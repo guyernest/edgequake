@@ -11,6 +11,7 @@ members = [
     "crates/edgequake-query",
     "crates/edgequake-rate-limiter",
     "crates/edgequake-storage",
+    "crates/edgequake-storage-aws",
     "crates/edgequake-tasks",
 ]
 
@@ -150,6 +151,7 @@ edgequake-pdf = { path = "crates/edgequake-pdf" }
 edgequake-pipeline = { path = "crates/edgequake-pipeline" }
 edgequake-query = { path = "crates/edgequake-query" }
 edgequake-storage = { path = "crates/edgequake-storage" }
+edgequake-storage-aws = { path = "crates/edgequake-storage-aws" }
 edgequake-tasks = { path = "crates/edgequake-tasks" }
 
 # CPU utilities

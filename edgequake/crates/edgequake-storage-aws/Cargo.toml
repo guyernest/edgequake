@@ -1,0 +1,84 @@
+[package]
+name = "edgequake-storage-aws"
+description = "AWS storage adapters for EdgeQuake RAG system (S3, Neptune, DynamoDB)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[features]
+default = ["s3-vectors"]
+s3-vectors = ["dep:parquet", "dep:arrow"]
+dynamodb = ["dep:aws-sdk-dynamodb"]
+neptune = ["dep:gremlin-client", "dep:async-tungstenite"]
+athena = ["dep:aws-sdk-athena"]
+# Enable all AWS storage backends
+full = ["s3-vectors", "dynamodb", "neptune", "athena"]
+
+[dependencies]
+# Core EdgeQuake dependencies
+edgequake-storage = { workspace = true }
+
+# Async
+async-trait = { workspace = true }
+tokio = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+
+# AWS SDK
+aws-config = "1.5"
+aws-sdk-s3 = "1.55"
+aws-sdk-dynamodb = { version = "1.53", optional = true }
+aws-sdk-athena = { version = "1.50", optional = true }
+aws-smithy-types = "1.2"
+aws-smithy-runtime-api = "1.7"
+
+# Additional utilities
+base64 = "0.22"
+
+# Vector operations
+# Using instant-distance for HNSW implementation (pure Rust, fast)
+instant-distance = "0.6"
+
+# Parquet for columnar storage
+parquet = { version = "53.2", optional = true, features = ["async"] }
+arrow = { version = "53.2", optional = true }
+
+# Compression
+flate2 = "1.0"
+
+# Binary serialization
+bincode = "1.3"
+
+# LRU cache
+lru = "0.12"
+
+# Time/date handling
+chrono = { workspace = true }
+
+# Graph database client (optional)
+gremlin-client = { version = "0.8", optional = true }
+async-tungstenite = { version = "0.28", features = ["tokio-runtime", "tokio-rustls-webpki-roots"], optional = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+tempfile = "3.13"
+criterion = { workspace = true }
+
+[[bench]]
+name = "vector_search"
+harness = false
