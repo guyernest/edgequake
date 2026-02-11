@@ -857,3 +857,24 @@ status: ## Show status of all services
 	@echo "$(BOLD)Database:$(RESET)"
 	@docker exec edgequake-postgres pg_isready -U edgequake -d edgequake 2>/dev/null && echo "  $(GREEN)Running on localhost:5432$(RESET)" || echo "  $(RED)Not running$(RESET)"
 	@echo ""
+
+# ============================================================================
+# MCP Server Integration
+# ============================================================================
+
+## Export OpenAPI schema for MCP server generation
+export-openapi:
+	@echo "$(BLUE)$(BOLD)Exporting OpenAPI schema...$(RESET)"
+	@cd edgequake/crates/edgequake-api && \
+		cargo run --bin export-openapi -- --pretty --output ../../../openapi.json
+	@echo "$(GREEN)✓ OpenAPI schema exported to: openapi.json$(RESET)"
+	@echo "$(BLUE)ℹ Schema statistics:$(RESET)"
+	@echo "  Endpoints: $$(cat openapi.json | grep -o '"/api' | wc -l | tr -d ' ')"
+	@echo "  Schemas:   $$(cat openapi.json | jq '.components.schemas | keys | length' 2>/dev/null || echo 'N/A')"
+	@echo ""
+	@echo "$(YELLOW)Next steps:$(RESET)"
+	@echo "  1. Feed openapi.json to your MCP generator tool"
+	@echo "  2. Configure AWS storage backends (S3, Neptune, DynamoDB)"
+	@echo "  3. See MCP_INTEGRATION.md for complete guide"
+
+.PHONY: export-openapi

@@ -58,6 +58,10 @@ hex = "0.4"
 rand = "0.9"
 bytes = "1.9"
 
+[[bin]]
+name = "export-openapi"
+path = "src/bin/export-openapi.rs"
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 tower = { version = "0.5", features = ["util"] }
