@@ -65,8 +65,8 @@ impl BatchConfig {
     /// Maximum requests per OpenAI batch job (API limit).
     pub const MAX_BATCH_REQUESTS: usize = 50_000;
 
-    /// Maximum JSONL file size in bytes (100MB API limit).
-    pub const MAX_JSONL_SIZE: usize = 100 * 1024 * 1024;
+    /// Maximum JSONL file size in bytes (5MB for reliable uploads; API limit is 100MB).
+    pub const MAX_JSONL_SIZE: usize = 5 * 1024 * 1024;
 
     /// Get the JSONL output directory.
     pub fn jsonl_dir(&self) -> PathBuf {

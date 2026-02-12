@@ -62,9 +62,14 @@ pub fn build_jsonl_files(
     let mut current_count = 0;
     let mut writer: Option<std::io::BufWriter<std::fs::File>> = None;
 
+    let mut current_size: usize = 0;
+
     for chunk in chunks {
-        // Start a new file if needed
-        if writer.is_none() || current_count >= BatchConfig::MAX_BATCH_REQUESTS {
+        // Start a new file if needed (split on request count OR file size)
+        if writer.is_none()
+            || current_count >= BatchConfig::MAX_BATCH_REQUESTS
+            || current_size >= BatchConfig::MAX_JSONL_SIZE
+        {
             // Flush previous file
             if let Some(ref mut w) = writer {
                 w.flush()?;
@@ -78,6 +83,7 @@ pub fn build_jsonl_files(
             file_paths.push(file_path);
             current_file_idx += 1;
             current_count = 0;
+            current_size = 0;
         }
 
         let user_prompt = user_prompt_fn(&chunk.chunk.content);
@@ -94,6 +100,7 @@ pub fn build_jsonl_files(
         if let Some(ref mut w) = writer {
             writeln!(w, "{}", line)?;
         }
+        current_size += line.len() + 1; // +1 for newline
         current_count += 1;
     }
 

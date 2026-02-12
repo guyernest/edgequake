@@ -217,38 +217,67 @@ impl OpenAIBatchClient {
             "Uploading JSONL file to OpenAI"
         );
 
-        let part = reqwest::multipart::Part::bytes(file_bytes)
-            .file_name(file_name)
-            .mime_str("application/jsonl")
-            .map_err(|e| BatchError::Api {
-                status: 0,
-                message: format!("Failed to set MIME type: {}", e),
-            })?;
+        let max_retries = 3;
+        let mut last_err = None;
 
-        let form = reqwest::multipart::Form::new()
-            .text("purpose", "batch")
-            .part("file", part);
+        for attempt in 0..max_retries {
+            if attempt > 0 {
+                let delay = std::time::Duration::from_secs(2u64.pow(attempt as u32));
+                warn!(
+                    attempt = attempt + 1,
+                    delay_secs = delay.as_secs(),
+                    "Retrying JSONL upload after error"
+                );
+                tokio::time::sleep(delay).await;
+            }
 
-        let resp = self
-            .client
-            .post(format!("{}/v1/files", self.base_url))
-            .bearer_auth(&self.api_key)
-            .multipart(form)
-            .send()
-            .await?;
+            let part = reqwest::multipart::Part::bytes(file_bytes.clone())
+                .file_name(file_name.clone())
+                .mime_str("application/jsonl")
+                .map_err(|e| BatchError::Api {
+                    status: 0,
+                    message: format!("Failed to set MIME type: {}", e),
+                })?;
 
-        let status = resp.status();
-        if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(BatchError::Api {
-                status: status.as_u16(),
-                message: body,
-            });
+            let form = reqwest::multipart::Form::new()
+                .text("purpose", "batch")
+                .part("file", part);
+
+            let result = self
+                .client
+                .post(format!("{}/v1/files", self.base_url))
+                .bearer_auth(&self.api_key)
+                .multipart(form)
+                .send()
+                .await;
+
+            match result {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if !status.is_success() {
+                        let body = resp.text().await.unwrap_or_default();
+                        return Err(BatchError::Api {
+                            status: status.as_u16(),
+                            message: body,
+                        });
+                    }
+
+                    let upload_resp: FileUploadResponse = resp.json().await?;
+                    info!(file_id = %upload_resp.id, "JSONL file uploaded successfully");
+                    return Ok(upload_resp.id);
+                }
+                Err(e) => {
+                    warn!(
+                        attempt = attempt + 1,
+                        error = %e,
+                        "JSONL upload failed"
+                    );
+                    last_err = Some(e);
+                }
+            }
         }
 
-        let upload_resp: FileUploadResponse = resp.json().await?;
-        info!(file_id = %upload_resp.id, "JSONL file uploaded successfully");
-        Ok(upload_resp.id)
+        Err(last_err.unwrap().into())
     }
 
     /// Create a batch job from an uploaded file.
