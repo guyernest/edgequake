@@ -9,13 +9,14 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-default = ["s3-vectors"]
+default = ["s3-vectors", "s3vectors"]
 s3-vectors = ["dep:parquet", "dep:arrow"]
+s3vectors = ["dep:aws-sdk-s3vectors"]
 dynamodb = ["dep:aws-sdk-dynamodb"]
 neptune = ["dep:gremlin-client", "dep:async-tungstenite"]
 athena = ["dep:aws-sdk-athena"]
 # Enable all AWS storage backends
-full = ["s3-vectors", "dynamodb", "neptune", "athena"]
+full = ["s3-vectors", "s3vectors", "dynamodb", "neptune", "athena"]
 
 [dependencies]
 # Core EdgeQuake dependencies
@@ -44,6 +45,7 @@ aws-config = "1.5"
 aws-sdk-s3 = "1.55"
 aws-sdk-dynamodb = { version = "1.53", optional = true }
 aws-sdk-athena = { version = "1.50", optional = true }
+aws-sdk-s3vectors = { version = "1.17", optional = true }
 aws-smithy-types = "1.2"
 aws-smithy-runtime-api = "1.7"
 
@@ -52,7 +54,7 @@ base64 = "0.22"
 
 # Vector operations
 # Using instant-distance for HNSW implementation (pure Rust, fast)
-instant-distance = "0.6"
+instant-distance = { version = "0.6", features = ["with-serde"] }
 
 # Parquet for columnar storage
 parquet = { version = "53.2", optional = true, features = ["async"] }

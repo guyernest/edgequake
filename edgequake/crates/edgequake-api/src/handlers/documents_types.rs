@@ -947,6 +947,40 @@ pub struct ListFailedChunksResponse {
 // Tests
 // ============================================================================
 
+/// Request body for updating/re-ingesting a document.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct UpdateDocumentRequest {
+    /// New content for the document (if updating content).
+    /// If not provided, re-ingests the existing content with current LLM/embedding settings.
+    #[serde(default)]
+    pub content: Option<String>,
+
+    /// Updated title (optional).
+    #[serde(default)]
+    pub title: Option<String>,
+
+    /// Updated metadata (optional).
+    #[serde(default)]
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// Response for document update/re-ingestion.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct UpdateDocumentResponse {
+    /// Document ID.
+    pub document_id: String,
+
+    /// New processing status.
+    pub status: String,
+
+    /// Human-readable message.
+    pub message: String,
+
+    /// Task/track ID for async processing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub track_id: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

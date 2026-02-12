@@ -324,11 +324,11 @@ impl AthenaQueryEngine {
             .send()
             .await
             .map_err(|e| {
-                AwsStorageError::Athena(format!("Failed to start query execution: {}", e))
+                AwsStorageError::AthenaError(format!("Failed to start query execution: {}", e))
             })?;
 
         let execution_id = response.query_execution_id().ok_or_else(|| {
-            AwsStorageError::Athena("No query execution ID returned".to_string())
+            AwsStorageError::AthenaError("No query execution ID returned".to_string())
         })?;
 
         debug!("Query started with execution ID: {}", execution_id);
@@ -353,25 +353,25 @@ impl AthenaQueryEngine {
                 .send()
                 .await
                 .map_err(|e| {
-                    AwsStorageError::Athena(format!("Failed to get query execution: {}", e))
+                    AwsStorageError::AthenaError(format!("Failed to get query execution: {}", e))
                 })?;
 
             let query_execution = response.query_execution().ok_or_else(|| {
-                AwsStorageError::Athena("No query execution data".to_string())
+                AwsStorageError::AthenaError("No query execution data".to_string())
             })?;
 
             let status = query_execution.status().ok_or_else(|| {
-                AwsStorageError::Athena("No query execution status".to_string())
+                AwsStorageError::AthenaError("No query execution status".to_string())
             })?;
 
             let state = status.state().ok_or_else(|| {
-                AwsStorageError::Athena("No query execution state".to_string())
+                AwsStorageError::AthenaError("No query execution state".to_string())
             })?;
 
             match state {
                 QueryExecutionState::Succeeded => {
                     let stats = query_execution.statistics().ok_or_else(|| {
-                        AwsStorageError::Athena("No query execution statistics".to_string())
+                        AwsStorageError::AthenaError("No query execution statistics".to_string())
                     })?;
 
                     return Ok(QueryStats {
@@ -390,17 +390,17 @@ impl AthenaQueryEngine {
                         .state_change_reason()
                         .unwrap_or("Unknown error")
                         .to_string();
-                    return Err(AwsStorageError::Athena(format!(
+                    return Err(AwsStorageError::AthenaError(format!(
                         "Query failed: {}",
                         reason
                     )));
                 }
                 QueryExecutionState::Cancelled => {
-                    return Err(AwsStorageError::Athena("Query was cancelled".to_string()));
+                    return Err(AwsStorageError::AthenaError("Query was cancelled".to_string()));
                 }
                 QueryExecutionState::Queued | QueryExecutionState::Running => {
                     if start_time.elapsed() > timeout {
-                        return Err(AwsStorageError::Athena(format!(
+                        return Err(AwsStorageError::AthenaError(format!(
                             "Query timeout after {} seconds",
                             self.config.query_timeout_secs
                         )));
@@ -434,15 +434,15 @@ impl AthenaQueryEngine {
             .send()
             .await
             .map_err(|e| {
-                AwsStorageError::Athena(format!("Failed to get query results: {}", e))
+                AwsStorageError::AthenaError(format!("Failed to get query results: {}", e))
             })?;
 
         let result_set = first_response.result_set().ok_or_else(|| {
-            AwsStorageError::Athena("No result set in query results".to_string())
+            AwsStorageError::AthenaError("No result set in query results".to_string())
         })?;
 
         let metadata = result_set.result_set_metadata().ok_or_else(|| {
-            AwsStorageError::Athena("No metadata in result set".to_string())
+            AwsStorageError::AthenaError("No metadata in result set".to_string())
         })?;
 
         let column_info = metadata.column_info();
@@ -452,25 +452,24 @@ impl AthenaQueryEngine {
             .collect();
 
         // Parse rows from first page (skip header row)
-        if let Some(result_rows) = result_set.rows() {
-            for (i, row) in result_rows.iter().enumerate() {
-                if i == 0 {
-                    continue; // Skip header row
-                }
+        let result_rows = result_set.rows();
+        for (i, row) in result_rows.iter().enumerate() {
+            if i == 0 {
+                continue; // Skip header row
+            }
 
-                let data = row.data();
-                let mut column_map = HashMap::new();
+            let data = row.data();
+            let mut column_map = HashMap::new();
 
-                for (j, col_name) in column_names.iter().enumerate() {
-                    if let Some(datum) = data.get(j) {
-                        if let Some(value) = datum.var_char_value() {
-                            column_map.insert(col_name.clone(), value.to_string());
-                        }
+            for (j, col_name) in column_names.iter().enumerate() {
+                if let Some(datum) = data.get(j) {
+                    if let Some(value) = datum.var_char_value() {
+                        column_map.insert(col_name.clone(), value.to_string());
                     }
                 }
-
-                rows.push(AthenaRow::new(column_map));
             }
+
+            rows.push(AthenaRow::new(column_map));
         }
 
         next_token = first_response.next_token().map(|s| s.to_string());
@@ -485,28 +484,27 @@ impl AthenaQueryEngine {
                 .send()
                 .await
                 .map_err(|e| {
-                    AwsStorageError::Athena(format!("Failed to get query results: {}", e))
+                    AwsStorageError::AthenaError(format!("Failed to get query results: {}", e))
                 })?;
 
             let result_set = response.result_set().ok_or_else(|| {
-                AwsStorageError::Athena("No result set in query results".to_string())
+                AwsStorageError::AthenaError("No result set in query results".to_string())
             })?;
 
-            if let Some(result_rows) = result_set.rows() {
-                for row in result_rows {
-                    let data = row.data();
-                    let mut column_map = HashMap::new();
+            let result_rows = result_set.rows();
+            for row in result_rows {
+                let data = row.data();
+                let mut column_map = HashMap::new();
 
-                    for (j, col_name) in column_names.iter().enumerate() {
-                        if let Some(datum) = data.get(j) {
-                            if let Some(value) = datum.var_char_value() {
-                                column_map.insert(col_name.clone(), value.to_string());
-                            }
+                for (j, col_name) in column_names.iter().enumerate() {
+                    if let Some(datum) = data.get(j) {
+                        if let Some(value) = datum.var_char_value() {
+                            column_map.insert(col_name.clone(), value.to_string());
                         }
                     }
-
-                    rows.push(AthenaRow::new(column_map));
                 }
+
+                rows.push(AthenaRow::new(column_map));
             }
 
             next_token = response.next_token().map(|s| s.to_string());
@@ -523,7 +521,7 @@ impl AthenaQueryEngine {
             .query_execution_id(execution_id)
             .send()
             .await
-            .map_err(|e| AwsStorageError::Athena(format!("Failed to cancel query: {}", e)))?;
+            .map_err(|e| AwsStorageError::AthenaError(format!("Failed to cancel query: {}", e)))?;
 
         info!("Cancelled query: {}", execution_id);
         Ok(())
@@ -538,23 +536,23 @@ impl AthenaQueryEngine {
             .send()
             .await
             .map_err(|e| {
-                AwsStorageError::Athena(format!("Failed to get query execution: {}", e))
+                AwsStorageError::AthenaError(format!("Failed to get query execution: {}", e))
             })?;
 
         let query_execution = response.query_execution().ok_or_else(|| {
-            AwsStorageError::Athena("No query execution data".to_string())
+            AwsStorageError::AthenaError("No query execution data".to_string())
         })?;
 
         let status = query_execution.status().ok_or_else(|| {
-            AwsStorageError::Athena("No query execution status".to_string())
+            AwsStorageError::AthenaError("No query execution status".to_string())
         })?;
 
         let state = status
             .state()
-            .ok_or_else(|| AwsStorageError::Athena("No query execution state".to_string()))?;
+            .ok_or_else(|| AwsStorageError::AthenaError("No query execution state".to_string()))?;
 
         let stats = query_execution.statistics().ok_or_else(|| {
-            AwsStorageError::Athena("No query execution statistics".to_string())
+            AwsStorageError::AthenaError("No query execution statistics".to_string())
         })?;
 
         Ok(QueryStats {

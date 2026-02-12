@@ -53,6 +53,9 @@
 pub mod error;
 pub mod s3_vector;
 
+#[cfg(feature = "s3vectors")]
+pub mod s3_vectors;
+
 #[cfg(feature = "neptune")]
 pub mod gremlin_helpers;
 
@@ -69,6 +72,9 @@ pub mod athena_sql;
 pub use error::{AwsStorageError, Result};
 pub use s3_vector::{S3Config, S3VectorStorage};
 
+#[cfg(feature = "s3vectors")]
+pub use s3_vectors::{S3VectorsConfig, S3VectorsStorage};
+
 #[cfg(feature = "neptune")]
 pub use neptune_graph::{NeptuneConfig, NeptuneGraphStorage};
 
@@ -81,6 +87,9 @@ pub use athena_sql::{AthenaConfig, AthenaQueryEngine, AthenaRow, QueryBuilder, Q
 // Re-export AWS SDK types for convenience
 pub use aws_config;
 pub use aws_sdk_s3;
+
+#[cfg(feature = "s3vectors")]
+pub use aws_sdk_s3vectors;
 
 #[cfg(feature = "dynamodb")]
 pub use aws_sdk_dynamodb;

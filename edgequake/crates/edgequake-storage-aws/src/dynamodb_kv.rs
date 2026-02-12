@@ -59,7 +59,33 @@ use tracing::{debug, info, warn};
 
 use edgequake_storage::{KVStorage, StorageError};
 
-use crate::error::{AwsStorageError, Result};
+use crate::error::AwsStorageError;
+
+/// Extract a descriptive error message from an AWS SDK error.
+///
+/// `SdkError::to_string()` often returns just "service error" which is useless
+/// for debugging. This helper extracts the actual service error message.
+fn dynamo_err<E, R>(err: aws_smithy_runtime_api::client::result::SdkError<E, R>) -> AwsStorageError
+where
+    E: std::fmt::Display + std::fmt::Debug,
+    R: std::fmt::Debug,
+{
+    let msg = match &err {
+        aws_smithy_runtime_api::client::result::SdkError::ServiceError(ctx) => {
+            // Use both Display and Debug to capture full error detail;
+            // Display on unhandled errors often says just "unhandled error"
+            let display = format!("{}", ctx.err());
+            let debug = format!("{:?}", ctx.err());
+            if display.contains("unhandled") || display == "service error" {
+                debug
+            } else {
+                display
+            }
+        }
+        other => format!("{:?}", other),
+    };
+    AwsStorageError::DynamoDbError(msg)
+}
 
 /// Configuration for DynamoDB KV storage.
 #[derive(Debug, Clone)]
@@ -140,7 +166,7 @@ impl DynamoKVStorage {
     /// # Arguments
     ///
     /// * `config` - DynamoDB configuration
-    pub async fn new(config: DynamoKVConfig) -> Result<Self> {
+    pub async fn new(config: DynamoKVConfig) -> crate::error::Result<Self> {
         // Load AWS configuration
         let aws_config = if let Some(region) = &config.region {
             aws_config::from_env()
@@ -156,6 +182,14 @@ impl DynamoKVStorage {
         Ok(Self { config, client })
     }
 
+    /// Create a new DynamoDB KV storage with a pre-configured client.
+    ///
+    /// Use this when you already have an AWS SDK client (e.g., in batch
+    /// processing where the caller manages AWS configuration).
+    pub fn new_with_client(config: DynamoKVConfig, client: DynamoDbClient) -> Self {
+        Self { config, client }
+    }
+
     /// Convert namespace and id to DynamoDB key.
     fn make_key(&self, id: &str) -> std::collections::HashMap<String, AttributeValue> {
         let mut key = std::collections::HashMap::new();
@@ -165,7 +199,7 @@ impl DynamoKVStorage {
     }
 
     /// Parse DynamoDB item to JSON value.
-    fn parse_item(&self, item: &std::collections::HashMap<String, AttributeValue>) -> Result<JsonValue> {
+    fn parse_item(&self, item: &std::collections::HashMap<String, AttributeValue>) -> crate::error::Result<JsonValue> {
         let data_attr = item
             .get("data")
             .ok_or_else(|| AwsStorageError::DynamoDbError("Missing 'data' attribute".into()))?;
@@ -190,7 +224,7 @@ impl KVStorage for DynamoKVStorage {
         &self.config.namespace
     }
 
-    async fn initialize(&self) -> Result<(), StorageError> {
+    async fn initialize(&self) -> edgequake_storage::error::Result<()> {
         info!("Initializing DynamoDB KV storage: table={}, namespace={}",
               self.config.table_name, self.config.namespace);
 
@@ -225,13 +259,13 @@ impl KVStorage for DynamoKVStorage {
         Ok(())
     }
 
-    async fn finalize(&self) -> Result<(), StorageError> {
+    async fn finalize(&self) -> edgequake_storage::error::Result<()> {
         info!("Finalizing DynamoDB KV storage");
         // DynamoDB doesn't require explicit finalization
         Ok(())
     }
 
-    async fn get_by_id(&self, id: &str) -> Result<Option<JsonValue>, StorageError> {
+    async fn get_by_id(&self, id: &str) -> edgequake_storage::error::Result<Option<JsonValue>> {
         let key = self.make_key(id);
 
         let result = self
@@ -241,7 +275,7 @@ impl KVStorage for DynamoKVStorage {
             .set_key(Some(key))
             .send()
             .await
-            .map_err(|e| AwsStorageError::DynamoDbError(e.to_string()))?;
+            .map_err(dynamo_err)?;
 
         if let Some(item) = result.item {
             let value = self.parse_item(&item)?;
@@ -251,7 +285,7 @@ impl KVStorage for DynamoKVStorage {
         }
     }
 
-    async fn get_by_ids(&self, ids: &[String]) -> Result<Vec<JsonValue>, StorageError> {
+    async fn get_by_ids(&self, ids: &[String]) -> edgequake_storage::error::Result<Vec<JsonValue>> {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -276,7 +310,7 @@ impl KVStorage for DynamoKVStorage {
                 .request_items(&self.config.table_name, keys_and_attrs)
                 .send()
                 .await
-                .map_err(|e| AwsStorageError::DynamoDbError(e.to_string()))?;
+                .map_err(dynamo_err)?;
 
             if let Some(responses) = response.responses {
                 if let Some(items) = responses.get(&self.config.table_name) {
@@ -292,7 +326,7 @@ impl KVStorage for DynamoKVStorage {
         Ok(results)
     }
 
-    async fn filter_keys(&self, keys: HashSet<String>) -> Result<HashSet<String>, StorageError> {
+    async fn filter_keys(&self, keys: HashSet<String>) -> edgequake_storage::error::Result<HashSet<String>> {
         if keys.is_empty() {
             return Ok(HashSet::new());
         }
@@ -317,7 +351,7 @@ impl KVStorage for DynamoKVStorage {
                 .request_items(&self.config.table_name, keys_and_attrs)
                 .send()
                 .await
-                .map_err(|e| AwsStorageError::DynamoDbError(e.to_string()))?;
+                .map_err(dynamo_err)?;
 
             if let Some(responses) = response.responses {
                 if let Some(items) = responses.get(&self.config.table_name) {
@@ -333,7 +367,7 @@ impl KVStorage for DynamoKVStorage {
         Ok(missing_keys)
     }
 
-    async fn upsert(&self, data: &[(String, JsonValue)]) -> Result<(), StorageError> {
+    async fn upsert(&self, data: &[(String, JsonValue)]) -> edgequake_storage::error::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -375,14 +409,14 @@ impl KVStorage for DynamoKVStorage {
                 .request_items(&self.config.table_name, write_requests)
                 .send()
                 .await
-                .map_err(|e| AwsStorageError::DynamoDbError(e.to_string()))?;
+                .map_err(dynamo_err)?;
         }
 
         debug!("Upserted {} items successfully", data.len());
         Ok(())
     }
 
-    async fn delete(&self, ids: &[String]) -> Result<(), StorageError> {
+    async fn delete(&self, ids: &[String]) -> edgequake_storage::error::Result<()> {
         if ids.is_empty() {
             return Ok(());
         }
@@ -413,19 +447,19 @@ impl KVStorage for DynamoKVStorage {
                 .request_items(&self.config.table_name, write_requests)
                 .send()
                 .await
-                .map_err(|e| AwsStorageError::DynamoDbError(e.to_string()))?;
+                .map_err(dynamo_err)?;
         }
 
         debug!("Deleted {} items successfully", ids.len());
         Ok(())
     }
 
-    async fn is_empty(&self) -> Result<bool, StorageError> {
+    async fn is_empty(&self) -> edgequake_storage::error::Result<bool> {
         let count = self.count().await?;
         Ok(count == 0)
     }
 
-    async fn count(&self) -> Result<usize, StorageError> {
+    async fn count(&self) -> edgequake_storage::error::Result<usize> {
         // Query with count only
         let result = self
             .client
@@ -437,12 +471,12 @@ impl KVStorage for DynamoKVStorage {
             .select(aws_sdk_dynamodb::types::Select::Count)
             .send()
             .await
-            .map_err(|e| AwsStorageError::DynamoDbError(e.to_string()))?;
+            .map_err(dynamo_err)?;
 
         Ok(result.count() as usize)
     }
 
-    async fn keys(&self) -> Result<Vec<String>, StorageError> {
+    async fn keys(&self) -> edgequake_storage::error::Result<Vec<String>> {
         let mut keys = Vec::new();
         let mut last_evaluated_key = None;
 
@@ -463,7 +497,7 @@ impl KVStorage for DynamoKVStorage {
             let result = query
                 .send()
                 .await
-                .map_err(|e| AwsStorageError::DynamoDbError(e.to_string()))?;
+                .map_err(dynamo_err)?;
 
             if let Some(items) = result.items {
                 for item in items {
@@ -482,7 +516,7 @@ impl KVStorage for DynamoKVStorage {
         Ok(keys)
     }
 
-    async fn clear(&self) -> Result<(), StorageError> {
+    async fn clear(&self) -> edgequake_storage::error::Result<()> {
         warn!("Clearing all items for namespace: {}", self.config.namespace);
 
         // Get all keys
@@ -500,7 +534,7 @@ impl KVStorage for DynamoKVStorage {
         key: &str,
         expected_status: &str,
         new_status: &str,
-    ) -> Result<bool, StorageError> {
+    ) -> edgequake_storage::error::Result<bool> {
         let dynamo_key = self.make_key(key);
 
         // Use conditional update to atomically check and set status
@@ -525,12 +559,18 @@ impl KVStorage for DynamoKVStorage {
                 Ok(true)
             }
             Err(e) => {
-                let err_str = e.to_string();
-                if err_str.contains("ConditionalCheckFailedException") {
+                // Check for conditional check failure (expected case)
+                let is_condition_failure = match &e {
+                    aws_smithy_runtime_api::client::result::SdkError::ServiceError(ctx) => {
+                        format!("{}", ctx.err()).contains("ConditionalCheckFailed")
+                    }
+                    _ => false,
+                };
+                if is_condition_failure {
                     debug!("Status transition failed: condition not met");
                     Ok(false)
                 } else {
-                    Err(AwsStorageError::DynamoDbError(err_str).into())
+                    Err(dynamo_err(e).into())
                 }
             }
         }

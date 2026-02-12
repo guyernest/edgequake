@@ -267,6 +267,10 @@ fn api_v1_routes() -> Router<AppState> {
         .route("/documents/{document_id}", get(handlers::get_document))
         .route(
             "/documents/{document_id}",
+            put(handlers::update_document),
+        )
+        .route(
+            "/documents/{document_id}",
             delete(handlers::delete_document),
         )
         // Query

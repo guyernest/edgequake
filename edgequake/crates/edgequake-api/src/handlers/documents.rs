@@ -4481,6 +4481,266 @@ pub async fn list_failed_chunks(
     }))
 }
 
+/// Update or re-ingest an existing document.
+///
+/// If `content` is provided in the request body, the document content is replaced
+/// and re-ingested. If no content is provided, the existing content is re-ingested
+/// with the current workspace LLM/embedding providers (useful after provider changes).
+///
+/// ## Process
+///
+/// 1. Validate document exists (KV lookup)
+/// 2. Atomic status transition: `completed|failed` -> `re_ingesting`
+/// 3. Clean old graph data (entities, relationships, embeddings)
+/// 4. Re-run pipeline with current workspace LLM/embedding providers
+/// 5. Store new results, update status to `completed`
+#[utoipa::path(
+    put,
+    path = "/api/v1/documents/{document_id}",
+    params(
+        ("document_id" = String, Path, description = "Document ID to update")
+    ),
+    request_body = UpdateDocumentRequest,
+    responses(
+        (status = 200, description = "Document re-ingestion started", body = UpdateDocumentResponse),
+        (status = 404, description = "Document not found"),
+        (status = 409, description = "Document is currently being processed")
+    )
+)]
+pub async fn update_document(
+    State(state): State<AppState>,
+    axum::extract::Path(document_id): axum::extract::Path<String>,
+    Json(request): Json<UpdateDocumentRequest>,
+) -> ApiResult<Json<UpdateDocumentResponse>> {
+    debug!("update_document called for: {}", document_id);
+
+    let metadata_key = format!("{}-metadata", document_id);
+    let content_key = format!("{}-content", document_id);
+
+    // Step 1: Verify document exists
+    let metadata = state
+        .kv_storage
+        .get_by_id(&metadata_key)
+        .await?
+        .ok_or_else(|| ApiError::NotFound(format!("Document {} not found", document_id)))?;
+
+    let workspace_id = metadata
+        .get("workspace_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default")
+        .to_string();
+
+    // Step 2: Atomic status transition to prevent races
+    // Try completed -> re_ingesting
+    let transitioned = state
+        .kv_storage
+        .transition_if_status(&metadata_key, "completed", "re_ingesting")
+        .await
+        .map_err(|e| ApiError::Internal(format!("Status transition failed: {}", e)))?;
+
+    if !transitioned {
+        // Try failed -> re_ingesting
+        let transitioned_from_failed = state
+            .kv_storage
+            .transition_if_status(&metadata_key, "failed", "re_ingesting")
+            .await
+            .map_err(|e| ApiError::Internal(format!("Status transition failed: {}", e)))?;
+
+        if !transitioned_from_failed {
+            return Err(ApiError::Conflict(format!(
+                "Cannot update document '{}'. Document must be in 'completed' or 'failed' status. \
+                 It may currently be processing or pending.",
+                document_id
+            )));
+        }
+    }
+
+    // Step 3: Clean old graph data
+    let vector_storage = get_workspace_vector_storage_strict(&state, &workspace_id).await.ok();
+    match cleanup_document_graph_data(
+        &document_id,
+        &state.graph_storage,
+        vector_storage.as_ref(),
+    )
+    .await
+    {
+        Ok(stats) => {
+            debug!(
+                document_id = %document_id,
+                entities_removed = stats.entities_removed,
+                relationships_removed = stats.relationships_removed,
+                "Old graph data cleaned for re-ingestion"
+            );
+        }
+        Err(e) => {
+            warn!(
+                document_id = %document_id,
+                error = %e,
+                "Failed to clean old graph data, continuing with re-ingestion"
+            );
+        }
+    }
+
+    // Clean old chunks from KV
+    let keys = state.kv_storage.keys().await?;
+    let chunk_prefix = format!("{}-chunk-", document_id);
+    let chunk_keys: Vec<String> = keys
+        .into_iter()
+        .filter(|k| k.starts_with(&chunk_prefix))
+        .collect();
+    if !chunk_keys.is_empty() {
+        state.kv_storage.delete(&chunk_keys).await?;
+    }
+
+    // Step 4: Update content if provided
+    let content = if let Some(new_content) = request.content {
+        // Update stored content
+        state
+            .kv_storage
+            .upsert(&[(content_key.clone(), serde_json::json!(new_content))])
+            .await;
+
+        // Update metadata with new hash
+        let new_hash = {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            new_content.hash(&mut hasher);
+            format!("{:016x}", hasher.finish())
+        };
+
+        let mut updated_metadata = metadata.clone();
+        if let Some(obj) = updated_metadata.as_object_mut() {
+            obj.insert("content_hash".to_string(), serde_json::json!(new_hash));
+            if let Some(title) = &request.title {
+                obj.insert("title".to_string(), serde_json::json!(title));
+            }
+            if let Some(meta) = &request.metadata {
+                obj.insert("custom_metadata".to_string(), meta.clone());
+            }
+            obj.insert("status".to_string(), serde_json::json!("re_ingesting"));
+            obj.insert(
+                "updated_at".to_string(),
+                serde_json::json!(Utc::now().to_rfc3339()),
+            );
+        }
+        state
+            .kv_storage
+            .upsert(&[(metadata_key.clone(), updated_metadata)])
+            .await;
+
+        new_content
+    } else {
+        // Re-ingest existing content
+        let existing_content = state
+            .kv_storage
+            .get_by_id(&content_key)
+            .await?
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .ok_or_else(|| {
+                ApiError::Internal(format!(
+                    "Document {} exists but content not found",
+                    document_id
+                ))
+            })?;
+
+        // Update metadata
+        let mut updated_metadata = metadata.clone();
+        if let Some(obj) = updated_metadata.as_object_mut() {
+            obj.insert("status".to_string(), serde_json::json!("re_ingesting"));
+            obj.insert(
+                "updated_at".to_string(),
+                serde_json::json!(Utc::now().to_rfc3339()),
+            );
+        }
+        state
+            .kv_storage
+            .upsert(&[(metadata_key.clone(), updated_metadata)])
+            .await;
+
+        existing_content
+    };
+
+    // Step 5: Re-run pipeline
+    let pipeline = state.create_workspace_pipeline(&workspace_id).await;
+
+    match pipeline.process(&document_id, &content).await {
+        Ok(result) => {
+            let entity_count: usize = result.extractions.iter().map(|e| e.entities.len()).sum();
+            let relationship_count: usize = result.extractions.iter().map(|e| e.relationships.len()).sum();
+
+            // Update metadata to completed
+            let mut final_metadata = state
+                .kv_storage
+                .get_by_id(&metadata_key)
+                .await?
+                .unwrap_or(serde_json::json!({}));
+
+            if let Some(obj) = final_metadata.as_object_mut() {
+                obj.insert("status".to_string(), serde_json::json!("completed"));
+                obj.insert(
+                    "entity_count".to_string(),
+                    serde_json::json!(entity_count),
+                );
+                obj.insert(
+                    "relationship_count".to_string(),
+                    serde_json::json!(relationship_count),
+                );
+                obj.insert(
+                    "chunk_count".to_string(),
+                    serde_json::json!(result.chunks.len()),
+                );
+                obj.insert(
+                    "updated_at".to_string(),
+                    serde_json::json!(Utc::now().to_rfc3339()),
+                );
+            }
+            state
+                .kv_storage
+                .upsert(&[(metadata_key, final_metadata)])
+                .await;
+
+            Ok(Json(UpdateDocumentResponse {
+                document_id: document_id.clone(),
+                status: "completed".to_string(),
+                message: format!(
+                    "Document re-ingested: {} entities, {} relationships, {} chunks",
+                    entity_count,
+                    relationship_count,
+                    result.chunks.len()
+                ),
+                track_id: None,
+            }))
+        }
+        Err(e) => {
+            // Mark as failed
+            let mut fail_metadata = state
+                .kv_storage
+                .get_by_id(&metadata_key)
+                .await?
+                .unwrap_or(serde_json::json!({}));
+
+            if let Some(obj) = fail_metadata.as_object_mut() {
+                obj.insert("status".to_string(), serde_json::json!("failed"));
+                obj.insert("error".to_string(), serde_json::json!(e.to_string()));
+                obj.insert(
+                    "updated_at".to_string(),
+                    serde_json::json!(Utc::now().to_rfc3339()),
+                );
+            }
+            state
+                .kv_storage
+                .upsert(&[(metadata_key, fail_metadata)])
+                .await;
+
+            Err(ApiError::Internal(format!(
+                "Re-ingestion failed: {}",
+                e
+            )))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

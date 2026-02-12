@@ -22,7 +22,9 @@
         docker-build docker-up docker-down docker-logs \
         check-deps status \
         test-quality test-invariants test-timing test-count test-flaky \
-        test-e2e-critical test-e2e-full test-stability-report
+        test-e2e-critical test-e2e-full test-stability-report \
+        batch-build batch-run batch-prepare batch-extract batch-embed batch-store batch-status batch-resume \
+        infra-install infra-synth infra-diff infra-deploy infra-deploy-core infra-deploy-neptune infra-destroy infra-status infra-env
 
 # Colors for terminal output
 BLUE := \033[34m
@@ -120,6 +122,27 @@ help: ## Show this help message
 	@echo "  $(GREEN)make lint$(RESET)         Lint all code"
 	@echo "  $(GREEN)make format$(RESET)       Format all code"
 	@echo "  $(GREEN)make test$(RESET)         Run all tests"
+	@echo ""
+	@echo "$(BOLD)$(BLUE)📦 Batch Ingestion$(RESET)"
+	@echo "  $(GREEN)make batch-build$(RESET)    Build batch ingestion CLI"
+	@echo "  $(GREEN)make batch-run$(RESET)      Run full pipeline (prepare+extract+embed+store)"
+	@echo "  $(GREEN)make batch-prepare$(RESET)  Phase 1: Parse, chunk, build JSONL"
+	@echo "  $(GREEN)make batch-extract$(RESET)  Phase 2: OpenAI Batch API extraction"
+	@echo "  $(GREEN)make batch-embed$(RESET)    Phase 3: Generate embeddings"
+	@echo "  $(GREEN)make batch-store$(RESET)    Phase 4: Write to Neptune/S3/DynamoDB"
+	@echo "  $(GREEN)make batch-status$(RESET)   Show job progress"
+	@echo "  $(GREEN)make batch-resume$(RESET)   Resume from checkpoint"
+	@echo ""
+	@echo "$(BOLD)$(BLUE)☁️  CDK Infrastructure$(RESET)"
+	@echo "  $(GREEN)make infra-install$(RESET)        Install CDK dependencies"
+	@echo "  $(GREEN)make infra-synth$(RESET)          Synthesize CloudFormation templates"
+	@echo "  $(GREEN)make infra-diff$(RESET)           Preview infrastructure changes"
+	@echo "  $(GREEN)make infra-deploy$(RESET)         Deploy all stacks"
+	@echo "  $(GREEN)make infra-deploy-core$(RESET)    Deploy Core stack (DynamoDB, S3, IAM)"
+	@echo "  $(GREEN)make infra-deploy-neptune$(RESET) Deploy Neptune stack (VPC, Neptune)"
+	@echo "  $(GREEN)make infra-destroy$(RESET)        Destroy all stacks"
+	@echo "  $(GREEN)make infra-status$(RESET)         Show stack status + endpoints"
+	@echo "  $(GREEN)make infra-env$(RESET)            Print env var export commands"
 	@echo ""
 	@echo "$(BOLD)$(BLUE)🛡️  Test Quality Gates (OODA-286+)$(RESET)"
 	@echo "  $(GREEN)make test-quality$(RESET)     Run all quality gates"
@@ -859,6 +882,73 @@ status: ## Show status of all services
 	@echo ""
 
 # ============================================================================
+# Batch Ingestion (edgequake-batch)
+# ============================================================================
+
+# Default batch parameters
+BATCH_DATA ?= $(ROOT_DIR)/../data/epstein/0000.parquet
+BATCH_MODEL ?= gpt-4.1-mini
+BATCH_EMBEDDING_MODEL ?= text-embedding-3-small
+BATCH_DYNAMO_TABLE ?= edgequake-kv-$(TENANT_ID)-$(ENVIRONMENT)
+BATCH_NAMESPACE ?= epstein
+BATCH_WORK_DIR ?= /tmp/edgequake-batch
+BATCH_LIMIT ?= 0
+
+BATCH_ARGS = --data $(BATCH_DATA) --api-key $(OPENAI_API_KEY) \
+	--model $(BATCH_MODEL) --embedding-model $(BATCH_EMBEDDING_MODEL) \
+	--dynamo-table $(BATCH_DYNAMO_TABLE) --namespace $(BATCH_NAMESPACE) \
+	--work-dir $(BATCH_WORK_DIR) --limit $(BATCH_LIMIT)
+
+ifdef NEPTUNE_ENDPOINT
+  BATCH_ARGS += --neptune-endpoint $(NEPTUNE_ENDPOINT)
+endif
+ifdef VECTOR_BUCKET
+  BATCH_ARGS += --vector-bucket $(VECTOR_BUCKET)
+endif
+ifdef VECTOR_INDEX
+  BATCH_ARGS += --vector-index $(VECTOR_INDEX)
+endif
+ifdef S3_BUCKET
+  BATCH_ARGS += --s3-bucket $(S3_BUCKET)
+endif
+ifdef NEPTUNE_ROLE_ARN
+  BATCH_ARGS += --neptune-role-arn $(NEPTUNE_ROLE_ARN)
+endif
+
+batch-build: ## Build batch ingestion CLI
+	@echo "$(BLUE)Building edgequake-batch...$(RESET)"
+	@cd $(BACKEND_DIR) && SQLX_OFFLINE=true cargo build --release -p edgequake-batch
+	@echo "$(GREEN)✓ edgequake-batch built: $(BACKEND_DIR)/target/release/edgequake-batch$(RESET)"
+
+batch-run: ## Run full batch pipeline (prepare + extract + embed + store)
+	@echo "$(BOLD)$(BLUE)Running full batch pipeline...$(RESET)"
+	@cd $(BACKEND_DIR) && cargo run --release -p edgequake-batch -- $(BATCH_ARGS) run
+
+batch-prepare: ## Phase 1: Parse parquet, chunk documents, build JSONL
+	@echo "$(BLUE)Running batch prepare phase...$(RESET)"
+	@cd $(BACKEND_DIR) && cargo run --release -p edgequake-batch -- $(BATCH_ARGS) prepare
+
+batch-extract: ## Phase 2: Submit to OpenAI Batch API, poll, download results
+	@echo "$(BLUE)Running batch extract phase...$(RESET)"
+	@cd $(BACKEND_DIR) && cargo run --release -p edgequake-batch -- $(BATCH_ARGS) extract
+
+batch-embed: ## Phase 3: Generate embeddings for chunks, entities, relationships
+	@echo "$(BLUE)Running batch embed phase...$(RESET)"
+	@cd $(BACKEND_DIR) && cargo run --release -p edgequake-batch -- $(BATCH_ARGS) embed
+
+batch-store: ## Phase 4: Write to Neptune/S3/DynamoDB
+	@echo "$(BLUE)Running batch store phase...$(RESET)"
+	@cd $(BACKEND_DIR) && cargo run --release -p edgequake-batch -- $(BATCH_ARGS) store
+
+batch-status: ## Show batch job status
+	@echo "$(BLUE)Checking batch job status...$(RESET)"
+	@cd $(BACKEND_DIR) && cargo run --release -p edgequake-batch -- $(BATCH_ARGS) status
+
+batch-resume: ## Resume batch pipeline from last checkpoint
+	@echo "$(BLUE)Resuming batch pipeline...$(RESET)"
+	@cd $(BACKEND_DIR) && cargo run --release -p edgequake-batch -- $(BATCH_ARGS) resume
+
+# ============================================================================
 # MCP Server Integration
 # ============================================================================
 
@@ -878,3 +968,91 @@ export-openapi:
 	@echo "  3. See MCP_INTEGRATION.md for complete guide"
 
 .PHONY: export-openapi
+
+# ============================================================================
+# CDK Infrastructure
+# ============================================================================
+
+TENANT_ID ?= default
+ENVIRONMENT ?= dev
+INFRA_DIR := $(BACKEND_DIR)/infra
+
+# AWS CLI options (profile + region) for SSM/CloudFormation commands
+AWS_CLI_OPTS :=
+ifdef AWS_PROFILE
+  AWS_CLI_OPTS += --profile $(AWS_PROFILE)
+endif
+ifdef AWS_REGION
+  AWS_CLI_OPTS += --region $(AWS_REGION)
+endif
+
+CDK_CONTEXT := --context tenantId=$(TENANT_ID) --context environment=$(ENVIRONMENT)
+
+infra-install: ## Install CDK infrastructure dependencies
+	@echo "$(BLUE)Installing CDK dependencies...$(RESET)"
+	@cd $(INFRA_DIR) && npm install
+	@echo "$(GREEN)✓ CDK dependencies installed$(RESET)"
+
+infra-synth: ## Synthesize CloudFormation templates
+	@echo "$(BLUE)Synthesizing CloudFormation templates...$(RESET)"
+	@cd $(INFRA_DIR) && npx cdk synth $(CDK_CONTEXT)
+	@echo "$(GREEN)✓ Templates synthesized in $(INFRA_DIR)/cdk.out/$(RESET)"
+
+infra-diff: ## Preview infrastructure changes
+	@echo "$(BLUE)Previewing infrastructure changes...$(RESET)"
+	@cd $(INFRA_DIR) && npx cdk diff $(CDK_CONTEXT)
+
+infra-deploy: ## Deploy all stacks (Core + Neptune)
+	@echo "$(BOLD)$(BLUE)Deploying all EdgeQuake stacks (tenant=$(TENANT_ID), env=$(ENVIRONMENT))...$(RESET)"
+	@cd $(INFRA_DIR) && npx cdk deploy --all --require-approval never $(CDK_CONTEXT)
+	@echo "$(GREEN)✓ All stacks deployed$(RESET)"
+
+infra-deploy-core: ## Deploy Core stack only (DynamoDB, S3, IAM)
+	@echo "$(BLUE)Deploying Core stack (tenant=$(TENANT_ID), env=$(ENVIRONMENT))...$(RESET)"
+	@cd $(INFRA_DIR) && npx cdk deploy EdgeQuakeCore-$(TENANT_ID)-$(ENVIRONMENT) --require-approval never $(CDK_CONTEXT)
+	@echo "$(GREEN)✓ Core stack deployed$(RESET)"
+
+infra-deploy-neptune: ## Deploy Neptune stack only (VPC, Neptune)
+	@echo "$(BLUE)Deploying Neptune stack (tenant=$(TENANT_ID), env=$(ENVIRONMENT))...$(RESET)"
+	@cd $(INFRA_DIR) && npx cdk deploy EdgeQuakeNeptune-$(TENANT_ID)-$(ENVIRONMENT) --require-approval never $(CDK_CONTEXT)
+	@echo "$(GREEN)✓ Neptune stack deployed$(RESET)"
+
+infra-destroy: ## Destroy all stacks (with confirmation)
+	@echo "$(RED)⚠️  This will destroy ALL EdgeQuake stacks for tenant=$(TENANT_ID) env=$(ENVIRONMENT)$(RESET)"
+	@echo "$(RED)Are you sure? [y/N]$(RESET)"
+	@read -r confirm && [ "$$confirm" = "y" ] && \
+		cd $(INFRA_DIR) && npx cdk destroy --all --force $(CDK_CONTEXT) && \
+		echo "$(GREEN)✓ All stacks destroyed$(RESET)" || \
+		echo "$(YELLOW)Cancelled$(RESET)"
+
+infra-status: ## Show stack status and resource endpoints
+	@echo "$(BOLD)EdgeQuake Infrastructure Status (tenant=$(TENANT_ID), env=$(ENVIRONMENT))$(RESET)"
+	@echo "========================================================"
+	@echo ""
+	@echo "$(BOLD)CloudFormation Stacks:$(RESET)"
+	@aws cloudformation describe-stacks --stack-name EdgeQuakeCore-$(TENANT_ID)-$(ENVIRONMENT) \
+		--query 'Stacks[0].{Status:StackStatus,Created:CreationTime}' --output table $(AWS_CLI_OPTS) 2>/dev/null \
+		|| echo "  Core stack: $(RED)not deployed$(RESET)"
+	@aws cloudformation describe-stacks --stack-name EdgeQuakeNeptune-$(TENANT_ID)-$(ENVIRONMENT) \
+		--query 'Stacks[0].{Status:StackStatus,Created:CreationTime}' --output table $(AWS_CLI_OPTS) 2>/dev/null \
+		|| echo "  Neptune stack: $(RED)not deployed$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Resource Endpoints:$(RESET)"
+	@echo "  DynamoDB Table:  $$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/dynamo-table --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null || echo 'N/A')"
+	@echo "  Vector Bucket:   $$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/vector-bucket --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null || echo 'N/A')"
+	@echo "  Vector Index:    $$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/vector-index --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null || echo 'N/A')"
+	@echo "  S3 Bucket:       $$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/s3-bucket --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null || echo 'N/A')"
+	@echo "  Neptune:         $$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/neptune-endpoint --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null || echo 'N/A')"
+	@echo "  Batch Role:      $$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/batch-role-arn --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null || echo 'N/A')"
+	@echo ""
+
+infra-env: ## Print export commands for batch CLI env vars (reads SSM)
+	@echo "# EdgeQuake environment variables (tenant=$(TENANT_ID), env=$(ENVIRONMENT))"
+	@echo "# Run: eval \$$(make infra-env TENANT_ID=$(TENANT_ID) ENVIRONMENT=$(ENVIRONMENT))"
+	@echo "export BATCH_DYNAMO_TABLE=$$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/dynamo-table --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null)"
+	@echo "export VECTOR_BUCKET=$$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/vector-bucket --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null)"
+	@echo "export VECTOR_INDEX=$$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/vector-index --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null)"
+	@echo "export NEPTUNE_ENDPOINT=$$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/neptune-endpoint --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null)"
+	@echo "export BATCH_ROLE_ARN=$$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/batch-role-arn --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null)"
+	@echo "export S3_BUCKET=$$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/s3-bucket --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null)"
+	@echo "export NEPTUNE_ROLE_ARN=$$(aws ssm get-parameter --name /edgequake/$(TENANT_ID)/$(ENVIRONMENT)/neptune-s3-role-arn --query 'Parameter.Value' --output text $(AWS_CLI_OPTS) 2>/dev/null)"

@@ -58,7 +58,7 @@ use tracing::{debug, info, warn};
 
 use edgequake_storage::{StorageError, VectorSearchResult, VectorStorage};
 
-use crate::error::{AwsStorageError, Result};
+use crate::error::AwsStorageError;
 
 /// Configuration for S3 vector storage.
 #[derive(Debug, Clone)]
@@ -174,7 +174,7 @@ impl Manifest {
 }
 
 /// Point wrapper for instant-distance HNSW index.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct VectorPoint {
     id: String,
     vector: Vec<f32>,
@@ -219,7 +219,7 @@ impl S3VectorStorage {
     /// # Arguments
     ///
     /// * `config` - S3 storage configuration
-    pub async fn new(config: S3Config) -> Result<Self> {
+    pub async fn new(config: S3Config) -> crate::error::Result<Self> {
         // Load AWS configuration
         let aws_config = if let Some(region) = &config.region {
             aws_config::from_env()
@@ -237,14 +237,35 @@ impl S3VectorStorage {
             std::num::NonZeroUsize::new(config.cache_size).unwrap(),
         );
 
+        let dimension = config.dimension;
         Ok(Self {
             config,
             s3_client,
             index: Arc::new(RwLock::new(None)),
             metadata_cache: Arc::new(RwLock::new(HashMap::new())),
             vector_cache: Arc::new(RwLock::new(vector_cache)),
-            manifest: Arc::new(RwLock::new(Manifest::new(config.dimension))),
+            manifest: Arc::new(RwLock::new(Manifest::new(dimension))),
         })
+    }
+
+    /// Create a new S3 vector storage with a pre-configured client.
+    ///
+    /// Use this when you already have an AWS SDK client (e.g., in batch
+    /// processing where the caller manages AWS configuration).
+    pub fn new_with_client(config: S3Config, s3_client: S3Client) -> Self {
+        let dimension = config.dimension;
+        let vector_cache = lru::LruCache::new(
+            std::num::NonZeroUsize::new(config.cache_size).unwrap(),
+        );
+
+        Self {
+            config,
+            s3_client,
+            index: Arc::new(RwLock::new(None)),
+            metadata_cache: Arc::new(RwLock::new(HashMap::new())),
+            vector_cache: Arc::new(RwLock::new(vector_cache)),
+            manifest: Arc::new(RwLock::new(Manifest::new(dimension))),
+        }
     }
 
     /// Get the S3 key prefix for this namespace.
@@ -263,7 +284,7 @@ impl S3VectorStorage {
     }
 
     /// Load the manifest from S3.
-    async fn load_manifest(&self) -> Result<Manifest> {
+    async fn load_manifest(&self) -> crate::error::Result<Manifest> {
         let key = self.manifest_key();
 
         match self
@@ -275,7 +296,8 @@ impl S3VectorStorage {
             .await
         {
             Ok(output) => {
-                let bytes = output.body.collect().await?.into_bytes();
+                let bytes = output.body.collect().await
+                    .map_err(|e| AwsStorageError::S3Error(e.to_string()))?.into_bytes();
                 let manifest: Manifest = serde_json::from_slice(&bytes)?;
                 Ok(manifest)
             }
@@ -288,7 +310,7 @@ impl S3VectorStorage {
     }
 
     /// Save the manifest to S3.
-    async fn save_manifest(&self, manifest: &Manifest) -> Result<()> {
+    async fn save_manifest(&self, manifest: &Manifest) -> crate::error::Result<()> {
         let key = self.manifest_key();
         let json = serde_json::to_vec_pretty(manifest)?;
 
@@ -305,7 +327,7 @@ impl S3VectorStorage {
     }
 
     /// Load the HNSW index from S3.
-    async fn load_index(&self) -> Result<Option<HnswMap<VectorPoint, String>>> {
+    async fn load_index(&self) -> crate::error::Result<Option<HnswMap<VectorPoint, String>>> {
         let key = self.index_key();
 
         match self
@@ -317,9 +339,10 @@ impl S3VectorStorage {
             .await
         {
             Ok(output) => {
-                let bytes = output.body.collect().await?.into_bytes();
+                let bytes = output.body.collect().await
+                    .map_err(|e| AwsStorageError::S3Error(e.to_string()))?.into_bytes();
                 let index: HnswMap<VectorPoint, String> = bincode::deserialize(&bytes)?;
-                info!("Loaded HNSW index from S3: {} vectors", index.len());
+                info!("Loaded HNSW index from S3: {} vectors", index.values.len());
                 Ok(Some(index))
             }
             Err(e) => {
@@ -330,7 +353,7 @@ impl S3VectorStorage {
     }
 
     /// Save the HNSW index to S3.
-    async fn save_index(&self, index: &HnswMap<VectorPoint, String>) -> Result<()> {
+    async fn save_index(&self, index: &HnswMap<VectorPoint, String>) -> crate::error::Result<()> {
         let key = self.index_key();
         let bytes = bincode::serialize(index)?;
 
@@ -356,12 +379,12 @@ impl S3VectorStorage {
             .send()
             .await?;
 
-        info!("Saved HNSW index to S3: {} vectors", index.len());
+        info!("Saved HNSW index to S3: {} vectors", index.values.len());
         Ok(())
     }
 
     /// Build HNSW index from all vectors in S3.
-    async fn build_index(&self) -> Result<HnswMap<VectorPoint, String>> {
+    async fn build_index(&self) -> crate::error::Result<HnswMap<VectorPoint, String>> {
         info!("Building HNSW index from S3 vectors...");
 
         let manifest = self.manifest.read().await.clone();
@@ -374,7 +397,7 @@ impl S3VectorStorage {
         }
 
         if all_vectors.is_empty() {
-            return Ok(HnswMap::default());
+            return Ok(Builder::default().build(Vec::<VectorPoint>::new(), Vec::<String>::new()));
         }
 
         // Build HNSW index
@@ -392,12 +415,12 @@ impl S3VectorStorage {
             .seed(42)
             .build(points, values);
 
-        info!("Built HNSW index with {} vectors", hnsw.len());
+        info!("Built HNSW index with {} vectors", hnsw.values.len());
         Ok(hnsw)
     }
 
     /// Load a vector batch from S3.
-    async fn load_vector_batch(&self, key: &str) -> Result<Vec<VectorRecord>> {
+    async fn load_vector_batch(&self, key: &str) -> crate::error::Result<Vec<VectorRecord>> {
         let output = self
             .s3_client
             .get_object()
@@ -406,14 +429,15 @@ impl S3VectorStorage {
             .send()
             .await?;
 
-        let bytes = output.body.collect().await?.into_bytes();
+        let bytes = output.body.collect().await
+            .map_err(|e| AwsStorageError::S3Error(e.to_string()))?.into_bytes();
         let records: Vec<VectorRecord> = serde_json::from_slice(&bytes)?;
 
         Ok(records)
     }
 
     /// Save a vector batch to S3.
-    async fn save_vector_batch(&self, records: &[VectorRecord]) -> Result<String> {
+    async fn save_vector_batch(&self, records: &[VectorRecord]) -> crate::error::Result<String> {
         let timestamp = chrono::Utc::now().timestamp();
         let key = format!("{}vectors/batch-{}.json", self.key_prefix(), timestamp);
 
@@ -432,8 +456,8 @@ impl S3VectorStorage {
     }
 
     /// Update metadata cache.
-    fn update_metadata_cache(&self, records: &[(String, Vec<f32>, serde_json::Value)]) {
-        let mut cache = self.metadata_cache.blocking_write();
+    async fn update_metadata_cache(&self, records: &[(String, Vec<f32>, serde_json::Value)]) {
+        let mut cache = self.metadata_cache.write().await;
         for (id, _, metadata) in records {
             cache.insert(id.clone(), metadata.clone());
         }
@@ -450,7 +474,7 @@ impl VectorStorage for S3VectorStorage {
         self.config.dimension
     }
 
-    async fn initialize(&self) -> Result<edgequake_storage::StorageError> {
+    async fn initialize(&self) -> edgequake_storage::error::Result<()> {
         info!("Initializing S3 vector storage: bucket={}, namespace={}",
               self.config.bucket, self.config.namespace);
 
@@ -492,7 +516,7 @@ impl VectorStorage for S3VectorStorage {
         Ok(())
     }
 
-    async fn finalize(&self) -> Result<edgequake_storage::StorageError> {
+    async fn finalize(&self) -> edgequake_storage::error::Result<()> {
         info!("Finalizing S3 vector storage");
 
         // Save index if it exists and has been modified
@@ -513,7 +537,7 @@ impl VectorStorage for S3VectorStorage {
         query_embedding: &[f32],
         top_k: usize,
         filter_ids: Option<&[String]>,
-    ) -> Result<Vec<VectorSearchResult>, edgequake_storage::StorageError> {
+    ) -> edgequake_storage::error::Result<Vec<VectorSearchResult>> {
         // Validate dimension
         if query_embedding.len() != self.config.dimension {
             return Err(AwsStorageError::DimensionMismatch {
@@ -542,8 +566,9 @@ impl VectorStorage for S3VectorStorage {
         let metadata_cache = self.metadata_cache.read().await;
         let mut search_results = Vec::new();
 
-        for (idx, distance) in results.iter().take(top_k * 2) {
-            let id = &index[*idx];
+        for map_item in results.take(top_k * 2) {
+            let id = map_item.value;
+            let distance = map_item.distance;
 
             // Apply filter if specified
             if let Some(filter) = filter_ids {
@@ -578,7 +603,7 @@ impl VectorStorage for S3VectorStorage {
     async fn upsert(
         &self,
         data: &[(String, Vec<f32>, serde_json::Value)],
-    ) -> Result<(), edgequake_storage::StorageError> {
+    ) -> edgequake_storage::error::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -623,11 +648,13 @@ impl VectorStorage for S3VectorStorage {
         self.save_manifest(&manifest).await?;
 
         // Update metadata cache
-        self.update_metadata_cache(data);
+        self.update_metadata_cache(data).await;
 
         // Update HNSW index
         let mut index_guard = self.index.write().await;
-        let mut index = index_guard.take().unwrap_or_default();
+        let mut index = index_guard.take().unwrap_or_else(|| {
+            Builder::default().build(Vec::<VectorPoint>::new(), Vec::<String>::new())
+        });
 
         for (id, embedding, _) in data {
             let point = VectorPoint {
@@ -652,7 +679,7 @@ impl VectorStorage for S3VectorStorage {
         Ok(())
     }
 
-    async fn delete(&self, ids: &[String]) -> Result<(), edgequake_storage::StorageError> {
+    async fn delete(&self, ids: &[String]) -> edgequake_storage::error::Result<()> {
         info!("Deleting {} vectors", ids.len());
 
         // For simplicity, we mark them as deleted in metadata
@@ -668,7 +695,7 @@ impl VectorStorage for S3VectorStorage {
         Ok(())
     }
 
-    async fn delete_entity(&self, entity_name: &str) -> Result<(), edgequake_storage::StorageError> {
+    async fn delete_entity(&self, entity_name: &str) -> edgequake_storage::error::Result<()> {
         info!("Deleting vectors for entity: {}", entity_name);
         // Find all vectors for this entity and delete them
         // This would require maintaining an entity-to-vector mapping
@@ -679,13 +706,13 @@ impl VectorStorage for S3VectorStorage {
     async fn delete_entity_relations(
         &self,
         entity_name: &str,
-    ) -> Result<(), edgequake_storage::StorageError> {
+    ) -> edgequake_storage::error::Result<()> {
         info!("Deleting relation vectors for entity: {}", entity_name);
         warn!("delete_entity_relations not yet implemented for S3 storage");
         Ok(())
     }
 
-    async fn get_by_id(&self, id: &str) -> Result<Option<Vec<f32>>, edgequake_storage::StorageError> {
+    async fn get_by_id(&self, id: &str) -> edgequake_storage::error::Result<Option<Vec<f32>>> {
         // Check cache first
         let mut cache = self.vector_cache.write().await;
         if let Some(vector) = cache.get(id) {
@@ -701,22 +728,22 @@ impl VectorStorage for S3VectorStorage {
     async fn get_by_ids(
         &self,
         ids: &[String],
-    ) -> Result<Vec<(String, Vec<f32>)>, edgequake_storage::StorageError> {
+    ) -> edgequake_storage::error::Result<Vec<(String, Vec<f32>)>> {
         warn!("get_by_ids not efficiently implemented for S3 - requires full scan");
         Ok(Vec::new())
     }
 
-    async fn is_empty(&self) -> Result<bool, edgequake_storage::StorageError> {
+    async fn is_empty(&self) -> edgequake_storage::error::Result<bool> {
         let manifest = self.manifest.read().await;
         Ok(manifest.total_vectors == 0)
     }
 
-    async fn count(&self) -> Result<usize, edgequake_storage::StorageError> {
+    async fn count(&self) -> edgequake_storage::error::Result<usize> {
         let manifest = self.manifest.read().await;
         Ok(manifest.total_vectors)
     }
 
-    async fn clear(&self) -> Result<(), edgequake_storage::StorageError> {
+    async fn clear(&self) -> edgequake_storage::error::Result<()> {
         info!("Clearing all vectors from S3 storage");
 
         // Delete all vector batches
@@ -732,7 +759,7 @@ impl VectorStorage for S3VectorStorage {
         }
 
         // Clear index
-        *self.index.write().await = Some(HnswMap::default());
+        *self.index.write().await = Some(Builder::default().build(Vec::<VectorPoint>::new(), Vec::<String>::new()));
 
         // Clear manifest
         *self.manifest.write().await = Manifest::new(self.config.dimension);
@@ -748,7 +775,7 @@ impl VectorStorage for S3VectorStorage {
     async fn clear_workspace(
         &self,
         workspace_id: &uuid::Uuid,
-    ) -> Result<usize, edgequake_storage::StorageError> {
+    ) -> edgequake_storage::error::Result<usize> {
         // For S3, each workspace has its own namespace
         // So clearing this workspace means clearing all data
         let count = self.count().await?;

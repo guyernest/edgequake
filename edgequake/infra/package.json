@@ -1,0 +1,23 @@
+{
+  "name": "edgequake-infra",
+  "version": "1.0.0",
+  "description": "EdgeQuake CDK infrastructure - single-tenant AWS deployment",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --all",
+    "destroy": "cdk destroy --all",
+    "diff": "cdk diff"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.175.0",
+    "constructs": "^10.4.0"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.175.0",
+    "typescript": "^5.9.0",
+    "@types/node": "^20"
+  }
+}

@@ -24,6 +24,10 @@ pub enum AwsStorageError {
     #[error("Athena error: {0}")]
     AthenaError(String),
 
+    /// S3 Vectors error
+    #[error("S3 Vectors error: {0}")]
+    S3VectorsError(String),
+
     /// Serialization error
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
@@ -58,11 +62,12 @@ pub enum AwsStorageError {
 }
 
 // Conversion from AWS SDK errors
-impl<E> From<aws_smithy_runtime_api::client::result::SdkError<E>> for AwsStorageError
+impl<E, R> From<aws_smithy_runtime_api::client::result::SdkError<E, R>> for AwsStorageError
 where
     E: std::error::Error + 'static,
+    R: std::fmt::Debug + 'static,
 {
-    fn from(err: aws_smithy_runtime_api::client::result::SdkError<E>) -> Self {
+    fn from(err: aws_smithy_runtime_api::client::result::SdkError<E, R>) -> Self {
         AwsStorageError::Other(err.to_string())
     }
 }
@@ -73,7 +78,9 @@ impl From<AwsStorageError> for edgequake_storage::StorageError {
         match err {
             AwsStorageError::NotFound(msg) => edgequake_storage::StorageError::NotFound(msg),
             AwsStorageError::DimensionMismatch { expected, actual } => {
-                edgequake_storage::StorageError::InvalidDimension { expected, actual }
+                edgequake_storage::StorageError::InvalidData(
+                    format!("Dimension mismatch: expected {}, got {}", expected, actual),
+                )
             }
             _ => edgequake_storage::StorageError::Database(err.to_string()),
         }

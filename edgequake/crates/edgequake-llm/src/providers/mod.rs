@@ -13,3 +13,5 @@ pub mod jina;
 pub mod ollama;
 
 pub mod lmstudio;
+
+pub mod openai_batch;
