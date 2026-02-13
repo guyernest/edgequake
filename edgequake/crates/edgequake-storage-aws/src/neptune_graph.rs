@@ -1,72 +1,25 @@
-//! Amazon Neptune graph storage using Gremlin.
+//! Amazon Neptune graph storage using the Neptune Data API.
 //!
-//! This module provides graph storage using Amazon Neptune, a fully managed
-//! graph database service that supports both Gremlin and SPARQL queries.
+//! Uses `aws-sdk-neptunedata` to execute Gremlin queries over HTTP with
+//! automatic IAM SigV4 authentication. This replaces the previous WebSocket-based
+//! `gremlin-client` approach, which didn't support IAM auth.
 //!
 //! ## Architecture
 //!
 //! ```text
-//! Application → Gremlin Client → Neptune Cluster
-//!                                    ├── Primary Instance
-//!                                    └── Read Replicas (optional)
-//! ```
-//!
-//! ## Features
-//!
-//! - **Serverless**: Auto-scales from 2.5 to 128 NCUs (Neptune Capacity Units)
-//! - **Cost-effective**: Pay per query ($0.16/1M reads, $0.20/1M writes)
-//! - **No idle costs**: Scales to zero when not in use
-//! - **ACID**: Full transactional support
-//! - **Highly available**: Multi-AZ deployment
-//! - **Backup**: Continuous backup to S3
-//!
-//! ## Gremlin Query Language
-//!
-//! Neptune uses Apache TinkerPop Gremlin for graph traversal:
-//!
-//! ```gremlin
-//! // Add a vertex
-//! g.addV('Entity').property('id', 'doc1').property('type', 'document')
-//!
-//! // Add an edge
-//! g.V().has('id', 'doc1').addE('relates_to').to(g.V().has('id', 'doc2'))
-//!
-//! // Traverse graph
-//! g.V().has('id', 'doc1').out().out().limit(10)
-//! ```
-//!
-//! ## Example
-//!
-//! ```rust,ignore
-//! use edgequake_storage_aws::{NeptuneConfig, NeptuneGraphStorage};
-//! use edgequake_storage::GraphStorage;
-//!
-//! let config = NeptuneConfig::new("my-cluster.cluster-xxx.us-east-1.neptune.amazonaws.com:8182");
-//! let storage = NeptuneGraphStorage::new(config).await?;
-//!
-//! storage.initialize().await?;
-//!
-//! // Add node
-//! let mut properties = HashMap::new();
-//! properties.insert("type".to_string(), json!("document"));
-//! storage.upsert_node("doc1", properties).await?;
-//!
-//! // Query graph
-//! let graph = storage.get_knowledge_graph("doc1", 2, 100).await?;
+//! Application → Neptune Data API (HTTP + SigV4) → Neptune Cluster
+//!                                                     ├── Primary Instance
+//!                                                     └── Read Replicas (optional)
 //! ```
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use async_trait::async_trait;
-use gremlin_client::{GremlinClient, GremlinError, GraphSON, Vertex, Edge as GremlinEdge};
+use aws_sdk_neptunedata::Client;
 use serde_json::Value as JsonValue;
-use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
-use edgequake_storage::{
-    GraphEdge, GraphNode, GraphStorage, KnowledgeGraph, StorageError,
-};
+use edgequake_storage::{GraphEdge, GraphNode, GraphStorage, KnowledgeGraph};
 
 use crate::error::AwsStorageError;
 
@@ -77,13 +30,13 @@ pub struct NeptuneConfig {
     pub endpoint: String,
     /// Storage namespace (workspace ID)
     pub namespace: String,
-    /// Use IAM authentication (recommended for production)
+    /// Use IAM authentication (always true with Neptune Data API)
     pub use_iam_auth: bool,
-    /// Connection pool size
+    /// Connection pool size (unused with HTTP API, kept for config compat)
     pub pool_size: usize,
     /// Query timeout in seconds
     pub timeout_secs: u64,
-    /// Enable SSL/TLS
+    /// Enable SSL/TLS (always true with Neptune Data API)
     pub use_ssl: bool,
 }
 
@@ -135,85 +88,99 @@ impl NeptuneConfig {
     }
 }
 
-/// Amazon Neptune graph storage using Gremlin.
+/// Amazon Neptune graph storage using the Neptune Data API.
 ///
-/// Provides a fully managed, serverless graph database for storing
+/// Executes Gremlin queries over HTTP with IAM SigV4 authentication,
+/// providing a fully managed, serverless graph database for storing
 /// entities and relationships in the knowledge graph.
 pub struct NeptuneGraphStorage {
     config: NeptuneConfig,
-    client: Arc<RwLock<Option<GremlinClient>>>,
+    client: Client,
 }
 
 impl NeptuneGraphStorage {
     /// Create a new Neptune graph storage.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Neptune configuration
     pub async fn new(config: NeptuneConfig) -> crate::error::Result<Self> {
-        Ok(Self {
-            config,
-            client: Arc::new(RwLock::new(None)),
-        })
-    }
+        let endpoint = &config.endpoint;
 
-    /// Get or create the Gremlin client.
-    async fn get_client(&self) -> crate::error::Result<GremlinClient> {
-        let mut client_guard = self.client.write().await;
+        // Parse host:port, stripping any protocol prefix
+        let clean = endpoint
+            .strip_prefix("wss://")
+            .or_else(|| endpoint.strip_prefix("https://"))
+            .or_else(|| endpoint.strip_prefix("ws://"))
+            .or_else(|| endpoint.strip_prefix("http://"))
+            .unwrap_or(endpoint);
 
-        if let Some(client) = client_guard.as_ref() {
-            return Ok(client.clone());
-        }
+        // Strip any path suffix (e.g., /gremlin)
+        let host_port = clean.split('/').next().unwrap_or(clean);
 
-        // Create new client
-        info!("Connecting to Neptune at {}", self.config.endpoint);
+        let neptune_url = format!("https://{}", host_port);
 
-        let host = self.config.endpoint.split(':').next()
-            .unwrap_or(&self.config.endpoint).to_string();
-        let port: u16 = self.config.endpoint.split(':').nth(1)
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(8182);
+        let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
 
-        let options = gremlin_client::ConnectionOptions::builder()
-            .host(host)
-            .port(port)
-            .ssl(self.config.use_ssl)
+        let neptune_config = aws_sdk_neptunedata::config::Builder::from(&aws_config)
+            .endpoint_url(&neptune_url)
             .build();
 
-        let client = GremlinClient::connect(options)
-            .map_err(|e| AwsStorageError::NeptuneError(format!("Failed to connect: {}", e)))?;
+        let client = Client::from_conf(neptune_config);
 
-        *client_guard = Some(client.clone());
-        Ok(client)
+        Ok(Self { config, client })
     }
 
-    /// Execute a Gremlin query.
+    /// Execute a Gremlin query via the Neptune Data API.
+    ///
+    /// The Neptune Data API returns results in GraphSON format with `@type`/`@value`
+    /// wrappers. This method converts to plain JSON via `unwrap_graphson()`.
+    ///
+    /// Response structure: `{ "result": { "data": { "@type": "g:List", "@value": [...] }, "meta": ... } }`
     async fn execute(&self, query: &str) -> crate::error::Result<Vec<JsonValue>> {
-        let client = self.get_client().await?;
-
         debug!("Executing Gremlin query: {}", query);
 
-        let results = client
-            .execute(query, &[])
+        let result = self
+            .client
+            .execute_gremlin_query()
+            .gremlin_query(query)
+            .send()
+            .await
             .map_err(|e| AwsStorageError::NeptuneError(format!("Query failed: {}", e)))?;
 
-        let values: Vec<JsonValue> = results
-            .filter_map(|r| {
-                match r {
-                    Ok(gval) => Some(serde_json::to_value(&format!("{:?}", gval)).unwrap_or_default()),
-                    Err(_) => None,
-                }
-            })
-            .collect();
+        // The result field contains the Gremlin response as a Document.
+        // Structure: {"data": {"@type": "g:List", "@value": [...]}, "meta": {...}}
+        let result_doc = result.result();
 
-        Ok(values)
+        let json_value = if let Some(doc) = result_doc {
+            document_to_json(doc)
+        } else {
+            return Ok(vec![]);
+        };
+
+        // Unwrap GraphSON typed values to plain JSON
+        let unwrapped = unwrap_graphson(&json_value);
+
+        // Extract the data array from the response envelope
+        match unwrapped {
+            JsonValue::Object(ref obj) => {
+                if let Some(data) = obj.get("data") {
+                    match data {
+                        JsonValue::Array(arr) => Ok(arr.clone()),
+                        other => Ok(vec![other.clone()]),
+                    }
+                } else {
+                    // No "data" key — return as-is
+                    Ok(vec![unwrapped])
+                }
+            }
+            JsonValue::Array(arr) => Ok(arr),
+            other => Ok(vec![other]),
+        }
     }
 
     /// Convert properties HashMap to Gremlin property chain.
     fn properties_to_gremlin(&self, properties: &HashMap<String, JsonValue>) -> String {
-        let mut parts = vec![
-            format!(".property('namespace', '{}')", self.config.namespace)
-        ];
+        let mut parts = vec![format!(
+            ".property('namespace', '{}')",
+            self.config.namespace
+        )];
 
         for (key, value) in properties {
             let value_str = match value {
@@ -221,7 +188,12 @@ impl NeptuneGraphStorage {
                 JsonValue::Number(n) => n.to_string(),
                 JsonValue::Bool(b) => b.to_string(),
                 JsonValue::Null => "null".to_string(),
-                _ => format!("'{}'", serde_json::to_string(value).unwrap_or_default().replace('\'', "\\'")),
+                _ => format!(
+                    "'{}'",
+                    serde_json::to_string(value)
+                        .unwrap_or_default()
+                        .replace('\'', "\\'")
+                ),
             };
             parts.push(format!(".property('{}', {})", key, value_str));
         }
@@ -229,7 +201,10 @@ impl NeptuneGraphStorage {
         parts.join("")
     }
 
-    /// Parse vertex to GraphNode.
+    /// Parse vertex to GraphNode from unwrapped elementMap() format.
+    ///
+    /// After GraphSON unwrapping, elementMap() returns a flat JSON object:
+    /// `{"id": "SEC", "label": "Entity", "entity_type": "ORGANIZATION", ...}`
     fn vertex_to_node(&self, vertex: &JsonValue) -> crate::error::Result<GraphNode> {
         let id = vertex["id"]
             .as_str()
@@ -238,42 +213,54 @@ impl NeptuneGraphStorage {
 
         let mut properties = HashMap::new();
 
-        if let Some(props) = vertex["properties"].as_object() {
-            for (key, value_array) in props {
-                // Neptune returns properties as arrays
-                if let Some(arr) = value_array.as_array() {
-                    if let Some(first) = arr.first() {
-                        if let Some(val) = first.get("value") {
-                            properties.insert(key.clone(), val.clone());
-                        }
-                    }
+        // elementMap() returns a flat object — all keys except "id" and "label"
+        // are vertex properties
+        if let Some(obj) = vertex.as_object() {
+            for (key, value) in obj {
+                if key != "id" && key != "label" {
+                    properties.insert(key.clone(), value.clone());
                 }
             }
         }
 
-        Ok(GraphNode {
-            id,
-            properties,
-        })
+        Ok(GraphNode { id, properties })
     }
 
-    /// Parse edge to GraphEdge.
+    /// Parse edge to GraphEdge from unwrapped elementMap() format.
+    ///
+    /// After GraphSON unwrapping, edge elementMap() returns:
+    /// ```json
+    /// {
+    ///   "id": "COMPANY_A:AGENT",
+    ///   "label": "relates_to",
+    ///   "OUT": {"id": "COMPANY_A", "label": "Entity"},
+    ///   "IN": {"id": "AGENT", "label": "Entity"},
+    ///   "description": "...",
+    ///   "weight": 0.5,
+    ///   "namespace": "epstein"
+    /// }
+    /// ```
     fn edge_to_graph_edge(&self, edge: &JsonValue) -> crate::error::Result<GraphEdge> {
-        let source = edge["outV"]
+        // Source vertex is under "OUT" key (outgoing direction)
+        let source = edge["OUT"]["id"]
             .as_str()
-            .ok_or_else(|| AwsStorageError::NeptuneError("Missing edge source".into()))?
+            .ok_or_else(|| AwsStorageError::NeptuneError("Missing edge source (OUT.id)".into()))?
             .to_string();
 
-        let target = edge["inV"]
+        // Target vertex is under "IN" key (incoming direction)
+        let target = edge["IN"]["id"]
             .as_str()
-            .ok_or_else(|| AwsStorageError::NeptuneError("Missing edge target".into()))?
+            .ok_or_else(|| AwsStorageError::NeptuneError("Missing edge target (IN.id)".into()))?
             .to_string();
 
         let mut properties = HashMap::new();
 
-        if let Some(props) = edge["properties"].as_object() {
-            for (key, value) in props {
-                properties.insert(key.clone(), value.clone());
+        // All keys except structural ones are edge properties
+        if let Some(obj) = edge.as_object() {
+            for (key, value) in obj {
+                if key != "id" && key != "label" && key != "IN" && key != "OUT" {
+                    properties.insert(key.clone(), value.clone());
+                }
             }
         }
 
@@ -285,6 +272,120 @@ impl NeptuneGraphStorage {
     }
 }
 
+/// Convert an `aws_smithy_types::Document` to `serde_json::Value`.
+fn document_to_json(doc: &aws_smithy_types::Document) -> JsonValue {
+    match doc {
+        aws_smithy_types::Document::Null => JsonValue::Null,
+        aws_smithy_types::Document::Bool(b) => JsonValue::Bool(*b),
+        aws_smithy_types::Document::Number(n) => match *n {
+            aws_smithy_types::Number::PosInt(i) => {
+                JsonValue::Number(serde_json::Number::from(i))
+            }
+            aws_smithy_types::Number::NegInt(i) => {
+                JsonValue::Number(serde_json::Number::from(i))
+            }
+            aws_smithy_types::Number::Float(f) => serde_json::Number::from_f64(f)
+                .map(JsonValue::Number)
+                .unwrap_or(JsonValue::Null),
+        },
+        aws_smithy_types::Document::String(s) => JsonValue::String(s.clone()),
+        aws_smithy_types::Document::Array(arr) => {
+            JsonValue::Array(arr.iter().map(document_to_json).collect())
+        }
+        aws_smithy_types::Document::Object(map) => {
+            let obj: serde_json::Map<String, JsonValue> = map
+                .iter()
+                .map(|(k, v)| (k.clone(), document_to_json(v)))
+                .collect();
+            JsonValue::Object(obj)
+        }
+    }
+}
+
+/// Recursively unwrap GraphSON-typed values to plain JSON.
+///
+/// The Neptune Data API returns Gremlin results in GraphSON format where values
+/// are wrapped in `{"@type": "g:...", "@value": ...}` envelopes. This function
+/// strips those wrappers to produce plain JSON values.
+///
+/// Supported types:
+/// - `g:Int32`, `g:Int64` → number
+/// - `g:Double`, `g:Float` → number
+/// - `g:List` → array (recursively unwrapped)
+/// - `g:Map` → object (from flat `[k1, v1, k2, v2, ...]` pairs)
+/// - `g:T` → string (traversal tokens: "id", "label")
+/// - `g:Direction` → string ("IN", "OUT")
+/// - `g:Vertex`, `g:Edge`, `g:VertexProperty`, `g:Path` → recursively unwrapped inner value
+fn unwrap_graphson(value: &JsonValue) -> JsonValue {
+    match value {
+        JsonValue::Object(obj) => {
+            if let (Some(type_val), Some(val)) = (obj.get("@type"), obj.get("@value")) {
+                let type_str = type_val.as_str().unwrap_or("");
+                match type_str {
+                    // Scalars — return the inner value directly
+                    "g:Int32" | "g:Int64" | "g:Float" | "g:Double" => {
+                        unwrap_graphson(val)
+                    }
+                    // Tokens and enums — return the string value
+                    "g:T" | "g:Direction" => {
+                        unwrap_graphson(val)
+                    }
+                    // List — unwrap each element
+                    "g:List" => {
+                        if let JsonValue::Array(arr) = val {
+                            JsonValue::Array(arr.iter().map(unwrap_graphson).collect())
+                        } else {
+                            unwrap_graphson(val)
+                        }
+                    }
+                    // Map — flat interleaved [k1, v1, k2, v2, ...] → JSON object
+                    "g:Map" => {
+                        if let JsonValue::Array(arr) = val {
+                            let mut map = serde_json::Map::new();
+                            let mut i = 0;
+                            while i + 1 < arr.len() {
+                                let key = unwrap_graphson(&arr[i]);
+                                let value = unwrap_graphson(&arr[i + 1]);
+                                let key_str = match &key {
+                                    JsonValue::String(s) => s.clone(),
+                                    other => other.to_string(),
+                                };
+                                map.insert(key_str, value);
+                                i += 2;
+                            }
+                            JsonValue::Object(map)
+                        } else {
+                            unwrap_graphson(val)
+                        }
+                    }
+                    // Complex types — unwrap the inner value recursively
+                    "g:Vertex" | "g:Edge" | "g:VertexProperty" | "g:Path"
+                    | "g:Property" | "g:Star" => {
+                        unwrap_graphson(val)
+                    }
+                    // Unknown typed value — unwrap anyway
+                    _ => {
+                        debug!("Unknown GraphSON type: {}", type_str);
+                        unwrap_graphson(val)
+                    }
+                }
+            } else {
+                // Plain object (no @type/@value) — recursively unwrap values
+                let map: serde_json::Map<String, JsonValue> = obj
+                    .iter()
+                    .map(|(k, v)| (k.clone(), unwrap_graphson(v)))
+                    .collect();
+                JsonValue::Object(map)
+            }
+        }
+        JsonValue::Array(arr) => {
+            JsonValue::Array(arr.iter().map(unwrap_graphson).collect())
+        }
+        // Primitives pass through
+        other => other.clone(),
+    }
+}
+
 #[async_trait]
 impl GraphStorage for NeptuneGraphStorage {
     fn namespace(&self) -> &str {
@@ -292,17 +393,19 @@ impl GraphStorage for NeptuneGraphStorage {
     }
 
     async fn initialize(&self) -> edgequake_storage::error::Result<()> {
-        info!("Initializing Neptune graph storage: endpoint={}, namespace={}",
-              self.config.endpoint, self.config.namespace);
+        info!(
+            "Initializing Neptune graph storage: endpoint={}, namespace={}",
+            self.config.endpoint, self.config.namespace
+        );
 
-        // Test connection
-        let client = self.get_client().await?;
-
-        // Verify connection with a simple query
+        // Test connection with a simple query
         let query = "g.V().limit(1).count()";
-        client
-            .execute(query, &[])
-            .map_err(|e| AwsStorageError::NeptuneError(format!("Connection test failed: {}", e)))?;
+        self.execute(query).await.map_err(|e| {
+            edgequake_storage::StorageError::Database(format!(
+                "Neptune connection test failed: {}",
+                e
+            ))
+        })?;
 
         info!("Neptune graph storage initialized successfully");
         Ok(())
@@ -310,15 +413,18 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn finalize(&self) -> edgequake_storage::error::Result<()> {
         info!("Finalizing Neptune graph storage");
-        // Neptune doesn't require explicit finalization
         Ok(())
     }
 
     // ========== Node Operations ==========
+    //
+    // NOTE: Neptune stores entity IDs as T.id (structural vertex ID), not as a
+    // regular property named "id". All queries use g.V('id') for T.id lookup
+    // instead of g.V().has('id', 'value').
 
     async fn has_node(&self, node_id: &str) -> edgequake_storage::error::Result<bool> {
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').hasNext()",
+            "g.V('{}').has('namespace', '{}').hasNext()",
             node_id, self.config.namespace
         );
 
@@ -326,9 +432,12 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(results.first().and_then(|v| v.as_bool()).unwrap_or(false))
     }
 
-    async fn get_node(&self, node_id: &str) -> edgequake_storage::error::Result<Option<GraphNode>> {
+    async fn get_node(
+        &self,
+        node_id: &str,
+    ) -> edgequake_storage::error::Result<Option<GraphNode>> {
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').elementMap()",
+            "g.V('{}').has('namespace', '{}').elementMap()",
             node_id, self.config.namespace
         );
 
@@ -349,11 +458,10 @@ impl GraphStorage for NeptuneGraphStorage {
     ) -> edgequake_storage::error::Result<()> {
         let props = self.properties_to_gremlin(&properties);
 
-        // Upsert: try to update existing, or create new
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').fold().coalesce(\
+            "g.V('{}').has('namespace', '{}').fold().coalesce(\
                 unfold().sideEffect(__.properties().drop()){},\
-                addV('Entity').property('id', '{}'){})",
+                addV('Entity').property(id, '{}'){})",
             node_id, self.config.namespace, props, node_id, props
         );
 
@@ -371,23 +479,15 @@ impl GraphStorage for NeptuneGraphStorage {
 
         info!("Batch upserting {} nodes", nodes.len());
 
-        // Neptune doesn't have a native batch upsert, so we batch queries
         for chunk in nodes.chunks(100) {
-            let mut queries = Vec::new();
-
             for (node_id, properties) in chunk {
                 let props = self.properties_to_gremlin(properties);
                 let query = format!(
-                    "g.V().has('id', '{}').has('namespace', '{}').fold().coalesce(\
+                    "g.V('{}').has('namespace', '{}').fold().coalesce(\
                         unfold().sideEffect(__.properties().drop()){},\
-                        addV('Entity').property('id', '{}'){})",
+                        addV('Entity').property(id, '{}'){})",
                     node_id, self.config.namespace, props, node_id, props
                 );
-                queries.push(query);
-            }
-
-            // Execute queries sequentially (Neptune doesn't support true batching)
-            for query in queries {
                 self.execute(&query).await?;
             }
         }
@@ -396,9 +496,8 @@ impl GraphStorage for NeptuneGraphStorage {
     }
 
     async fn delete_node(&self, node_id: &str) -> edgequake_storage::error::Result<()> {
-        // Delete node and all connected edges
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').drop()",
+            "g.V('{}').has('namespace', '{}').drop()",
             node_id, self.config.namespace
         );
 
@@ -408,7 +507,7 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn node_degree(&self, node_id: &str) -> edgequake_storage::error::Result<usize> {
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').bothE().count()",
+            "g.V('{}').has('namespace', '{}').bothE().count()",
             node_id, self.config.namespace
         );
 
@@ -421,14 +520,16 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(count)
     }
 
-    async fn node_degrees_batch(&self, node_ids: &[String]) -> edgequake_storage::error::Result<Vec<(String, usize)>> {
+    async fn node_degrees_batch(
+        &self,
+        node_ids: &[String],
+    ) -> edgequake_storage::error::Result<Vec<(String, usize)>> {
         if node_ids.is_empty() {
             return Ok(Vec::new());
         }
 
         let mut results = Vec::new();
 
-        // Process in batches
         for chunk in node_ids.chunks(50) {
             for node_id in chunk {
                 let degree = self.node_degree(node_id).await?;
@@ -457,7 +558,10 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(nodes)
     }
 
-    async fn get_nodes_by_ids(&self, node_ids: &[String]) -> edgequake_storage::error::Result<Vec<GraphNode>> {
+    async fn get_nodes_by_ids(
+        &self,
+        node_ids: &[String],
+    ) -> edgequake_storage::error::Result<Vec<GraphNode>> {
         if node_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -469,8 +573,8 @@ impl GraphStorage for NeptuneGraphStorage {
             .join(",");
 
         let query = format!(
-            "g.V().has('namespace', '{}').has('id', within({}))).elementMap()",
-            self.config.namespace, ids_list
+            "g.V({}).has('namespace', '{}').elementMap()",
+            ids_list, self.config.namespace
         );
 
         let results = self.execute(&query).await?;
@@ -485,16 +589,23 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(nodes)
     }
 
-    async fn get_nodes_batch(&self, node_ids: &[String]) -> edgequake_storage::error::Result<HashMap<String, GraphNode>> {
+    async fn get_nodes_batch(
+        &self,
+        node_ids: &[String],
+    ) -> edgequake_storage::error::Result<HashMap<String, GraphNode>> {
         let nodes = self.get_nodes_by_ids(node_ids).await?;
         Ok(nodes.into_iter().map(|n| (n.id.clone(), n)).collect())
     }
 
     // ========== Edge Operations ==========
 
-    async fn has_edge(&self, source: &str, target: &str) -> edgequake_storage::error::Result<bool> {
+    async fn has_edge(
+        &self,
+        source: &str,
+        target: &str,
+    ) -> edgequake_storage::error::Result<bool> {
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').outE().where(inV().has('id', '{}')).hasNext()",
+            "g.V('{}').has('namespace', '{}').outE().where(inV().hasId('{}')).hasNext()",
             source, self.config.namespace, target
         );
 
@@ -502,9 +613,13 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(results.first().and_then(|v| v.as_bool()).unwrap_or(false))
     }
 
-    async fn get_edge(&self, source: &str, target: &str) -> edgequake_storage::error::Result<Option<GraphEdge>> {
+    async fn get_edge(
+        &self,
+        source: &str,
+        target: &str,
+    ) -> edgequake_storage::error::Result<Option<GraphEdge>> {
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').outE().where(inV().has('id', '{}')).elementMap()",
+            "g.V('{}').has('namespace', '{}').outE().where(inV().hasId('{}')).elementMap()",
             source, self.config.namespace, target
         );
 
@@ -528,24 +643,24 @@ impl GraphStorage for NeptuneGraphStorage {
 
         // First ensure both vertices exist
         self.execute(&format!(
-            "g.V().has('id', '{}').has('namespace', '{}').fold().coalesce(unfold(), addV('Entity').property('id', '{}').property('namespace', '{}'))",
+            "g.V('{}').has('namespace', '{}').fold().coalesce(unfold(), addV('Entity').property(id, '{}').property('namespace', '{}'))",
             source, self.config.namespace, source, self.config.namespace
         )).await?;
 
         self.execute(&format!(
-            "g.V().has('id', '{}').has('namespace', '{}').fold().coalesce(unfold(), addV('Entity').property('id', '{}').property('namespace', '{}'))",
+            "g.V('{}').has('namespace', '{}').fold().coalesce(unfold(), addV('Entity').property(id, '{}').property('namespace', '{}'))",
             target, self.config.namespace, target, self.config.namespace
         )).await?;
 
         // Delete existing edge if present
         self.execute(&format!(
-            "g.V().has('id', '{}').has('namespace', '{}').outE('relates_to').where(inV().has('id', '{}')).drop()",
+            "g.V('{}').has('namespace', '{}').outE('relates_to').where(inV().hasId('{}')).drop()",
             source, self.config.namespace, target
         )).await?;
 
         // Add new edge
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').addE('relates_to').to(g.V().has('id', '{}').has('namespace', '{}')){}",
+            "g.V('{}').has('namespace', '{}').addE('relates_to').to(g.V('{}').has('namespace', '{}')){}",
             source, self.config.namespace, target, self.config.namespace, props
         );
 
@@ -570,9 +685,13 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(())
     }
 
-    async fn delete_edge(&self, source: &str, target: &str) -> edgequake_storage::error::Result<()> {
+    async fn delete_edge(
+        &self,
+        source: &str,
+        target: &str,
+    ) -> edgequake_storage::error::Result<()> {
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').outE().where(inV().has('id', '{}')).drop()",
+            "g.V('{}').has('namespace', '{}').outE().where(inV().hasId('{}')).drop()",
             source, self.config.namespace, target
         );
 
@@ -580,9 +699,12 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(())
     }
 
-    async fn get_node_edges(&self, node_id: &str) -> edgequake_storage::error::Result<Vec<GraphEdge>> {
+    async fn get_node_edges(
+        &self,
+        node_id: &str,
+    ) -> edgequake_storage::error::Result<Vec<GraphEdge>> {
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').bothE().elementMap()",
+            "g.V('{}').has('namespace', '{}').bothE().elementMap()",
             node_id, self.config.namespace
         );
 
@@ -624,34 +746,41 @@ impl GraphStorage for NeptuneGraphStorage {
         max_depth: usize,
         max_nodes: usize,
     ) -> edgequake_storage::error::Result<KnowledgeGraph> {
-        let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').repeat(both().simplePath()).times({}).limit({}).path().by(elementMap())",
+        // Use emit() to collect vertices at each depth, then get edges separately
+        let node_query = format!(
+            "g.V('{}').has('namespace', '{}').emit().repeat(both().simplePath()).times({}).dedup().limit({}).elementMap()",
             start_node, self.config.namespace, max_depth, max_nodes
         );
 
-        let results = self.execute(&query).await?;
+        let node_results = self.execute(&node_query).await?;
 
         let mut graph = KnowledgeGraph::new();
-        let mut seen_nodes = std::collections::HashSet::new();
-        let mut seen_edges = std::collections::HashSet::new();
+        let mut node_ids = Vec::new();
 
-        for path in results {
-            if let Some(objects) = path["objects"].as_array() {
-                for obj in objects {
-                    if obj["type"].as_str() == Some("vertex") {
-                        if let Ok(node) = self.vertex_to_node(obj) {
-                            if seen_nodes.insert(node.id.clone()) {
-                                graph.add_node(node);
-                            }
-                        }
-                    } else if obj["type"].as_str() == Some("edge") {
-                        if let Ok(edge) = self.edge_to_graph_edge(obj) {
-                            let edge_key = format!("{}:{}", edge.source, edge.target);
-                            if seen_edges.insert(edge_key) {
-                                graph.add_edge(edge);
-                            }
-                        }
-                    }
+        for vertex in &node_results {
+            if let Ok(node) = self.vertex_to_node(vertex) {
+                node_ids.push(node.id.clone());
+                graph.add_node(node);
+            }
+        }
+
+        // Get edges between the discovered nodes
+        if node_ids.len() > 1 {
+            let ids_list = node_ids
+                .iter()
+                .map(|id| format!("'{}'", id))
+                .collect::<Vec<_>>()
+                .join(",");
+
+            let edge_query = format!(
+                "g.V({}).has('namespace', '{}').outE().where(inV().hasId(within({}))).elementMap()",
+                ids_list, self.config.namespace, ids_list
+            );
+
+            let edge_results = self.execute(&edge_query).await?;
+            for edge_data in edge_results {
+                if let Ok(edge) = self.edge_to_graph_edge(&edge_data) {
+                    graph.add_edge(edge);
                 }
             }
         }
@@ -661,9 +790,12 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(graph)
     }
 
-    async fn get_popular_labels(&self, limit: usize) -> edgequake_storage::error::Result<Vec<String>> {
+    async fn get_popular_labels(
+        &self,
+        limit: usize,
+    ) -> edgequake_storage::error::Result<Vec<String>> {
         let query = format!(
-            "g.V().has('namespace', '{}').group().by('id').by(bothE().count()).order(local).by(values, desc).limit({})",
+            "g.V().has('namespace', '{}').group().by(T.id).by(bothE().count()).order(local).by(values, desc).limit(local, {})",
             self.config.namespace, limit
         );
 
@@ -682,12 +814,15 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(labels)
     }
 
-    async fn search_labels(&self, query_str: &str, limit: usize) -> edgequake_storage::error::Result<Vec<String>> {
-        // Gremlin doesn't have a built-in "starts with" for properties
-        // We'll get all and filter in Rust
+    async fn search_labels(
+        &self,
+        query_str: &str,
+        limit: usize,
+    ) -> edgequake_storage::error::Result<Vec<String>> {
         let query = format!(
-            "g.V().has('namespace', '{}').values('id').limit({})",
-            self.config.namespace, limit * 10
+            "g.V().has('namespace', '{}').limit({}).id()",
+            self.config.namespace,
+            limit * 10
         );
 
         let results = self.execute(&query).await?;
@@ -715,16 +850,16 @@ impl GraphStorage for NeptuneGraphStorage {
         _tenant_id: Option<&str>,
         _workspace_id: Option<&str>,
     ) -> edgequake_storage::error::Result<Vec<(GraphNode, usize)>> {
-        let mut query = format!(
-            "g.V().has('namespace', '{}')",
-            self.config.namespace
-        );
+        let mut query = format!("g.V().has('namespace', '{}')", self.config.namespace);
 
         if let Some(et) = entity_type {
             query.push_str(&format!(".has('entity_type', '{}')", et));
         }
 
-        query.push_str(&format!(".limit({}).project('node', 'degree').by(elementMap()).by(bothE().count())", limit));
+        query.push_str(&format!(
+            ".limit({}).project('node', 'degree').by(elementMap()).by(bothE().count())",
+            limit
+        ));
 
         let results = self.execute(&query).await?;
 
@@ -752,9 +887,13 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(nodes)
     }
 
-    async fn get_neighbors(&self, node_id: &str, depth: usize) -> edgequake_storage::error::Result<Vec<GraphNode>> {
+    async fn get_neighbors(
+        &self,
+        node_id: &str,
+        depth: usize,
+    ) -> edgequake_storage::error::Result<Vec<GraphNode>> {
         let query = format!(
-            "g.V().has('id', '{}').has('namespace', '{}').repeat(both().simplePath()).times({}).dedup().elementMap()",
+            "g.V('{}').has('namespace', '{}').repeat(both().simplePath()).times({}).dedup().elementMap()",
             node_id, self.config.namespace, depth
         );
 
@@ -789,8 +928,8 @@ impl GraphStorage for NeptuneGraphStorage {
             .join(",");
 
         let query = format!(
-            "g.V().has('namespace', '{}').has('id', within({})).outE().where(inV().has('id', within({}))).elementMap()",
-            self.config.namespace, ids_list, ids_list
+            "g.V({}).has('namespace', '{}').outE().where(inV().hasId(within({}))).elementMap()",
+            ids_list, self.config.namespace, ids_list
         );
 
         let results = self.execute(&query).await?;
@@ -838,7 +977,10 @@ impl GraphStorage for NeptuneGraphStorage {
     }
 
     async fn clear(&self) -> edgequake_storage::error::Result<()> {
-        warn!("Clearing all nodes and edges for namespace: {}", self.config.namespace);
+        warn!(
+            "Clearing all nodes and edges for namespace: {}",
+            self.config.namespace
+        );
 
         let query = format!(
             "g.V().has('namespace', '{}').drop()",
@@ -849,7 +991,10 @@ impl GraphStorage for NeptuneGraphStorage {
         Ok(())
     }
 
-    async fn clear_workspace(&self, workspace_id: &uuid::Uuid) -> edgequake_storage::error::Result<(usize, usize)> {
+    async fn clear_workspace(
+        &self,
+        _workspace_id: &uuid::Uuid,
+    ) -> edgequake_storage::error::Result<(usize, usize)> {
         let node_count = self.node_count().await?;
         let edge_count = self.edge_count().await?;
 

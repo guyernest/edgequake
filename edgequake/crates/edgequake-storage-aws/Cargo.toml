@@ -13,7 +13,7 @@ default = ["s3-vectors", "s3vectors"]
 s3-vectors = ["dep:parquet", "dep:arrow"]
 s3vectors = ["dep:aws-sdk-s3vectors"]
 dynamodb = ["dep:aws-sdk-dynamodb"]
-neptune = ["dep:gremlin-client", "dep:async-tungstenite"]
+neptune = ["dep:aws-sdk-neptunedata"]
 athena = ["dep:aws-sdk-athena"]
 # Enable all AWS storage backends
 full = ["s3-vectors", "s3vectors", "dynamodb", "neptune", "athena"]
@@ -72,9 +72,8 @@ lru = "0.12"
 # Time/date handling
 chrono = { workspace = true }
 
-# Graph database client (optional)
-gremlin-client = { version = "0.8", optional = true }
-async-tungstenite = { version = "0.28", features = ["tokio-runtime", "tokio-rustls-webpki-roots"], optional = true }
+# Neptune Data API client (optional, for Gremlin over HTTP with IAM SigV4)
+aws-sdk-neptunedata = { version = "1.96", optional = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

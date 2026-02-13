@@ -22,6 +22,30 @@ use tracing::{debug, info, warn};
 
 use crate::error::AwsStorageError;
 
+/// Extract a descriptive error message from an AWS SDK error.
+///
+/// `SdkError::to_string()` often returns just "service error" which is useless
+/// for debugging. This helper extracts the actual service error message.
+fn s3v_err<E, R>(err: aws_smithy_runtime_api::client::result::SdkError<E, R>) -> AwsStorageError
+where
+    E: std::fmt::Display + std::fmt::Debug,
+    R: std::fmt::Debug,
+{
+    let msg = match &err {
+        aws_smithy_runtime_api::client::result::SdkError::ServiceError(ctx) => {
+            let display = format!("{}", ctx.err());
+            let debug = format!("{:?}", ctx.err());
+            if display.contains("unhandled") || display == "service error" {
+                debug
+            } else {
+                display
+            }
+        }
+        other => format!("{:?}", other),
+    };
+    AwsStorageError::S3VectorsError(msg)
+}
+
 /// Maximum vectors per `put_vectors` / `delete_vectors` call.
 const PUT_BATCH_SIZE: usize = 500;
 
@@ -152,7 +176,7 @@ impl VectorStorage for S3VectorsStorage {
                     .vector_bucket_name(&self.config.vector_bucket_name)
                     .send()
                     .await
-                    .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+                    .map_err(s3v_err)?;
             }
         }
 
@@ -185,7 +209,7 @@ impl VectorStorage for S3VectorsStorage {
                     .distance_metric(DistanceMetric::Cosine)
                     .send()
                     .await
-                    .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+                    .map_err(s3v_err)?;
             }
         }
 
@@ -226,7 +250,7 @@ impl VectorStorage for S3VectorsStorage {
             builder
                 .send()
                 .await
-                .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+                .map_err(s3v_err)?;
         }
 
         debug!(count = data.len(), "Put vectors to S3 Vectors");
@@ -239,11 +263,12 @@ impl VectorStorage for S3VectorsStorage {
         top_k: usize,
         filter_ids: Option<&[String]>,
     ) -> edgequake_storage::error::Result<Vec<VectorSearchResult>> {
-        // If filtering by IDs, request more results to account for filtering
+        // If filtering by IDs, request more results to account for filtering.
+        // S3 Vectors API limits top_k to 100.
         let request_top_k = if filter_ids.is_some() {
-            (top_k * 3).min(10_000) as i32
+            (top_k * 3).min(100) as i32
         } else {
-            top_k as i32
+            (top_k).min(100) as i32
         };
 
         let resp = self
@@ -257,7 +282,7 @@ impl VectorStorage for S3VectorsStorage {
             .return_metadata(true)
             .send()
             .await
-            .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+            .map_err(s3v_err)?;
 
         let mut results: Vec<VectorSearchResult> = resp
             .vectors()
@@ -311,7 +336,7 @@ impl VectorStorage for S3VectorsStorage {
             builder
                 .send()
                 .await
-                .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+                .map_err(s3v_err)?;
         }
 
         debug!(count = ids.len(), "Deleted vectors from S3 Vectors");
@@ -343,7 +368,7 @@ impl VectorStorage for S3VectorsStorage {
             .return_metadata(false)
             .send()
             .await
-            .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+            .map_err(s3v_err)?;
 
         let keys: Vec<String> = resp.vectors().iter().map(|v| v.key().to_string()).collect();
         if !keys.is_empty() {
@@ -381,7 +406,7 @@ impl VectorStorage for S3VectorsStorage {
                 .return_metadata(false)
                 .send()
                 .await
-                .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+                .map_err(s3v_err)?;
 
             let keys: Vec<String> = resp.vectors().iter().map(|v| v.key().to_string()).collect();
             if !keys.is_empty() {
@@ -408,7 +433,7 @@ impl VectorStorage for S3VectorsStorage {
             .return_data(true)
             .send()
             .await
-            .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+            .map_err(s3v_err)?;
 
         let vector = resp.vectors().first().and_then(|v| {
             v.data().and_then(|d| match d {
@@ -445,7 +470,7 @@ impl VectorStorage for S3VectorsStorage {
             let resp = builder
                 .send()
                 .await
-                .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+                .map_err(s3v_err)?;
 
             for v in resp.vectors() {
                 if let Some(VectorData::Float32(data)) = v.data() {
@@ -466,7 +491,7 @@ impl VectorStorage for S3VectorsStorage {
             .max_results(1)
             .send()
             .await
-            .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+            .map_err(s3v_err)?;
 
         Ok(resp.vectors().is_empty())
     }
@@ -490,7 +515,7 @@ impl VectorStorage for S3VectorsStorage {
             let resp = builder
                 .send()
                 .await
-                .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+                .map_err(s3v_err)?;
 
             total += resp.vectors().len();
             next_token = resp.next_token().map(|s| s.to_string());
@@ -523,7 +548,7 @@ impl VectorStorage for S3VectorsStorage {
             .index_name(&self.config.index_name)
             .send()
             .await
-            .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+            .map_err(s3v_err)?;
 
         // Recreate the index
         self.client
@@ -535,7 +560,7 @@ impl VectorStorage for S3VectorsStorage {
             .distance_metric(DistanceMetric::Cosine)
             .send()
             .await
-            .map_err(|e| AwsStorageError::S3VectorsError(e.to_string()))?;
+            .map_err(s3v_err)?;
 
         Ok(())
     }
