@@ -28,11 +28,13 @@
 mod entity_extraction;
 mod normalizer;
 mod parser;
+pub mod resolver;
 mod summarization;
 
 pub use entity_extraction::EntityExtractionPrompts;
 pub use normalizer::normalize_entity_name;
 pub use parser::{HybridExtractionParser, JsonExtractionParser, TupleParser};
+pub use resolver::{EntityResolutionConfig, EntityResolver};
 pub use summarization::SummarizationPrompts;
 
 /// Default tuple delimiter for extraction output.

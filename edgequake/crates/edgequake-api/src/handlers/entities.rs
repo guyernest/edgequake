@@ -775,13 +775,18 @@ pub async fn merge_entities(
 }
 
 /// Get entity neighborhood (connected nodes within specified depth).
+///
+/// Nodes are ranked by degree (most connected first) and truncated to `max_nodes`.
+/// The seed entity is always included first regardless of degree.
 #[utoipa::path(
     get,
     path = "/api/v1/graph/entities/{entity_name}/neighborhood",
     tag = "Entities",
     params(
         ("entity_name" = String, Path, description = "Entity name"),
-        ("depth" = Option<u32>, Query, description = "Traversal depth (default 1, max 3)")
+        ("depth" = Option<u32>, Query, description = "Traversal depth (default 1, max 3)"),
+        ("max_nodes" = Option<usize>, Query, description = "Maximum nodes to return (default 200, max 500)"),
+        ("entity_type" = Option<String>, Query, description = "Filter neighbors by entity type")
     ),
     responses(
         (status = 200, description = "Entity neighborhood", body = EntityNeighborhoodResponse),
@@ -825,17 +830,19 @@ pub async fn get_entity_neighborhood(
         }
     };
 
-    // Clamp depth to range [1, 3]
+    // Clamp depth to range [1, 3] and max_nodes to [1, 500]
     let depth = query.depth.clamp(1, 3);
+    let max_nodes = query.max_nodes.clamp(1, 500);
 
-    // Collect nodes and edges using BFS
+    // =========================================================================
+    // Phase 1: BFS traversal — collect ALL neighbors, no cap during traversal
+    // =========================================================================
     let mut visited_nodes = std::collections::HashSet::new();
     let mut frontier = vec![resolved_entity.clone()];
     visited_nodes.insert(resolved_entity.clone());
 
     let mut all_edges = Vec::new();
 
-    // BFS traversal up to the specified depth
     for _ in 0..depth {
         let mut next_frontier = Vec::new();
 
@@ -843,7 +850,6 @@ pub async fn get_entity_neighborhood(
             let edges = state.graph_storage.get_node_edges(node_id).await?;
 
             for edge in edges {
-                // Check both directions
                 let neighbor = if edge.source == *node_id {
                     &edge.target
                 } else {
@@ -856,7 +862,6 @@ pub async fn get_entity_neighborhood(
                     all_edges.push((edge_id, edge.clone()));
                 }
 
-                // Add neighbor to next frontier if not visited
                 if !visited_nodes.contains(neighbor) {
                     visited_nodes.insert(neighbor.clone());
                     next_frontier.push(neighbor.clone());
@@ -870,33 +875,89 @@ pub async fn get_entity_neighborhood(
         }
     }
 
-    // Build response nodes
-    let mut nodes = Vec::with_capacity(visited_nodes.len());
+    let total_discovered = visited_nodes.len();
+
+    // =========================================================================
+    // Phase 1: Batch degree lookup + degree-based ranking
+    // =========================================================================
+    let node_ids: Vec<String> = visited_nodes.iter().cloned().collect();
+    let degree_pairs = state.graph_storage.node_degrees_batch(&node_ids).await?;
+    let degree_map: HashMap<String, usize> = degree_pairs.into_iter().collect();
+
+    // Fetch all node data in batch
+    let node_data_map = state.graph_storage.get_nodes_batch(&node_ids).await?;
+
+    // Build node list with degree info
+    let mut node_entries: Vec<(String, NeighborhoodNode)> = Vec::new();
     for node_id in &visited_nodes {
-        if let Some(node) = state.graph_storage.get_node(node_id).await? {
-            let degree = state.graph_storage.node_degree(node_id).await.unwrap_or(0);
-            nodes.push(NeighborhoodNode {
-                id: node.id.clone(),
-                entity_type: node
-                    .properties
-                    .get("entity_type")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("UNKNOWN")
-                    .to_string(),
-                description: node
-                    .properties
-                    .get("description")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                degree,
-            });
+        if let Some(node) = node_data_map.get(node_id) {
+            let degree = degree_map.get(node_id).copied().unwrap_or(0);
+            let entity_type = node
+                .properties
+                .get("entity_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("UNKNOWN")
+                .to_string();
+
+            node_entries.push((
+                node_id.clone(),
+                NeighborhoodNode {
+                    id: node.id.clone(),
+                    entity_type,
+                    description: node
+                        .properties
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    degree,
+                },
+            ));
         }
     }
 
-    // Build response edges
+    // =========================================================================
+    // Phase 2: Type filtering — filter by entity_type if specified
+    // Always keep the seed entity regardless of type filter.
+    // =========================================================================
+    if let Some(ref filter_type) = query.entity_type {
+        node_entries.retain(|(id, n)| {
+            *id == resolved_entity || n.entity_type.eq_ignore_ascii_case(filter_type)
+        });
+    }
+
+    // =========================================================================
+    // Phase 1: Sort by degree descending, seed entity always first
+    // =========================================================================
+    node_entries.sort_by(|(id_a, a), (id_b, b)| {
+        let a_is_seed = *id_a == resolved_entity;
+        let b_is_seed = *id_b == resolved_entity;
+        // Seed entity always sorts first
+        match (a_is_seed, b_is_seed) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => b.degree.cmp(&a.degree), // Higher degree first
+        }
+    });
+
+    // Truncate to max_nodes
+    let is_truncated = node_entries.len() > max_nodes;
+    node_entries.truncate(max_nodes);
+
+    // Build surviving node set for edge filtering (owned strings to avoid borrow conflict)
+    let surviving_nodes: std::collections::HashSet<String> =
+        node_entries.iter().map(|(id, _)| id.clone()).collect();
+
+    let nodes: Vec<NeighborhoodNode> = node_entries.into_iter().map(|(_, n)| n).collect();
+
+    // =========================================================================
+    // Phase 3: Build edges with provenance fields, filtered to surviving nodes
+    // =========================================================================
     let edges: Vec<NeighborhoodEdge> = all_edges
         .into_iter()
+        .filter(|(_, edge)| {
+            surviving_nodes.contains(&edge.source) && surviving_nodes.contains(&edge.target)
+        })
         .map(|(id, edge)| NeighborhoodEdge {
             id,
             source: edge.source,
@@ -912,10 +973,30 @@ pub async fn get_entity_neighborhood(
                 .get("weight")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(1.0),
+            source_chunk_id: edge
+                .properties
+                .get("source_chunk_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            source_document_id: edge
+                .properties
+                .get("source_document_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            source_file_path: edge
+                .properties
+                .get("source_file_path")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
         .collect();
 
-    Ok(Json(EntityNeighborhoodResponse { nodes, edges }))
+    Ok(Json(EntityNeighborhoodResponse {
+        nodes,
+        edges,
+        is_truncated,
+        total_discovered,
+    }))
 }
 
 #[cfg(test)]

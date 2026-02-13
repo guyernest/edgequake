@@ -350,11 +350,24 @@ pub struct EntityNeighborhoodQuery {
     /// Traversal depth (default 1, max 3).
     #[serde(default = "default_depth")]
     pub depth: u32,
+
+    /// Maximum nodes to return (default 200, max 500).
+    /// Nodes are ranked by degree (most connected first).
+    #[serde(default = "default_max_nodes")]
+    pub max_nodes: usize,
+
+    /// Filter neighbors by entity type (e.g., "PERSON", "ORGANIZATION").
+    pub entity_type: Option<String>,
 }
 
 /// Default traversal depth.
 fn default_depth() -> u32 {
     1
+}
+
+/// Default max nodes for neighborhood queries.
+fn default_max_nodes() -> usize {
+    200
 }
 
 /// Entity neighborhood response.
@@ -365,6 +378,12 @@ pub struct EntityNeighborhoodResponse {
 
     /// Edges between nodes.
     pub edges: Vec<NeighborhoodEdge>,
+
+    /// Whether the result was truncated due to max_nodes limit.
+    pub is_truncated: bool,
+
+    /// Total number of nodes discovered before truncation.
+    pub total_discovered: usize,
 }
 
 /// Node in the neighborhood graph.
@@ -400,6 +419,18 @@ pub struct NeighborhoodEdge {
 
     /// Edge weight.
     pub weight: f64,
+
+    /// Source chunk ID (provenance).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_chunk_id: Option<String>,
+
+    /// Source document ID (provenance).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_document_id: Option<String>,
+
+    /// Source file path (provenance).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_file_path: Option<String>,
 }
 
 // ============================================================================

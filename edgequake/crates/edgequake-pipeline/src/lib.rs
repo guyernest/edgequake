@@ -107,9 +107,9 @@ pub use progress::{
     ProgressTracker, StageProgress, StageStatus,
 };
 pub use prompts::{
-    default_entity_types, normalize_entity_name, EntityExtractionPrompts, HybridExtractionParser,
-    JsonExtractionParser, SummarizationPrompts, TupleParser, DEFAULT_COMPLETION_DELIMITER,
-    DEFAULT_TUPLE_DELIMITER, SUPPORTED_LANGUAGES,
+    default_entity_types, normalize_entity_name, EntityExtractionPrompts, EntityResolutionConfig,
+    EntityResolver, HybridExtractionParser, JsonExtractionParser, SummarizationPrompts,
+    TupleParser, DEFAULT_COMPLETION_DELIMITER, DEFAULT_TUPLE_DELIMITER, SUPPORTED_LANGUAGES,
 };
 pub use sanitizer::{EmojiMode, SanitizeConfig, SanitizeReport, Sanitizer};
 pub use summarizer::{DescriptionSummarizer, LLMSummarizer, SimpleSummarizer, SummarizerConfig};

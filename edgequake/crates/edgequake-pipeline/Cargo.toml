@@ -24,6 +24,8 @@ futures = "0.3"
 regex = "1.10"
 # Unicode normalization for text sanitization (SPEC-001/Issue-9)
 unicode-normalization = "0.1"
+# String similarity for entity resolution (Jaro-Winkler)
+strsim = "0.11"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }

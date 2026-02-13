@@ -73,7 +73,7 @@ Type definitions:
     *   **Entity Details:** For each identified entity, extract:
         *   `entity_name`: Use consistent title case naming. Ensure the SAME person/entity always has the SAME name across extractions.
         *   `entity_type`: One of the types above. If none apply, use `Other`.
-        *   `entity_description`: Concise description based solely on the input text.
+        *   `entity_description`: Concise description based **solely on the input text** — do NOT include general knowledge about the entity beyond what the text states.
     *   **Output Format - Entities:** 4 fields delimited by `{td}`, on a single line. First field must be `entity`.
         *   Format: `entity{td}entity_name{td}entity_type{td}entity_description`
 
@@ -112,6 +112,16 @@ Type definitions:
 
 7.  **Language:** Output must be in English. Retain proper nouns in original form.
 
+8.  **Entity Name Canonicalization & Alias Handling:**
+    *   Use the **most complete, commonly known name** for each entity. Examples:
+        *   "Virginia Giuffre" (NOT "Virginia Roberts", "Virginia Roberts Giuffre", or "Jane Doe No. 102")
+        *   "Donald Trump" (NOT "Donald J. Trump" or "President Trump")
+        *   "Mar-A-Lago" (NOT "Mar-A-Lago Club" or "Mar-A-Lago Resort")
+        *   "Ghislaine Maxwell" (NOT "G. Maxwell" or "Ms. Maxwell")
+    *   Do NOT create separate entities for the same real-world entity under different names, titles, or aliases.
+    *   If the text uses multiple names for the same person (maiden name, married name, legal pseudonym), choose the most commonly recognized form and append aliases to the description: "Also known as: [alias1, alias2]".
+    *   Strip middle initials, honorifics (Mr., Mrs., Dr.), and legal numbering (Jane Doe No. 102) from entity names unless essential for disambiguation.
+
 ---Timestamp Instructions---
 For every entity and relationship, if a date or time period can be inferred from the
 document context, append [TIMESTAMP: YYYY-MM-DD] at the end of the description field.
@@ -138,7 +148,7 @@ Many documents are email exchanges. For emails:
 5. Email chains (Re:, Fwd:) may contain multiple conversations - extract from all, using each sub-email's date
 6. Confidentiality notices at the end of emails should be ignored for extraction
 
-8.  **Completion Signal:** Output `{cd}` only after all entities and relationships have been completely extracted.
+9.  **Completion Signal:** Output `{cd}` only after all entities and relationships have been completely extracted.
 
 ---Examples---
 

@@ -53,7 +53,7 @@ You are a Knowledge Graph Specialist responsible for extracting entities and rel
     *   **Entity Details:** For each identified entity, extract the following information:
         *   `entity_name`: The name of the entity. If the entity name is case-insensitive, capitalize the first letter of each significant word (title case). Ensure **consistent naming** across the entire extraction process.
         *   `entity_type`: Categorize the entity using one of the following types: `{entity_types}`. If none of the provided entity types apply, classify it as `Other`.
-        *   `entity_description`: Provide a concise yet comprehensive description of the entity's attributes and activities, based *solely* on the information present in the input text.
+        *   `entity_description`: Provide a concise yet comprehensive description of the entity's attributes and activities. The description **MUST be grounded in the text being analyzed** — do NOT include general knowledge about the entity beyond what the text states.
     *   **Output Format - Entities:** Output a total of 4 fields for each entity, delimited by `{tuple_delimiter}`, on a single line. The first field *must* be the literal string `entity`.
         *   Format: `entity{tuple_delimiter}entity_name{tuple_delimiter}entity_type{tuple_delimiter}entity_description`
 
@@ -90,6 +90,12 @@ You are a Knowledge Graph Specialist responsible for extracting entities and rel
     *   Proper nouns should be retained in their original language if translation would cause ambiguity.
 
 8.  **Completion Signal:** Output the literal string `{completion_delimiter}` only after all entities and relationships have been completely extracted.
+
+9.  **Entity Name Canonicalization & Alias Handling:**
+    *   Use the **most complete, commonly known name** for each entity. For example, use "Donald Trump" not "Donald J. Trump", use "Virginia Giuffre" not "Virginia Roberts".
+    *   Do NOT create separate entities for the same real-world entity under different names, titles, or aliases.
+    *   If the text uses multiple names for the same entity (e.g., maiden name vs. married name, nickname vs. full name), choose the most commonly recognized form and append aliases to the description: "Also known as: [alias1, alias2]".
+    *   Strip middle initials, honorifics (Mr., Mrs., Dr.), and legal numbering (Jane Doe No. 102) from entity names unless they are essential for disambiguation.
 
 ---Examples---
 {examples}"#,
