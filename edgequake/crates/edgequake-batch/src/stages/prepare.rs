@@ -43,11 +43,51 @@ pub async fn run_prepare(
     // Step 1: Read parquet file
     let spinner = progress.spinner("Reading parquet file...");
     let mut documents = read_parquet_documents(&config.data_path)?;
+    let total_in_file = documents.len();
+
+    // Apply offset: skip the first N documents
+    if config.offset > 0 {
+        if config.offset >= documents.len() {
+            info!(
+                offset = config.offset,
+                total = documents.len(),
+                "Offset exceeds document count, nothing to process"
+            );
+            documents.clear();
+        } else {
+            info!(
+                offset = config.offset,
+                total = documents.len(),
+                "Skipping first {} documents",
+                config.offset
+            );
+            documents = documents.split_off(config.offset);
+        }
+    }
+
+    // Apply limit: take at most N documents after offset
     if config.limit > 0 && documents.len() > config.limit {
-        info!(limit = config.limit, total = documents.len(), "Limiting documents");
+        info!(
+            limit = config.limit,
+            available = documents.len(),
+            offset = config.offset,
+            "Limiting to {} documents (from offset {})",
+            config.limit,
+            config.offset
+        );
         documents.truncate(config.limit);
     }
-    spinner.finish_with_message(format!("Read {} documents from parquet", documents.len()));
+    spinner.finish_with_message(format!(
+        "Read {} documents from parquet (offset={}, limit={}, total_in_file={})",
+        documents.len(),
+        config.offset,
+        if config.limit > 0 {
+            config.limit.to_string()
+        } else {
+            "none".to_string()
+        },
+        total_in_file
+    ));
 
     job.total_documents = documents.len();
 

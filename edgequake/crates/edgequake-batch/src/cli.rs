@@ -86,6 +86,13 @@ pub struct Cli {
     #[arg(long, default_value = "0", env = "BATCH_LIMIT")]
     pub limit: usize,
 
+    /// Skip the first N documents before processing (default 0).
+    /// Use with --limit to process documents in batches:
+    ///   First run:  --limit 100             (processes docs 0-99)
+    ///   Second run: --offset 100 --limit 200 (processes docs 100-299)
+    #[arg(long, default_value = "0", env = "BATCH_OFFSET")]
+    pub offset: usize,
+
     #[command(subcommand)]
     pub command: Command,
 }

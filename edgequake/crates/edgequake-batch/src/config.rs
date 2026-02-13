@@ -59,6 +59,9 @@ pub struct BatchConfig {
 
     /// Maximum number of documents to process (0 = no limit).
     pub limit: usize,
+
+    /// Number of documents to skip before processing (0 = start from beginning).
+    pub offset: usize,
 }
 
 impl BatchConfig {

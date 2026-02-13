@@ -893,11 +893,12 @@ BATCH_DYNAMO_TABLE ?= edgequake-kv-$(TENANT_ID)-$(ENVIRONMENT)
 BATCH_NAMESPACE ?= epstein
 BATCH_WORK_DIR ?= /tmp/edgequake-batch
 BATCH_LIMIT ?= 0
+BATCH_OFFSET ?= 0
 
 BATCH_ARGS = --data $(BATCH_DATA) --api-key $(OPENAI_API_KEY) \
 	--model $(BATCH_MODEL) --embedding-model $(BATCH_EMBEDDING_MODEL) \
 	--dynamo-table $(BATCH_DYNAMO_TABLE) --namespace $(BATCH_NAMESPACE) \
-	--work-dir $(BATCH_WORK_DIR) --limit $(BATCH_LIMIT)
+	--work-dir $(BATCH_WORK_DIR) --limit $(BATCH_LIMIT) --offset $(BATCH_OFFSET)
 
 ifdef NEPTUNE_ENDPOINT
   BATCH_ARGS += --neptune-endpoint $(NEPTUNE_ENDPOINT)

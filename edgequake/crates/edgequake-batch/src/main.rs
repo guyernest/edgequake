@@ -74,6 +74,7 @@ async fn main() -> anyhow::Result<()> {
         vector_bucket: cli.vector_bucket.clone(),
         vector_index: cli.vector_index.clone(),
         limit: cli.limit,
+        offset: cli.offset,
     };
 
     // Create work directory
