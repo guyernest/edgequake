@@ -1,3 +1,4 @@
+#![cfg(feature = "pipeline")]
 //! OpenAI Integration Tests
 //!
 //! These tests verify the complete pipeline with real OpenAI LLM provider.

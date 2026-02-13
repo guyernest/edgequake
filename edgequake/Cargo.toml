@@ -45,8 +45,9 @@ name = "multi_tenant"
 path = "examples/multi_tenant.rs"
 
 [features]
-default = ["postgres"]
-postgres = ["edgequake-api/postgres", "edgequake-storage/postgres"]
+default = ["postgres", "pipeline"]
+postgres = ["edgequake-api/postgres", "edgequake-storage/postgres", "edgequake-query/postgres"]
+pipeline = ["edgequake-core/pipeline"]
 
 [dependencies]
 edgequake-core = { workspace = true }

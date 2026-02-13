@@ -1,3 +1,4 @@
+#![cfg(feature = "pipeline")]
 //! End-to-End Multi-Tenancy Isolation Tests
 //!
 //! These tests verify that the TenantRAGManager correctly isolates data

@@ -40,6 +40,7 @@ pub mod config;
 pub mod conversation_service;
 pub mod error;
 pub mod keyword_extractor;
+#[cfg(feature = "pipeline")]
 pub mod orchestrator;
 pub mod query;
 pub mod tenant_manager;
@@ -72,7 +73,9 @@ pub type PostgresWorkspaceService = WorkspaceServiceImpl;
 pub use keyword_extractor::{ExtractedKeywords, KeywordExtractor};
 
 // Re-export tenant manager
-pub use tenant_manager::{TenantConfig, TenantKBKey, TenantRAGManager, TenantService};
+pub use tenant_manager::{TenantConfig, TenantKBKey, TenantService};
+#[cfg(feature = "pipeline")]
+pub use tenant_manager::TenantRAGManager;
 
 // Re-export workspace service
 pub use workspace_service::{InMemoryWorkspaceService, WorkspaceService, WorkspaceServiceFactory};
@@ -86,6 +89,7 @@ pub use token_budget::{BudgetAllocation, BudgetSource, ContextSource, TokenBudge
 // Re-export commonly used types
 pub use config::Config;
 pub use error::{Error, Result};
+#[cfg(feature = "pipeline")]
 pub use orchestrator::{EdgeQuake, EdgeQuakeConfig, StorageBackend, StorageConfig};
 pub use query::QueryEngine;
 pub use types::{

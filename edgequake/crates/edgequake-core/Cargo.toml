@@ -11,6 +11,7 @@ repository.workspace = true
 [features]
 default = []
 postgres = ["edgequake-storage/postgres", "dep:sqlx"]
+pipeline = ["dep:edgequake-pipeline"]
 
 [dependencies]
 serde = { workspace = true }
@@ -24,7 +25,7 @@ tokio = { workspace = true, features = ["sync"] }
 tiktoken-rs = { workspace = true }
 edgequake-llm.workspace = true
 edgequake-storage.workspace = true
-edgequake-pipeline.workspace = true
+edgequake-pipeline = { workspace = true, optional = true }
 async-trait.workspace = true
 lru = "0.13"
 sqlx = { workspace = true, optional = true }

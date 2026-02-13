@@ -9,12 +9,12 @@ description = "REST API server for EdgeQuake"
 
 [features]
 default = []
-postgres = ["edgequake-storage/postgres", "edgequake-core/postgres", "dep:sqlx"]
+postgres = ["edgequake-storage/postgres", "edgequake-core/postgres", "edgequake-query/postgres", "dep:sqlx"]
 # Vision mode for PDF extraction using multimodal LLM (requires poppler-utils system package)
 vision = ["edgequake-pdf/vision"]
 
 [dependencies]
-edgequake-core = { path = "../edgequake-core" }
+edgequake-core = { path = "../edgequake-core", features = ["pipeline"] }
 edgequake-storage = { path = "../edgequake-storage" }
 edgequake-llm = { path = "../edgequake-llm" }
 edgequake-pipeline = { path = "../edgequake-pipeline" }

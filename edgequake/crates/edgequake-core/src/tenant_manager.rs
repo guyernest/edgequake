@@ -23,11 +23,16 @@
 //!
 //! Based on LightRAG's tenant management: `lightrag/tenant_rag_manager.py`
 
-use crate::error::{Error, Result};
+use crate::error::Result;
+#[cfg(feature = "pipeline")]
+use crate::error::Error;
+#[cfg(feature = "pipeline")]
 use crate::orchestrator::{EdgeQuake, EdgeQuakeConfig};
 use async_trait::async_trait;
 use std::collections::HashMap;
+#[cfg(feature = "pipeline")]
 use std::path::PathBuf;
+#[cfg(feature = "pipeline")]
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -156,12 +161,14 @@ impl TenantService for InMemoryTenantService {
     }
 }
 
+#[cfg(feature = "pipeline")]
 /// LRU cache entry for EdgeQuake instances.
 struct CacheEntry {
     instance: Arc<RwLock<EdgeQuake>>,
     last_accessed: std::time::Instant,
 }
 
+#[cfg(feature = "pipeline")]
 /// Manages EdgeQuake instances per tenant/KB combination with caching and isolation.
 ///
 /// # Features
@@ -190,6 +197,7 @@ pub struct TenantRAGManager {
     require_auth: bool,
 }
 
+#[cfg(feature = "pipeline")]
 impl TenantRAGManager {
     /// Create a new TenantRAGManager.
     ///
@@ -498,6 +506,7 @@ impl TenantRAGManager {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "pipeline")]
     #[test]
     fn test_validate_identifier() {
         let tenant_service = Arc::new(InMemoryTenantService::new());
