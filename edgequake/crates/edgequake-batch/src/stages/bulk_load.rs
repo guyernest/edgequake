@@ -119,6 +119,98 @@ pub async fn run_bulk_load(
     Ok(())
 }
 
+/// Score a description by investigation relevance.
+///
+/// Higher scores = more relevant to the Epstein investigation.
+/// Used to rank descriptions when aggregating entities across chunks,
+/// so the best description is shown first in the merged output.
+fn score_description(desc: &str) -> i32 {
+    let lower = desc.to_lowercase();
+    let mut score: i32 = 0;
+
+    // Base score: prefer longer, more informative descriptions
+    score += (desc.len().min(200) / 10) as i32;
+
+    // Bonus for investigation-relevant keywords
+    const INVESTIGATION_TERMS: &[&str] = &[
+        "epstein",
+        "maxwell",
+        "trafficking",
+        "abuse",
+        "victim",
+        "allegation",
+        "indictment",
+        "prosecution",
+        "deposition",
+        "testimony",
+        "witness",
+        "defendant",
+        "attorney",
+        "counsel",
+        "plea",
+        "settlement",
+        "subpoena",
+        "investigation",
+        "fbi",
+        "doj",
+        "grand jury",
+        "conspiracy",
+        "obstruction",
+        "flight log",
+        "palm beach",
+        "little st. james",
+        "non-prosecution",
+        "recruited",
+        "massage",
+        "minor",
+        "underage",
+        "foundation",
+        "wire transfer",
+        "financial",
+        "trust fund",
+    ];
+    for term in INVESTIGATION_TERMS {
+        if lower.contains(term) {
+            score += 5;
+        }
+    }
+
+    // Bonus for timestamps (indicates well-grounded facts)
+    if lower.contains("[timestamp:") {
+        score += 10;
+    }
+
+    // Penalty for generic/irrelevant descriptions
+    const IRRELEVANT_INDICATORS: &[&str] = &[
+        "polling average",
+        "variable in",
+        "currency",
+        "exchange rate",
+        "stock price",
+        "weather",
+        "sports",
+        "recipe",
+        "fictional",
+    ];
+    for term in IRRELEVANT_INDICATORS {
+        if lower.contains(term) {
+            score -= 20;
+        }
+    }
+
+    // Penalty for very short descriptions (likely unhelpful)
+    if desc.len() < 20 {
+        score -= 5;
+    }
+
+    // Penalty for "Also known as" only descriptions (no real content)
+    if lower.starts_with("also known as") {
+        score -= 10;
+    }
+
+    score
+}
+
 /// Generate Gremlin CSV files for vertices and edges.
 fn generate_csv(
     extractions: &HashMap<String, ExtractionResult>,
@@ -137,32 +229,103 @@ fn generate_csv(
         "entity_type:String",
         "description:String",
         "namespace:String",
+        "source_chunk_ids:String",
+        "source_document_id:String",
+        "source_file_path:String",
     ])?;
 
-    // Deduplicate entities by name (same entity may appear across chunks)
-    let mut seen_entities: HashMap<String, ()> = HashMap::new();
-    let total_entities: usize = extractions.values().map(|r| r.entities.len()).sum();
-    let bar = progress.document_bar(total_entities as u64, "Generating vertex CSV");
+    // Aggregate entities by name across all extractions.
+    // Same entity may appear in multiple chunks — we merge descriptions,
+    // source chunk IDs, and keep the most specific entity_type.
+    struct AggregatedEntity {
+        entity_type: String,
+        descriptions: Vec<String>,
+        source_chunk_ids: Vec<String>,
+        source_document_id: Option<String>,
+        source_file_path: Option<String>,
+    }
 
-    let mut vertex_count = 0;
+    let mut entity_map: HashMap<String, AggregatedEntity> = HashMap::new();
+    let total_entities: usize = extractions.values().map(|r| r.entities.len()).sum();
+    let bar = progress.document_bar(total_entities as u64, "Aggregating entities");
+
     for result in extractions.values() {
         for entity in &result.entities {
-            if seen_entities.contains_key(&entity.name) {
-                bar.inc(1);
-                continue;
-            }
-            seen_entities.insert(entity.name.clone(), ());
+            let entry = entity_map
+                .entry(entity.name.clone())
+                .or_insert_with(|| AggregatedEntity {
+                    entity_type: entity.entity_type.clone(),
+                    descriptions: Vec::new(),
+                    source_chunk_ids: Vec::new(),
+                    source_document_id: entity.source_document_id.clone(),
+                    source_file_path: entity.source_file_path.clone(),
+                });
 
-            vertex_writer.write_record([
-                &entity.name,
-                "Entity",
-                &entity.entity_type,
-                &entity.description,
-                namespace,
-            ])?;
-            vertex_count += 1;
+            // Prefer a non-UNKNOWN entity type
+            if entry.entity_type == "UNKNOWN" && entity.entity_type != "UNKNOWN" {
+                entry.entity_type = entity.entity_type.clone();
+            }
+
+            // Collect unique descriptions (skip empty and duplicates)
+            let desc = entity.description.trim();
+            if !desc.is_empty() && !entry.descriptions.iter().any(|d| d == desc) {
+                entry.descriptions.push(desc.to_string());
+            }
+
+            // Merge source chunk IDs
+            for chunk_id in &entity.source_chunk_ids {
+                if !entry.source_chunk_ids.contains(chunk_id) {
+                    entry.source_chunk_ids.push(chunk_id.clone());
+                }
+            }
+
+            // Fill in provenance if missing
+            if entry.source_document_id.is_none() {
+                entry.source_document_id = entity.source_document_id.clone();
+            }
+            if entry.source_file_path.is_none() {
+                entry.source_file_path = entity.source_file_path.clone();
+            }
+
             bar.inc(1);
         }
+    }
+    bar.finish_with_message(format!("Aggregated {} unique entities", entity_map.len()));
+
+    // Write aggregated entities to CSV
+    let mut vertex_count = 0;
+    let mut seen_entities: HashMap<String, ()> = HashMap::new();
+    for (name, agg) in &entity_map {
+        seen_entities.insert(name.clone(), ());
+
+        // Rank descriptions by investigation relevance, take top 3
+        let mut scored: Vec<(i32, &String)> = agg
+            .descriptions
+            .iter()
+            .map(|d| (score_description(d), d))
+            .collect();
+        scored.sort_by(|a, b| b.0.cmp(&a.0)); // highest score first
+        let merged_description = scored
+            .iter()
+            .take(3)
+            .map(|(_, d)| d.as_str())
+            .collect::<Vec<_>>()
+            .join(" | ");
+
+        let source_chunk_ids = agg.source_chunk_ids.join("|");
+        let source_document_id = agg.source_document_id.as_deref().unwrap_or("");
+        let source_file_path = agg.source_file_path.as_deref().unwrap_or("");
+        vertex_writer.write_record([
+            name.as_str(),
+            "Entity",
+            &agg.entity_type,
+            &merged_description,
+            namespace,
+            &source_chunk_ids,
+            source_document_id,
+            source_file_path,
+        ])?;
+        vertex_count += 1;
     }
 
     // Auto-create vertices for relationship endpoints not in entity list
@@ -178,6 +341,9 @@ fn generate_csv(
                         "UNKNOWN",
                         "",
                         namespace,
+                        "", // source_chunk_ids
+                        "", // source_document_id
+                        "", // source_file_path
                     ])?;
                     vertex_count += 1;
                     missing_count += 1;
@@ -204,6 +370,10 @@ fn generate_csv(
         "description:String",
         "weight:Double",
         "namespace:String",
+        "keywords:String",
+        "source_chunk_id:String",
+        "source_document_id:String",
+        "source_file_path:String",
     ])?;
 
     let total_rels: usize = extractions.values().map(|r| r.relationships.len()).sum();
@@ -220,6 +390,10 @@ fn generate_csv(
             }
             seen_edges.insert(edge_id.clone(), ());
 
+            let keywords = rel.keywords.join(", ");
+            let source_chunk_id = rel.source_chunk_id.as_deref().unwrap_or("");
+            let source_document_id = rel.source_document_id.as_deref().unwrap_or("");
+            let source_file_path = rel.source_file_path.as_deref().unwrap_or("");
             edge_writer.write_record([
                 &edge_id,
                 &rel.source,
@@ -228,6 +402,10 @@ fn generate_csv(
                 &rel.description,
                 &rel.weight.to_string(),
                 namespace,
+                &keywords,
+                source_chunk_id,
+                source_document_id,
+                source_file_path,
             ])?;
             edge_count += 1;
             bar.inc(1);

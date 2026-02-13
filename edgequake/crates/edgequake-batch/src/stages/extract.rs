@@ -9,6 +9,7 @@ use crate::state::{JobState, Phase, StateManager};
 use edgequake_llm::providers::openai_batch::OpenAIBatchClient;
 use edgequake_pipeline::extractor::ExtractionResult;
 use edgequake_pipeline::prompts::HybridExtractionParser;
+use edgequake_pipeline::{EntityResolutionConfig, EntityResolver};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tracing::{info, warn};
@@ -45,6 +46,7 @@ pub async fn run_extract(
 
     let client = OpenAIBatchClient::new(api_key);
     let parser = HybridExtractionParser::new(true);
+    let resolver = EntityResolver::with_epstein_aliases(EntityResolutionConfig::default());
 
     let mut results: HashMap<String, ExtractionResult> = HashMap::new();
     let mut success_count = 0;
@@ -89,6 +91,7 @@ pub async fn run_extract(
                 match OpenAIBatchClient::extract_content(&batch_result) {
                     Some(content) => match parser.parse(&content, custom_id) {
                         Ok(extraction) => {
+                            let extraction = resolver.resolve_extraction(extraction);
                             results.insert(custom_id.clone(), extraction);
                             success_count += 1;
                         }
@@ -222,14 +225,23 @@ async fn poll_single_batch(
 /// Load cached extraction results from disk.
 ///
 /// Returns None if the cache file doesn't exist or can't be parsed.
+/// Applies entity resolution to normalize names and deduplicate entities.
 pub fn load_cached_results(
     config: &BatchConfig,
 ) -> Option<HashMap<String, ExtractionResult>> {
     let cache_path = config.work_dir.join("extract_results.json");
     match std::fs::read_to_string(&cache_path) {
-        Ok(json) => match serde_json::from_str(&json) {
-            Ok(results) => {
+        Ok(json) => match serde_json::from_str::<HashMap<String, ExtractionResult>>(&json) {
+            Ok(mut results) => {
                 info!(path = %cache_path.display(), "Loaded cached extraction results");
+                let resolver =
+                    EntityResolver::with_epstein_aliases(EntityResolutionConfig::default());
+                for extraction in results.values_mut() {
+                    let resolved =
+                        resolver.resolve_extraction(std::mem::take(extraction));
+                    *extraction = resolved;
+                }
+                info!("Applied entity resolution to cached results");
                 Some(results)
             }
             Err(e) => {

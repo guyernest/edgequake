@@ -77,22 +77,85 @@ impl EntityResolver {
         let mut resolver = Self::new(config);
         // Known aliases from the Epstein dataset
         let aliases = [
+            // Virginia Giuffre variants
             ("VIRGINIA_ROBERTS", "VIRGINIA_GIUFFRE"),
             ("VIRGINIA_ROBERTS_GIUFFRE", "VIRGINIA_GIUFFRE"),
             ("VIRGINIA_L._GIUFFRE", "VIRGINIA_GIUFFRE"),
+            ("VIRGINIA_L._ROBERTS", "VIRGINIA_GIUFFRE"),
+            ("MS._GIUFFRE", "VIRGINIA_GIUFFRE"),
+            ("MS._ROBERTS", "VIRGINIA_GIUFFRE"),
+            // Donald Trump variants
             ("DONALD_J._TRUMP", "DONALD_TRUMP"),
             ("DONALD_J_TRUMP", "DONALD_TRUMP"),
             ("PRESIDENT_TRUMP", "DONALD_TRUMP"),
-            ("MAR-A-LAGO_CLUB", "MAR-A-LAGO"),
-            ("MAR-A-LAGO_RESORT", "MAR-A-LAGO"),
-            ("MAR-A-LAGO_ESTATE", "MAR-A-LAGO"),
-            ("G._MAXWELL", "GHISLAINE_MAXWELL"),
-            ("MS._MAXWELL", "GHISLAINE_MAXWELL"),
-            ("LITTLE_SAINT_JAMES", "LITTLE_ST._JAMES"),
-            ("LITTLE_ST_JAMES", "LITTLE_ST._JAMES"),
+            ("TRUMP", "DONALD_TRUMP"),
+            // Jeffrey Epstein variants
             ("J._EPSTEIN", "JEFFREY_EPSTEIN"),
             ("J_EPSTEIN", "JEFFREY_EPSTEIN"),
             ("EPSTEIN", "JEFFREY_EPSTEIN"),
+            ("MR._EPSTEIN", "JEFFREY_EPSTEIN"),
+            // Ghislaine Maxwell variants
+            ("G._MAXWELL", "GHISLAINE_MAXWELL"),
+            ("MS._MAXWELL", "GHISLAINE_MAXWELL"),
+            ("MAXWELL", "GHISLAINE_MAXWELL"),
+            // Bill Clinton variants
+            ("WILLIAM_CLINTON", "BILL_CLINTON"),
+            ("WILLIAM_J._CLINTON", "BILL_CLINTON"),
+            ("WILLIAM_JEFFERSON_CLINTON", "BILL_CLINTON"),
+            ("PRESIDENT_CLINTON", "BILL_CLINTON"),
+            ("CLINTON", "BILL_CLINTON"),
+            // Prince Andrew variants
+            ("PRINCE_ANDREW", "ANDREW_DUKE_OF_YORK"),
+            ("ANDREW_WINDSOR", "ANDREW_DUKE_OF_YORK"),
+            ("DUKE_OF_YORK", "ANDREW_DUKE_OF_YORK"),
+            ("THE_DUKE_OF_YORK", "ANDREW_DUKE_OF_YORK"),
+            // Alan Dershowitz variants
+            ("ALAN_M._DERSHOWITZ", "ALAN_DERSHOWITZ"),
+            ("PROFESSOR_DERSHOWITZ", "ALAN_DERSHOWITZ"),
+            ("DERSHOWITZ", "ALAN_DERSHOWITZ"),
+            // Les Wexner variants
+            ("LESLIE_WEXNER", "LES_WEXNER"),
+            ("LESLIE_H._WEXNER", "LES_WEXNER"),
+            ("L._WEXNER", "LES_WEXNER"),
+            ("WEXNER", "LES_WEXNER"),
+            // Jean-Luc Brunel variants
+            ("JEAN_LUC_BRUNEL", "JEAN-LUC_BRUNEL"),
+            ("BRUNEL", "JEAN-LUC_BRUNEL"),
+            ("J.L._BRUNEL", "JEAN-LUC_BRUNEL"),
+            ("JL_BRUNEL", "JEAN-LUC_BRUNEL"),
+            // Sarah Kellen variants
+            ("SARAH_KELLEN_VICKERS", "SARAH_KELLEN"),
+            ("KELLEN", "SARAH_KELLEN"),
+            // Nadia Marcinkova variants
+            ("NADIA_MARCINKO", "NADIA_MARCINKOVA"),
+            ("NADA_MARCINKOVA", "NADIA_MARCINKOVA"),
+            // Location aliases
+            ("MAR-A-LAGO_CLUB", "MAR-A-LAGO"),
+            ("MAR-A-LAGO_RESORT", "MAR-A-LAGO"),
+            ("MAR-A-LAGO_ESTATE", "MAR-A-LAGO"),
+            ("LITTLE_SAINT_JAMES", "LITTLE_ST._JAMES"),
+            ("LITTLE_ST_JAMES", "LITTLE_ST._JAMES"),
+            ("LITTLE_SAINT_JAMES_ISLAND", "LITTLE_ST._JAMES"),
+            ("LITTLE_ST._JAMES_ISLAND", "LITTLE_ST._JAMES"),
+            ("ZORRO_RANCH", "ZORRO_RANCH"),
+            // Organization aliases
+            ("EPSTEIN_FOUNDATION", "JEFFREY_EPSTEIN_FOUNDATION"),
+            ("J._EPSTEIN_&_COMPANY", "J._EPSTEIN_&_CO."),
+            ("J._EPSTEIN_AND_COMPANY", "J._EPSTEIN_&_CO."),
+            ("THE_WEXNER_FOUNDATION", "WEXNER_FOUNDATION"),
+            // FBI / DOJ
+            ("FEDERAL_BUREAU_OF_INVESTIGATION", "FBI"),
+            ("F.B.I.", "FBI"),
+            ("DEPARTMENT_OF_JUSTICE", "DOJ"),
+            ("DEPT._OF_JUSTICE", "DOJ"),
+            ("U.S._DEPARTMENT_OF_JUSTICE", "DOJ"),
+            // SDNY
+            ("SOUTHERN_DISTRICT_OF_NEW_YORK", "SDNY"),
+            ("S.D.N.Y.", "SDNY"),
+            ("U.S._ATTORNEY'S_OFFICE_SDNY", "SDNY"),
+            // Palm Beach
+            ("PALM_BEACH_POLICE", "PALM_BEACH_POLICE_DEPARTMENT"),
+            ("PBPD", "PALM_BEACH_POLICE_DEPARTMENT"),
         ];
         for (alias, canonical) in aliases {
             resolver.add_alias(alias, canonical);
@@ -334,6 +397,76 @@ mod tests {
         );
         assert_eq!(resolver.resolve_name("DONALD_J._TRUMP"), "DONALD_TRUMP");
         assert_eq!(resolver.resolve_name("MAR-A-LAGO_CLUB"), "MAR-A-LAGO");
+    }
+
+    #[test]
+    fn test_expanded_alias_map() {
+        let resolver = EntityResolver::with_epstein_aliases(EntityResolutionConfig::default());
+
+        // Clinton variants
+        assert_eq!(resolver.resolve_name("WILLIAM_CLINTON"), "BILL_CLINTON");
+        assert_eq!(
+            resolver.resolve_name("WILLIAM_J._CLINTON"),
+            "BILL_CLINTON"
+        );
+        assert_eq!(resolver.resolve_name("PRESIDENT_CLINTON"), "BILL_CLINTON");
+
+        // Prince Andrew variants
+        assert_eq!(
+            resolver.resolve_name("PRINCE_ANDREW"),
+            "ANDREW_DUKE_OF_YORK"
+        );
+        assert_eq!(
+            resolver.resolve_name("DUKE_OF_YORK"),
+            "ANDREW_DUKE_OF_YORK"
+        );
+
+        // Dershowitz variants
+        assert_eq!(
+            resolver.resolve_name("ALAN_M._DERSHOWITZ"),
+            "ALAN_DERSHOWITZ"
+        );
+        assert_eq!(
+            resolver.resolve_name("PROFESSOR_DERSHOWITZ"),
+            "ALAN_DERSHOWITZ"
+        );
+
+        // Wexner variants
+        assert_eq!(resolver.resolve_name("LESLIE_WEXNER"), "LES_WEXNER");
+        assert_eq!(resolver.resolve_name("LESLIE_H._WEXNER"), "LES_WEXNER");
+
+        // Brunel variants
+        assert_eq!(
+            resolver.resolve_name("JEAN_LUC_BRUNEL"),
+            "JEAN-LUC_BRUNEL"
+        );
+
+        // Kellen/Marcinkova
+        assert_eq!(
+            resolver.resolve_name("SARAH_KELLEN_VICKERS"),
+            "SARAH_KELLEN"
+        );
+        assert_eq!(
+            resolver.resolve_name("NADIA_MARCINKO"),
+            "NADIA_MARCINKOVA"
+        );
+
+        // Maxwell solo
+        assert_eq!(resolver.resolve_name("MAXWELL"), "GHISLAINE_MAXWELL");
+
+        // Agencies
+        assert_eq!(
+            resolver.resolve_name("FEDERAL_BUREAU_OF_INVESTIGATION"),
+            "FBI"
+        );
+        assert_eq!(
+            resolver.resolve_name("DEPARTMENT_OF_JUSTICE"),
+            "DOJ"
+        );
+        assert_eq!(
+            resolver.resolve_name("SOUTHERN_DISTRICT_OF_NEW_YORK"),
+            "SDNY"
+        );
     }
 
     // =========================================================================

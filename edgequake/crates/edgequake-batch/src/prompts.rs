@@ -80,16 +80,22 @@ Type definitions:
 2.  **Relationship Extraction & Output:**
     *   **Identification:** Identify direct, clearly stated, and meaningful relationships between extracted entities.
     *   **N-ary Relationship Decomposition:** Decompose N-ary relationships into binary pairs.
-    *   **Focus Areas for Relationships:**
-        *   Financial flows (who paid whom, amounts, dates)
-        *   Travel connections (who traveled where, with whom)
-        *   Legal relationships (attorney-client, witness, defendant)
-        *   Power/influence relationships (who controls whom, who reports to whom)
-        *   Communication patterns (frequency, secrecy indicators)
+    *   **Relationship Type Keywords:** Use these specific keywords as the FIRST keyword in `relationship_keywords` when applicable:
+        *   **Financial:** `financial_transaction` (payments, wire transfers), `financial_control` (owns, manages assets), `financial_benefit` (gifts, loans, trust beneficiary)
+        *   **Legal:** `legal_representation` (attorney-client), `defendant` (accused in case), `plaintiff` (accuser in case), `witness_testimony` (testified about), `plea_agreement` (NPA, cooperation deal), `legal_filing` (filed motion, subpoena)
+        *   **Travel:** `travel_companion` (traveled together), `travel_destination` (visited location), `flight_log` (documented on flight)
+        *   **Employment:** `employer` (hired, employed), `employee` (worked for), `associate` (business associate)
+        *   **Social:** `personal_relationship` (friend, romantic, familial), `introduced_by` (connected two parties), `recruited` (recruited for activities)
+        *   **Communication:** `communicated_with` (email, phone, letter), `meeting` (in-person meeting)
+        *   **Property:** `property_owner` (owns property), `resided_at` (lived at location), `visited` (visited location)
+        *   **Organizational:** `member_of` (belongs to organization), `founded` (created organization), `donated_to` (charitable contribution)
+        *   **Criminal:** `alleged_abuse` (alleged criminal conduct), `conspiracy` (coordinated illegal activity), `obstruction` (interfered with investigation), `trafficking` (human trafficking)
+        *   **Evidentiary:** `mentioned_in` (referenced in document), `evidence_of` (proves/supports claim), `contradicts` (conflicts with testimony)
+    *   You may combine multiple keywords (e.g., `financial_transaction, travel_companion`) but always lead with the most specific typed keyword.
     *   **Relationship Details:** For each binary relationship:
         *   `source_entity`: Source entity name (consistent with entity extraction)
         *   `target_entity`: Target entity name (consistent with entity extraction)
-        *   `relationship_keywords`: One or more high-level keywords separated by comma
+        *   `relationship_keywords`: One or more typed keywords separated by comma (use vocabulary above)
         *   `relationship_description`: Concise explanation of the relationship
     *   **Output Format - Relationships:** 5 fields delimited by `{td}`, on a single line. First field must be `relation`.
         *   Format: `relation{td}source_entity{td}target_entity{td}relationship_keywords{td}relationship_description`
@@ -169,9 +175,9 @@ entity{td}Mohammed Bin Salman{td}PERSON{td}MBS (Mohammed Bin Salman) is referenc
 entity{td}Palm Beach Property Sale{td}FINANCIAL_ITEM{td}A Russian individual purchased a house in Palm Beach connected to knowledge of relevant parties. [TIMESTAMP: 2019]
 entity{td}$450M Painting Purchase{td}FINANCIAL_ITEM{td}Mohammed Bin Salman allegedly purchased a $450 million painting to curry favor. [TIMESTAMP: 2019-05-30]
 entity{td}Yemen And Iran Policy{td}ALLEGATION{td}Exchange of political favors related to Yemen and Iran foreign policy support. [TIMESTAMP: 2019-05-30]
-relation{td}Jeffrey Epstein{td}Michael Wolff{td}communication, email{td}Epstein and Wolff exchanged emails discussing political connections and financial dealings. [TIMESTAMP: 2019-05-30]
-relation{td}Mohammed Bin Salman{td}Donald Trump{td}political favor, quid pro quo{td}MBS allegedly provided favors to Trump in exchange for Yemen and Iran policy support. [TIMESTAMP: 2019-05-30]
-relation{td}Mohammed Bin Salman{td}$450M Painting Purchase{td}financial transaction{td}MBS purchased a $450M painting allegedly to curry political favor. [TIMESTAMP: 2019-05-30]
+relation{td}Jeffrey Epstein{td}Michael Wolff{td}communicated_with, email{td}Epstein and Wolff exchanged emails discussing political connections and financial dealings. [TIMESTAMP: 2019-05-30]
+relation{td}Mohammed Bin Salman{td}Donald Trump{td}financial_benefit, conspiracy{td}MBS allegedly provided favors to Trump in exchange for Yemen and Iran policy support. [TIMESTAMP: 2019-05-30]
+relation{td}Mohammed Bin Salman{td}$450M Painting Purchase{td}financial_transaction{td}MBS purchased a $450M painting allegedly to curry political favor. [TIMESTAMP: 2019-05-30]
 {cd}
 
 Example 2 (Legal document):
@@ -195,9 +201,9 @@ entity{td}Case 08-80736{td}LEGAL_CASE{td}Federal case number 08-80736, a prosecu
 entity{td}Non-Prosecution Agreement{td}DOCUMENT{td}The NPA dated September 24, 2007 between SDFL and Jeffrey Epstein. [TIMESTAMP: 2007-09-24]
 entity{td}Motion To Dismiss{td}DOCUMENT{td}Defendant's motion to dismiss the prosecution based on the NPA. [TIMESTAMP: 2008-06-15]
 relation{td}Jeffrey Epstein{td}Case 08-80736{td}defendant{td}Jeffrey Epstein is the defendant in case 08-80736. [TIMESTAMP: 2008-06-15]
-relation{td}Jeffrey Epstein{td}Non-Prosecution Agreement{td}agreement, legal{td}Epstein entered into a non-prosecution agreement with the SDFL. [TIMESTAMP: 2007-09-24]
-relation{td}US Attorney SDFL{td}Non-Prosecution Agreement{td}prosecution, agreement{td}The SDFL office signed the NPA with Epstein. [TIMESTAMP: 2007-09-24]
-relation{td}Case 08-80736{td}Motion To Dismiss{td}legal proceeding{td}The motion to dismiss was filed in case 08-80736. [TIMESTAMP: 2008-06-15]
+relation{td}Jeffrey Epstein{td}Non-Prosecution Agreement{td}plea_agreement{td}Epstein entered into a non-prosecution agreement with the SDFL. [TIMESTAMP: 2007-09-24]
+relation{td}US Attorney SDFL{td}Non-Prosecution Agreement{td}legal_filing, plea_agreement{td}The SDFL office signed the NPA with Epstein. [TIMESTAMP: 2007-09-24]
+relation{td}Case 08-80736{td}Motion To Dismiss{td}legal_filing{td}The motion to dismiss was filed in case 08-80736. [TIMESTAMP: 2008-06-15]
 {cd}
 
 Example 3 (Financial record):
@@ -213,8 +219,8 @@ Reference: Monthly retainer - Q1 2012
 entity{td}Epstein Financial Trust{td}ORGANIZATION{td}Epstein Financial Trust, account ending 4892, sent wire transfers to associated entities. [TIMESTAMP: 2012-03-15]
 entity{td}Maxwell Foundation{td}ORGANIZATION{td}Maxwell Foundation, account ending 7731, received funds from Epstein Financial Trust. [TIMESTAMP: 2012-03-15]
 entity{td}$250K Wire Transfer{td}FINANCIAL_ITEM{td}A $250,000 wire transfer from Epstein Financial Trust to Maxwell Foundation described as monthly retainer for Q1 2012. [TIMESTAMP: 2012-03-15]
-relation{td}Epstein Financial Trust{td}Maxwell Foundation{td}financial transfer, retainer{td}Epstein Financial Trust wired $250,000 to Maxwell Foundation as a monthly retainer payment. [TIMESTAMP: 2012-03-15]
-relation{td}Epstein Financial Trust{td}$250K Wire Transfer{td}source account{td}Epstein Financial Trust initiated the wire transfer from account ending 4892. [TIMESTAMP: 2012-03-15]
+relation{td}Epstein Financial Trust{td}Maxwell Foundation{td}financial_transaction{td}Epstein Financial Trust wired $250,000 to Maxwell Foundation as a monthly retainer payment. [TIMESTAMP: 2012-03-15]
+relation{td}Epstein Financial Trust{td}$250K Wire Transfer{td}financial_control{td}Epstein Financial Trust initiated the wire transfer from account ending 4892. [TIMESTAMP: 2012-03-15]
 {cd}
 "#,
             entity_types = entity_types_str,
@@ -368,9 +374,14 @@ mod tests {
         let prompts = EpsteinExtractionPrompts::new();
         let system = prompts.system_prompt();
 
-        assert!(system.contains("Financial flows"));
-        assert!(system.contains("Travel connections"));
-        assert!(system.contains("Legal relationships"));
-        assert!(system.contains("Communication patterns"));
+        // Typed relationship keywords
+        assert!(system.contains("financial_transaction"));
+        assert!(system.contains("legal_representation"));
+        assert!(system.contains("travel_companion"));
+        assert!(system.contains("communicated_with"));
+        assert!(system.contains("alleged_abuse"));
+        assert!(system.contains("trafficking"));
+        assert!(system.contains("plea_agreement"));
+        assert!(system.contains("witness_testimony"));
     }
 }

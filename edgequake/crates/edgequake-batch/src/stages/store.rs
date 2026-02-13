@@ -134,10 +134,14 @@ pub async fn run_store(
     for result in extractions.values() {
         for entity in &result.entities {
             if let Some(embedding) = embeddings.entity_embeddings.get(&entity.name) {
+                let source_chunk_ids = entity.source_chunk_ids.join("|");
                 let metadata = serde_json::json!({
                     "entity_name": entity.name,
                     "entity_type": entity.entity_type,
                     "type": "entity",
+                    "source_chunk_ids": source_chunk_ids,
+                    "source_document_id": entity.source_document_id,
+                    "source_file_path": entity.source_file_path,
                 });
                 entity_vectors.push((
                     format!("entity:{}", entity.name),
@@ -166,6 +170,10 @@ pub async fn run_store(
                     "source": rel.source,
                     "target": rel.target,
                     "type": "relationship",
+                    "keywords": rel.keywords.join(", "),
+                    "source_chunk_id": rel.source_chunk_id,
+                    "source_document_id": rel.source_document_id,
+                    "source_file_path": rel.source_file_path,
                 });
                 let vector_id = format!("rel:{}:{}", rel.source, rel.target);
                 rel_vectors.push((vector_id, embedding.clone(), metadata));
