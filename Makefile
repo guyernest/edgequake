@@ -14,6 +14,36 @@
 #   make stop          - Stop all services
 #
 # ============================================================================
+# =========================================================================
+# Cargo Release Automation
+# =========================================================================
+
+.PHONY: install-cargo-release release
+
+install-cargo-release: ## Install cargo-release tool for workspace version management
+	cargo install cargo-release
+
+# Usage: make release VERSION=0.2.2 [LEVEL=patch|minor|major]
+release: ## Bump all crate versions and tag release using cargo-release (uses VERSION file if VERSION is unset)
+	@if ! command -v cargo-release >/dev/null 2>&1; then \
+		echo "cargo-release not found. Installing..."; \
+		cargo install cargo-release; \
+	fi
+	@if [ -z "$(VERSION)" ]; then \
+		if [ -f VERSION ]; then \
+			VERSION_FILE=$$(cat VERSION | tr -d '\n'); \
+			if [ -z "$$VERSION_FILE" ]; then \
+				echo "VERSION file is empty. Please set a version."; \
+				exit 1; \
+			fi; \
+			VERSION=$$VERSION_FILE; \
+		else \
+			echo "VERSION variable not set and VERSION file not found."; \
+			exit 1; \
+		fi; \
+	fi; \
+	cd edgequake && cargo release $$VERSION --workspace --no-publish --execute
+
 
 .PHONY: help install dev dev-bg dev-memory stop clean build test lint format \
         backend-dev backend-db backend-memory backend-bg backend-build backend-build-online backend-sqlx-prepare backend-test backend-run \
@@ -25,6 +55,30 @@
         test-e2e-critical test-e2e-full test-stability-report \
         batch-build batch-run batch-prepare batch-extract batch-embed batch-store batch-status batch-resume \
         infra-install infra-synth infra-diff infra-deploy infra-deploy-core infra-deploy-neptune infra-destroy infra-status infra-env
+
+# ============================================================================
+# Version Management
+# ============================================================================
+
+.PHONY: version-bump version-tag
+
+# Bump version in VERSION, Cargo.toml, and package.json
+version-bump:
+	@if [ -z "$(VERSION)" ]; then \
+	  echo "Usage: make version-bump VERSION=<new_version>"; \
+	  exit 1; \
+	fi
+	bash scripts/bump-version.sh $(VERSION)
+
+# Tag and push release
+version-tag:
+	@if [ -z "$(VERSION)" ]; then \
+	  echo "Set VERSION=<new_version> make version-bump version-tag"; \
+	  exit 1; \
+	fi
+	git commit -am "Bump version to $(VERSION)"
+	git tag v$(VERSION)
+	git push && git push --tags
 
 # Colors for terminal output
 BLUE := \033[34m
@@ -76,6 +130,8 @@ endif
 help: ## Show this help message
 	@echo ""
 	@echo "$(BOLD)EdgeQuake Development Commands$(RESET)"
+	@echo "  $(GREEN)make install-cargo-release$(RESET)  Install cargo-release for version management"
+	@echo "  $(GREEN)make release VERSION=0.2.2$(RESET)  Bump all crate versions and tag release"
 	@echo "================================"
 	@echo ""
 	@echo "$(BOLD)$(BLUE)🚀 Quick Start$(RESET)"

@@ -74,12 +74,12 @@ pub use engine::{
 };
 pub use error::{QueryError, Result};
 // Re-export keywords module types
+#[cfg(feature = "postgres")]
+pub use keywords::PostgresKeywordCache;
 pub use keywords::{
     CachedKeywordExtractor, ExtractedKeywords, InMemoryKeywordCache, KeywordCache,
     KeywordExtractor, Keywords, LLMKeywordExtractor, MockKeywordExtractor, QueryIntent,
 };
-#[cfg(feature = "postgres")]
-pub use keywords::PostgresKeywordCache;
 pub use modes::QueryMode;
 pub use sota_engine::{QueryEmbeddings, SOTAQueryConfig, SOTAQueryEngine};
 pub use strategies::{

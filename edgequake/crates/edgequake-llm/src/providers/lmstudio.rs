@@ -661,7 +661,7 @@ impl EmbeddingProvider for LMStudioProvider {
             .collect();
 
         let total_texts = api_texts.len();
-        let num_batches = (total_texts + MAX_EMBEDDING_BATCH_SIZE - 1) / MAX_EMBEDDING_BATCH_SIZE;
+        let num_batches = total_texts.div_ceil(MAX_EMBEDDING_BATCH_SIZE);
 
         if num_batches > 1 {
             info!(
@@ -731,10 +731,9 @@ impl EmbeddingProvider for LMStudioProvider {
                 )));
             }
 
-            let embedding_response: EmbeddingResponse =
-                response.json().await.map_err(|e| {
-                    LlmError::NetworkError(format!("Failed to parse embedding response: {}", e))
-                })?;
+            let embedding_response: EmbeddingResponse = response.json().await.map_err(|e| {
+                LlmError::NetworkError(format!("Failed to parse embedding response: {}", e))
+            })?;
 
             all_embeddings.extend(embedding_response.data.into_iter().map(|d| d.embedding));
         }

@@ -208,6 +208,7 @@ impl Default for InMemoryKeywordCache {
 /// PostgreSQL-based keyword cache.
 ///
 /// Persistent and shared across instances. Use as L2 cache.
+#[cfg(feature = "postgres")]
 pub struct PostgresKeywordCache {
     pool: sqlx::PgPool,
     table_name: String,
@@ -260,6 +261,7 @@ impl PostgresKeywordCache {
 
 #[cfg(feature = "postgres")]
 #[async_trait]
+#[cfg(feature = "postgres")]
 impl KeywordCache for PostgresKeywordCache {
     async fn get(&self, key: &str) -> Result<Option<ExtractedKeywords>> {
         let sql = format!(

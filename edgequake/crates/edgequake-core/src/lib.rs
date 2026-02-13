@@ -43,6 +43,7 @@ pub mod keyword_extractor;
 #[cfg(feature = "pipeline")]
 pub mod orchestrator;
 pub mod query;
+#[cfg(feature = "pipeline")]
 pub mod tenant_manager;
 pub mod token_budget;
 pub mod types;
@@ -73,9 +74,9 @@ pub type PostgresWorkspaceService = WorkspaceServiceImpl;
 pub use keyword_extractor::{ExtractedKeywords, KeywordExtractor};
 
 // Re-export tenant manager
-pub use tenant_manager::{TenantConfig, TenantKBKey, TenantService};
 #[cfg(feature = "pipeline")]
 pub use tenant_manager::TenantRAGManager;
+pub use tenant_manager::{TenantConfig, TenantKBKey, TenantService};
 
 // Re-export workspace service
 pub use workspace_service::{InMemoryWorkspaceService, WorkspaceService, WorkspaceServiceFactory};

@@ -50,7 +50,7 @@ postgres = ["edgequake-api/postgres", "edgequake-storage/postgres", "edgequake-q
 pipeline = ["edgequake-core/pipeline"]
 
 [dependencies]
-edgequake-core = { workspace = true }
+edgequake-core = { workspace = true, features = ["pipeline"] }
 edgequake-storage = { workspace = true }
 edgequake-llm = { workspace = true }
 edgequake-pipeline = { workspace = true }
@@ -72,7 +72,7 @@ criterion = { workspace = true }
 tokio-test = { workspace = true }
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.2"
 edition = "2021"
 rust-version = "1.78"
 license = "MIT OR Apache-2.0"

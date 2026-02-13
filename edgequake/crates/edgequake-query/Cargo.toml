@@ -12,8 +12,8 @@ default = []
 postgres = ["dep:sqlx"]
 
 [dependencies]
-edgequake-core = { path = "../edgequake-core" }
-edgequake-storage = { path = "../edgequake-storage" }
+edgequake-core = { path = "../edgequake-core", default-features = false }
+edgequake-storage = { path = "../edgequake-storage", default-features = false }
 edgequake-llm = { path = "../edgequake-llm" }
 
 async-trait.workspace = true
