@@ -58,6 +58,10 @@ pub struct Cli {
     #[arg(long, env = "NEPTUNE_ROLE_ARN")]
     pub neptune_role_arn: Option<String>,
 
+    /// Path to domain configuration TOML file
+    #[arg(long, env = "EDGEQUAKE_DOMAIN_CONFIG")]
+    pub domain_config: Option<PathBuf>,
+
     /// Storage namespace (workspace ID)
     #[arg(long, default_value = "epstein-batch", env = "BATCH_NAMESPACE")]
     pub namespace: String,

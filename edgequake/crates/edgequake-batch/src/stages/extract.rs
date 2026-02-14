@@ -3,6 +3,7 @@
 //! Batches are processed sequentially to stay within OpenAI's enqueued token limit.
 
 use crate::config::BatchConfig;
+use crate::domain_config::DomainConfig;
 use crate::jsonl::PreparedChunk;
 use crate::progress::BatchProgress;
 use crate::state::{JobState, Phase, StateManager};
@@ -33,6 +34,7 @@ pub struct ExtractResult {
 pub async fn run_extract(
     config: &BatchConfig,
     api_key: &str,
+    domain_config: &DomainConfig,
     state_mgr: &StateManager,
     job: &mut JobState,
     jsonl_paths: &[PathBuf],
@@ -46,7 +48,7 @@ pub async fn run_extract(
 
     let client = OpenAIBatchClient::new(api_key);
     let parser = HybridExtractionParser::new(true);
-    let resolver = EntityResolver::with_epstein_aliases(EntityResolutionConfig::default());
+    let resolver = build_resolver(domain_config);
 
     let mut results: HashMap<String, ExtractionResult> = HashMap::new();
     let mut success_count = 0;
@@ -228,14 +230,14 @@ async fn poll_single_batch(
 /// Applies entity resolution to normalize names and deduplicate entities.
 pub fn load_cached_results(
     config: &BatchConfig,
+    domain_config: &DomainConfig,
 ) -> Option<HashMap<String, ExtractionResult>> {
     let cache_path = config.work_dir.join("extract_results.json");
     match std::fs::read_to_string(&cache_path) {
         Ok(json) => match serde_json::from_str::<HashMap<String, ExtractionResult>>(&json) {
             Ok(mut results) => {
                 info!(path = %cache_path.display(), "Loaded cached extraction results");
-                let resolver =
-                    EntityResolver::with_epstein_aliases(EntityResolutionConfig::default());
+                let resolver = build_resolver(domain_config);
                 for extraction in results.values_mut() {
                     let resolved =
                         resolver.resolve_extraction(std::mem::take(extraction));
@@ -254,4 +256,11 @@ pub fn load_cached_results(
             None
         }
     }
+}
+
+/// Build an EntityResolver from domain config aliases.
+fn build_resolver(domain_config: &DomainConfig) -> EntityResolver {
+    let mut resolver = EntityResolver::new(EntityResolutionConfig::default());
+    resolver.add_aliases(domain_config.alias_pairs());
+    resolver
 }

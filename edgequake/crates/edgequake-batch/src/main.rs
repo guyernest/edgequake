@@ -21,10 +21,11 @@
 
 mod cli;
 mod config;
+pub mod domain_config;
+mod domain_prompts;
 mod jsonl;
 mod parquet_reader;
 mod progress;
-mod prompts;
 mod stages;
 mod state;
 
@@ -46,6 +47,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cli = Cli::parse();
+
+    // Load domain configuration (CLI flag → env → ./domain.toml → ~/.edgequake/ → built-in)
+    let domain_config = domain_config::DomainConfig::load(cli.domain_config.as_deref())?;
+    info!(domain = %domain_config.domain.name, "Loaded domain config");
+    let domain_config = std::sync::Arc::new(domain_config);
 
     // Generate or use provided job ID
     let job_id = cli
@@ -112,18 +118,19 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Run => {
-            run_full_pipeline(&config, &cli.api_key, &aws_config, &state_mgr, &mut job, &progress).await?;
+            run_full_pipeline(&config, &cli.api_key, &aws_config, &domain_config, &state_mgr, &mut job, &progress).await?;
         }
         Command::Prepare => {
-            stages::prepare::run_prepare(&config, &state_mgr, &mut job, &progress).await?;
+            stages::prepare::run_prepare(&config, &domain_config, &state_mgr, &mut job, &progress).await?;
         }
         Command::Extract => {
             // Extract requires prepare results; load from state
             let prepare_result =
-                stages::prepare::run_prepare(&config, &state_mgr, &mut job, &progress).await?;
+                stages::prepare::run_prepare(&config, &domain_config, &state_mgr, &mut job, &progress).await?;
             stages::extract::run_extract(
                 &config,
                 &cli.api_key,
+                &domain_config,
                 &state_mgr,
                 &mut job,
                 &prepare_result.jsonl_result.file_paths,
@@ -135,10 +142,10 @@ async fn main() -> anyhow::Result<()> {
         Command::Embed => {
             // Re-run prepare (fast, local only) to get chunks in memory
             let prepare_result =
-                stages::prepare::run_prepare(&config, &state_mgr, &mut job, &progress).await?;
+                stages::prepare::run_prepare(&config, &domain_config, &state_mgr, &mut job, &progress).await?;
 
             // Load cached extraction results from disk (avoids re-submitting to OpenAI)
-            let extract_results = stages::extract::load_cached_results(&config)
+            let extract_results = stages::extract::load_cached_results(&config, &domain_config)
                 .ok_or_else(|| anyhow::anyhow!(
                     "No cached extraction results found. Run 'extract' first, then 'embed'."
                 ))?;
@@ -158,10 +165,10 @@ async fn main() -> anyhow::Result<()> {
         Command::Store => {
             // Re-run prepare (fast, local only) to get chunks/documents in memory
             let prepare_result =
-                stages::prepare::run_prepare(&config, &state_mgr, &mut job, &progress).await?;
+                stages::prepare::run_prepare(&config, &domain_config, &state_mgr, &mut job, &progress).await?;
 
             // Load cached extraction results from disk
-            let extract_results = stages::extract::load_cached_results(&config)
+            let extract_results = stages::extract::load_cached_results(&config, &domain_config)
                 .ok_or_else(|| anyhow::anyhow!(
                     "No cached extraction results found. Run 'extract' first, then 'store'."
                 ))?;
@@ -207,7 +214,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Resume => {
             info!(phase = %job.phase, "Resuming from checkpoint");
-            run_full_pipeline(&config, &cli.api_key, &aws_config, &state_mgr, &mut job, &progress).await?;
+            run_full_pipeline(&config, &cli.api_key, &aws_config, &domain_config, &state_mgr, &mut job, &progress).await?;
         }
     }
 
@@ -219,6 +226,7 @@ async fn run_full_pipeline(
     config: &BatchConfig,
     api_key: &str,
     aws_config: &aws_config::SdkConfig,
+    domain_config: &std::sync::Arc<domain_config::DomainConfig>,
     state_mgr: &StateManager,
     job: &mut state::JobState,
     progress: &BatchProgress,
@@ -230,10 +238,10 @@ async fn run_full_pipeline(
         job.phase,
         state::Phase::Pending | state::Phase::Preparing
     ) {
-        stages::prepare::run_prepare(config, state_mgr, job, progress).await?
+        stages::prepare::run_prepare(config, domain_config, state_mgr, job, progress).await?
     } else {
         info!("Phase 1 already complete, re-running for data");
-        stages::prepare::run_prepare(config, state_mgr, job, progress).await?
+        stages::prepare::run_prepare(config, domain_config, state_mgr, job, progress).await?
     };
 
     // Phase 2: Extract
@@ -244,6 +252,7 @@ async fn run_full_pipeline(
         stages::extract::run_extract(
             config,
             api_key,
+            domain_config,
             state_mgr,
             job,
             &prepare_result.jsonl_result.file_paths,
@@ -258,6 +267,7 @@ async fn run_full_pipeline(
         stages::extract::run_extract(
             config,
             api_key,
+            domain_config,
             state_mgr,
             job,
             &prepare_result.jsonl_result.file_paths,
@@ -269,6 +279,7 @@ async fn run_full_pipeline(
         stages::extract::run_extract(
             config,
             api_key,
+            domain_config,
             state_mgr,
             job,
             &prepare_result.jsonl_result.file_paths,
