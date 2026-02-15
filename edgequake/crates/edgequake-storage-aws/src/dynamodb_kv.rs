@@ -383,13 +383,14 @@ impl KVStorage for DynamoKVStorage {
             return Ok(());
         }
 
-        info!("Upserting {} items to DynamoDB", data.len());
+        debug!("Upserting {} items to DynamoDB", data.len());
 
         let timestamp = Self::timestamp();
+        const MAX_RETRIES: u32 = 8;
 
         // DynamoDB BatchWriteItem has a limit of 25 items
         for chunk in data.chunks(25) {
-            let mut write_requests = Vec::new();
+            let mut write_requests: Vec<WriteRequest> = Vec::new();
 
             for (id, value) in chunk {
                 let json_str = serde_json::to_string(value)?;
@@ -422,12 +423,55 @@ impl KVStorage for DynamoKVStorage {
                 write_requests.push(write_request);
             }
 
-            self.client
-                .batch_write_item()
-                .request_items(&self.config.table_name, write_requests)
-                .send()
-                .await
-                .map_err(dynamo_err)?;
+            // Retry loop for unprocessed items with exponential backoff
+            let mut attempt = 0u32;
+            loop {
+                let result = self
+                    .client
+                    .batch_write_item()
+                    .request_items(&self.config.table_name, write_requests.clone())
+                    .send()
+                    .await
+                    .map_err(dynamo_err)?;
+
+                // Check for unprocessed items
+                let unprocessed = result
+                    .unprocessed_items()
+                    .and_then(|items| items.get(&self.config.table_name))
+                    .map(|items| items.to_vec())
+                    .unwrap_or_default();
+
+                if unprocessed.is_empty() {
+                    break;
+                }
+
+                attempt += 1;
+                if attempt >= MAX_RETRIES {
+                    warn!(
+                        unprocessed = unprocessed.len(),
+                        attempts = attempt,
+                        "Giving up on unprocessed items after max retries"
+                    );
+                    return Err(AwsStorageError::DynamoDbError(format!(
+                        "{} items still unprocessed after {} retries",
+                        unprocessed.len(),
+                        MAX_RETRIES
+                    ))
+                    .into());
+                }
+
+                debug!(
+                    unprocessed = unprocessed.len(),
+                    attempt = attempt,
+                    "Retrying unprocessed items with backoff"
+                );
+
+                // Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms, 1.6s, 3.2s, 6.4s
+                let delay_ms = 50 * (1u64 << attempt);
+                tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+
+                write_requests = unprocessed;
+            }
         }
 
         debug!("Upserted {} items successfully", data.len());
@@ -489,6 +533,27 @@ impl KVStorage for DynamoKVStorage {
                 ":namespace",
                 AttributeValue::S(self.config.namespace.clone()),
             )
+            .select(aws_sdk_dynamodb::types::Select::Count)
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
+        Ok(result.count() as usize)
+    }
+
+    async fn count_by_prefix(&self, prefix: &str) -> edgequake_storage::error::Result<usize> {
+        let result = self
+            .client
+            .query()
+            .table_name(&self.config.table_name)
+            .key_condition_expression("#ns = :namespace AND begins_with(#id, :prefix)")
+            .expression_attribute_names("#ns", "namespace")
+            .expression_attribute_names("#id", "id")
+            .expression_attribute_values(
+                ":namespace",
+                AttributeValue::S(self.config.namespace.clone()),
+            )
+            .expression_attribute_values(":prefix", AttributeValue::S(prefix.to_string()))
             .select(aws_sdk_dynamodb::types::Select::Count)
             .send()
             .await

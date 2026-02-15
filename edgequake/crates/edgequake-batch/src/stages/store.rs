@@ -60,9 +60,7 @@ pub async fn run_store(
 
     // Batch upsert documents
     for batch in doc_entries.chunks(25) {
-        if let Err(e) = kv.upsert(batch).await {
-            warn!(error = %e, "Failed to upsert document batch to KV");
-        }
+        kv.upsert(batch).await?;
     }
     bar.finish_with_message(format!("Stored {} documents", documents.len()));
 
@@ -99,9 +97,7 @@ pub async fn run_store(
 
     // Batch upsert chunks to KV
     for batch in chunk_kv_entries.chunks(25) {
-        if let Err(e) = kv.upsert(batch).await {
-            warn!(error = %e, "Failed to upsert chunk batch to KV");
-        }
+        kv.upsert(batch).await?;
     }
 
     // Batch upsert vectors
