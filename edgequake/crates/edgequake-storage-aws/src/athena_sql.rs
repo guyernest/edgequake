@@ -167,7 +167,10 @@ impl AthenaRow {
     pub fn get_json(&self, column: &str) -> Result<JsonValue> {
         let value = self.get(column)?;
         serde_json::from_str(&value).map_err(|e| {
-            AwsStorageError::Other(format!("Failed to parse JSON from column {}: {}", column, e))
+            AwsStorageError::Other(format!(
+                "Failed to parse JSON from column {}: {}",
+                column, e
+            ))
         })
     }
 
@@ -396,7 +399,9 @@ impl AthenaQueryEngine {
                     )));
                 }
                 QueryExecutionState::Cancelled => {
-                    return Err(AwsStorageError::AthenaError("Query was cancelled".to_string()));
+                    return Err(AwsStorageError::AthenaError(
+                        "Query was cancelled".to_string(),
+                    ));
                 }
                 QueryExecutionState::Queued | QueryExecutionState::Running => {
                     if start_time.elapsed() > timeout {
@@ -441,9 +446,9 @@ impl AthenaQueryEngine {
             AwsStorageError::AthenaError("No result set in query results".to_string())
         })?;
 
-        let metadata = result_set.result_set_metadata().ok_or_else(|| {
-            AwsStorageError::AthenaError("No metadata in result set".to_string())
-        })?;
+        let metadata = result_set
+            .result_set_metadata()
+            .ok_or_else(|| AwsStorageError::AthenaError("No metadata in result set".to_string()))?;
 
         let column_info = metadata.column_info();
         let column_names: Vec<String> = column_info
@@ -539,13 +544,13 @@ impl AthenaQueryEngine {
                 AwsStorageError::AthenaError(format!("Failed to get query execution: {}", e))
             })?;
 
-        let query_execution = response.query_execution().ok_or_else(|| {
-            AwsStorageError::AthenaError("No query execution data".to_string())
-        })?;
+        let query_execution = response
+            .query_execution()
+            .ok_or_else(|| AwsStorageError::AthenaError("No query execution data".to_string()))?;
 
-        let status = query_execution.status().ok_or_else(|| {
-            AwsStorageError::AthenaError("No query execution status".to_string())
-        })?;
+        let status = query_execution
+            .status()
+            .ok_or_else(|| AwsStorageError::AthenaError("No query execution status".to_string()))?;
 
         let state = status
             .state()

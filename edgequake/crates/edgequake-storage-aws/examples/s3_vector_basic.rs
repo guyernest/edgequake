@@ -136,7 +136,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (i, result) in results.iter().enumerate() {
         println!("\n   {}. ID: {}", i + 1, result.id);
         println!("      Score: {:.4}", result.score);
-        println!("      Metadata: {}", serde_json::to_string_pretty(&result.metadata)?);
+        println!(
+            "      Metadata: {}",
+            serde_json::to_string_pretty(&result.metadata)?
+        );
     }
     println!();
 
@@ -176,7 +179,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Generate a sample vector with a base value.
 fn generate_sample_vector(dimension: usize, base: f32) -> Vec<f32> {
-    (0..dimension)
-        .map(|i| base + (i as f32 * 0.001))
-        .collect()
+    (0..dimension).map(|i| base + (i as f32 * 0.001)).collect()
 }

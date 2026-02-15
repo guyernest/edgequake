@@ -231,7 +231,12 @@ impl EntityResolver {
         let resolved_names: Vec<String> = result
             .entities
             .iter()
-            .map(|e| name_map.get(&e.name).cloned().unwrap_or_else(|| e.name.clone()))
+            .map(|e| {
+                name_map
+                    .get(&e.name)
+                    .cloned()
+                    .unwrap_or_else(|| e.name.clone())
+            })
             .collect();
         self.apply_fuzzy_matching(&resolved_names, &mut name_map);
 
@@ -248,8 +253,7 @@ impl EntityResolver {
 
             if let Some(existing) = canonical_entities.get_mut(&canonical_name) {
                 // Merge: append alias info and combine descriptions
-                if original_name != canonical_name
-                    && !existing.description.contains(&original_name)
+                if original_name != canonical_name && !existing.description.contains(&original_name)
                 {
                     if !existing.description.contains("Also known as:") {
                         existing.description =
@@ -267,13 +271,9 @@ impl EntityResolver {
                 }
             } else {
                 // Add alias note if name was changed
-                if original_name != canonical_name
-                    && !entity.description.contains(&original_name)
-                {
-                    entity.description = format!(
-                        "{} Also known as: {}",
-                        entity.description, original_name
-                    );
+                if original_name != canonical_name && !entity.description.contains(&original_name) {
+                    entity.description =
+                        format!("{} Also known as: {}", entity.description, original_name);
                 }
                 canonical_entities.insert(canonical_name, entity);
             }
@@ -292,9 +292,7 @@ impl EntityResolver {
         }
 
         // Remove self-referencing relationships that may have been created by resolution
-        result
-            .relationships
-            .retain(|rel| rel.source != rel.target);
+        result.relationships.retain(|rel| rel.source != rel.target);
 
         // Deduplicate relationships (same source+target pair)
         let mut seen_rels: HashMap<(String, String), usize> = HashMap::new();
@@ -405,10 +403,7 @@ mod tests {
 
         // Clinton variants
         assert_eq!(resolver.resolve_name("WILLIAM_CLINTON"), "BILL_CLINTON");
-        assert_eq!(
-            resolver.resolve_name("WILLIAM_J._CLINTON"),
-            "BILL_CLINTON"
-        );
+        assert_eq!(resolver.resolve_name("WILLIAM_J._CLINTON"), "BILL_CLINTON");
         assert_eq!(resolver.resolve_name("PRESIDENT_CLINTON"), "BILL_CLINTON");
 
         // Prince Andrew variants
@@ -416,10 +411,7 @@ mod tests {
             resolver.resolve_name("PRINCE_ANDREW"),
             "ANDREW_DUKE_OF_YORK"
         );
-        assert_eq!(
-            resolver.resolve_name("DUKE_OF_YORK"),
-            "ANDREW_DUKE_OF_YORK"
-        );
+        assert_eq!(resolver.resolve_name("DUKE_OF_YORK"), "ANDREW_DUKE_OF_YORK");
 
         // Dershowitz variants
         assert_eq!(
@@ -436,20 +428,14 @@ mod tests {
         assert_eq!(resolver.resolve_name("LESLIE_H._WEXNER"), "LES_WEXNER");
 
         // Brunel variants
-        assert_eq!(
-            resolver.resolve_name("JEAN_LUC_BRUNEL"),
-            "JEAN-LUC_BRUNEL"
-        );
+        assert_eq!(resolver.resolve_name("JEAN_LUC_BRUNEL"), "JEAN-LUC_BRUNEL");
 
         // Kellen/Marcinkova
         assert_eq!(
             resolver.resolve_name("SARAH_KELLEN_VICKERS"),
             "SARAH_KELLEN"
         );
-        assert_eq!(
-            resolver.resolve_name("NADIA_MARCINKO"),
-            "NADIA_MARCINKOVA"
-        );
+        assert_eq!(resolver.resolve_name("NADIA_MARCINKO"), "NADIA_MARCINKOVA");
 
         // Maxwell solo
         assert_eq!(resolver.resolve_name("MAXWELL"), "GHISLAINE_MAXWELL");
@@ -459,10 +445,7 @@ mod tests {
             resolver.resolve_name("FEDERAL_BUREAU_OF_INVESTIGATION"),
             "FBI"
         );
-        assert_eq!(
-            resolver.resolve_name("DEPARTMENT_OF_JUSTICE"),
-            "DOJ"
-        );
+        assert_eq!(resolver.resolve_name("DEPARTMENT_OF_JUSTICE"), "DOJ");
         assert_eq!(
             resolver.resolve_name("SOUTHERN_DISTRICT_OF_NEW_YORK"),
             "SDNY"
@@ -514,18 +497,9 @@ mod tests {
         let resolver = EntityResolver::new(EntityResolutionConfig::default());
 
         assert_eq!(resolver.resolve_name("MAR-A-LAGO_CLUB"), "MAR-A-LAGO");
-        assert_eq!(
-            resolver.resolve_name("PALM_BEACH_MANSION"),
-            "PALM_BEACH"
-        );
-        assert_eq!(
-            resolver.resolve_name("TOWNHOUSE_PROPERTY"),
-            "TOWNHOUSE"
-        );
-        assert_eq!(
-            resolver.resolve_name("ZORRO_RANCH_ESTATE"),
-            "ZORRO_RANCH"
-        );
+        assert_eq!(resolver.resolve_name("PALM_BEACH_MANSION"), "PALM_BEACH");
+        assert_eq!(resolver.resolve_name("TOWNHOUSE_PROPERTY"), "TOWNHOUSE");
+        assert_eq!(resolver.resolve_name("ZORRO_RANCH_ESTATE"), "ZORRO_RANCH");
     }
 
     #[test]

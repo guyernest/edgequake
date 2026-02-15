@@ -72,8 +72,11 @@ fn bench_query(c: &mut Criterion) {
                     return;
                 }
 
-                let config =
-                    S3Config::new(std::env::var("TEST_S3_BUCKET").unwrap(), "bench-workspace", 128);
+                let config = S3Config::new(
+                    std::env::var("TEST_S3_BUCKET").unwrap(),
+                    "bench-workspace",
+                    128,
+                );
                 let storage = S3VectorStorage::new(config).await.unwrap();
                 storage.initialize().await.unwrap();
 
@@ -96,8 +99,11 @@ fn bench_index_load(c: &mut Criterion) {
                 return;
             }
 
-            let config =
-                S3Config::new(std::env::var("TEST_S3_BUCKET").unwrap(), "bench-workspace", 128);
+            let config = S3Config::new(
+                std::env::var("TEST_S3_BUCKET").unwrap(),
+                "bench-workspace",
+                128,
+            );
             let storage = S3VectorStorage::new(config).await.unwrap();
             black_box(storage.initialize().await.unwrap());
         });

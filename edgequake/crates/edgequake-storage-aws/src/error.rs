@@ -78,9 +78,10 @@ impl From<AwsStorageError> for edgequake_storage::StorageError {
         match err {
             AwsStorageError::NotFound(msg) => edgequake_storage::StorageError::NotFound(msg),
             AwsStorageError::DimensionMismatch { expected, actual } => {
-                edgequake_storage::StorageError::InvalidData(
-                    format!("Dimension mismatch: expected {}, got {}", expected, actual),
-                )
+                edgequake_storage::StorageError::InvalidData(format!(
+                    "Dimension mismatch: expected {}, got {}",
+                    expected, actual
+                ))
             }
             _ => edgequake_storage::StorageError::Database(err.to_string()),
         }

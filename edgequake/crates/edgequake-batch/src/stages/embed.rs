@@ -269,10 +269,7 @@ pub fn load_cached_embed_results(config: &BatchConfig) -> Option<EmbedResult> {
             }
         },
         Err(_) => {
-            info!(
-                "No cached embed results found at {}",
-                cache_path.display()
-            );
+            info!("No cached embed results found at {}", cache_path.display());
             None
         }
     }

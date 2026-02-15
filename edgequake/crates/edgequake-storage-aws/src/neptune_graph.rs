@@ -309,12 +309,8 @@ fn document_to_json(doc: &aws_smithy_types::Document) -> JsonValue {
         aws_smithy_types::Document::Null => JsonValue::Null,
         aws_smithy_types::Document::Bool(b) => JsonValue::Bool(*b),
         aws_smithy_types::Document::Number(n) => match *n {
-            aws_smithy_types::Number::PosInt(i) => {
-                JsonValue::Number(serde_json::Number::from(i))
-            }
-            aws_smithy_types::Number::NegInt(i) => {
-                JsonValue::Number(serde_json::Number::from(i))
-            }
+            aws_smithy_types::Number::PosInt(i) => JsonValue::Number(serde_json::Number::from(i)),
+            aws_smithy_types::Number::NegInt(i) => JsonValue::Number(serde_json::Number::from(i)),
             aws_smithy_types::Number::Float(f) => serde_json::Number::from_f64(f)
                 .map(JsonValue::Number)
                 .unwrap_or(JsonValue::Null),
@@ -354,13 +350,9 @@ fn unwrap_graphson(value: &JsonValue) -> JsonValue {
                 let type_str = type_val.as_str().unwrap_or("");
                 match type_str {
                     // Scalars — return the inner value directly
-                    "g:Int32" | "g:Int64" | "g:Float" | "g:Double" => {
-                        unwrap_graphson(val)
-                    }
+                    "g:Int32" | "g:Int64" | "g:Float" | "g:Double" => unwrap_graphson(val),
                     // Tokens and enums — return the string value
-                    "g:T" | "g:Direction" => {
-                        unwrap_graphson(val)
-                    }
+                    "g:T" | "g:Direction" => unwrap_graphson(val),
                     // List — unwrap each element
                     "g:List" => {
                         if let JsonValue::Array(arr) = val {
@@ -390,10 +382,8 @@ fn unwrap_graphson(value: &JsonValue) -> JsonValue {
                         }
                     }
                     // Complex types — unwrap the inner value recursively
-                    "g:Vertex" | "g:Edge" | "g:VertexProperty" | "g:Path"
-                    | "g:Property" | "g:Star" => {
-                        unwrap_graphson(val)
-                    }
+                    "g:Vertex" | "g:Edge" | "g:VertexProperty" | "g:Path" | "g:Property"
+                    | "g:Star" => unwrap_graphson(val),
                     // Unknown typed value — unwrap anyway
                     _ => {
                         debug!("Unknown GraphSON type: {}", type_str);
@@ -409,9 +399,7 @@ fn unwrap_graphson(value: &JsonValue) -> JsonValue {
                 JsonValue::Object(map)
             }
         }
-        JsonValue::Array(arr) => {
-            JsonValue::Array(arr.iter().map(unwrap_graphson).collect())
-        }
+        JsonValue::Array(arr) => JsonValue::Array(arr.iter().map(unwrap_graphson).collect()),
         // Primitives pass through
         other => other.clone(),
     }
@@ -456,20 +444,19 @@ impl GraphStorage for NeptuneGraphStorage {
     async fn has_node(&self, node_id: &str) -> edgequake_storage::error::Result<bool> {
         let query = format!(
             "g.V('{}').has('namespace', '{}').hasNext()",
-            gremlin_escape(node_id), self.config.namespace
+            gremlin_escape(node_id),
+            self.config.namespace
         );
 
         let results = self.execute(&query).await?;
         Ok(results.first().and_then(|v| v.as_bool()).unwrap_or(false))
     }
 
-    async fn get_node(
-        &self,
-        node_id: &str,
-    ) -> edgequake_storage::error::Result<Option<GraphNode>> {
+    async fn get_node(&self, node_id: &str) -> edgequake_storage::error::Result<Option<GraphNode>> {
         let query = format!(
             "g.V('{}').has('namespace', '{}').elementMap()",
-            gremlin_escape(node_id), self.config.namespace
+            gremlin_escape(node_id),
+            self.config.namespace
         );
 
         let results = self.execute(&query).await?;
@@ -531,7 +518,8 @@ impl GraphStorage for NeptuneGraphStorage {
     async fn delete_node(&self, node_id: &str) -> edgequake_storage::error::Result<()> {
         let query = format!(
             "g.V('{}').has('namespace', '{}').drop()",
-            gremlin_escape(node_id), self.config.namespace
+            gremlin_escape(node_id),
+            self.config.namespace
         );
 
         self.execute(&query).await?;
@@ -541,14 +529,12 @@ impl GraphStorage for NeptuneGraphStorage {
     async fn node_degree(&self, node_id: &str) -> edgequake_storage::error::Result<usize> {
         let query = format!(
             "g.V('{}').has('namespace', '{}').bothE().count()",
-            gremlin_escape(node_id), self.config.namespace
+            gremlin_escape(node_id),
+            self.config.namespace
         );
 
         let results = self.execute(&query).await?;
-        let count = results
-            .first()
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize;
+        let count = results.first().and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
         Ok(count)
     }
@@ -632,14 +618,12 @@ impl GraphStorage for NeptuneGraphStorage {
 
     // ========== Edge Operations ==========
 
-    async fn has_edge(
-        &self,
-        source: &str,
-        target: &str,
-    ) -> edgequake_storage::error::Result<bool> {
+    async fn has_edge(&self, source: &str, target: &str) -> edgequake_storage::error::Result<bool> {
         let query = format!(
             "g.V('{}').has('namespace', '{}').outE().where(inV().hasId('{}')).hasNext()",
-            gremlin_escape(source), self.config.namespace, gremlin_escape(target)
+            gremlin_escape(source),
+            self.config.namespace,
+            gremlin_escape(target)
         );
 
         let results = self.execute(&query).await?;
@@ -653,7 +637,9 @@ impl GraphStorage for NeptuneGraphStorage {
     ) -> edgequake_storage::error::Result<Option<GraphEdge>> {
         let query = format!(
             "g.V('{}').has('namespace', '{}').outE().where(inV().hasId('{}')).elementMap()",
-            gremlin_escape(source), self.config.namespace, gremlin_escape(target)
+            gremlin_escape(source),
+            self.config.namespace,
+            gremlin_escape(target)
         );
 
         let results = self.execute(&query).await?;
@@ -691,7 +677,8 @@ impl GraphStorage for NeptuneGraphStorage {
         self.execute(&format!(
             "g.V('{}').has('namespace', '{}').outE('relates_to').where(inV().hasId('{}')).drop()",
             escaped_source, self.config.namespace, escaped_target
-        )).await?;
+        ))
+        .await?;
 
         // Add new edge (use __.V() anonymous traversal inside .to() — Neptune
         // requires child traversals to be spawned anonymously, not via g.V())
@@ -728,7 +715,9 @@ impl GraphStorage for NeptuneGraphStorage {
     ) -> edgequake_storage::error::Result<()> {
         let query = format!(
             "g.V('{}').has('namespace', '{}').outE().where(inV().hasId('{}')).drop()",
-            gremlin_escape(source), self.config.namespace, gremlin_escape(target)
+            gremlin_escape(source),
+            self.config.namespace,
+            gremlin_escape(target)
         );
 
         self.execute(&query).await?;
@@ -741,7 +730,8 @@ impl GraphStorage for NeptuneGraphStorage {
     ) -> edgequake_storage::error::Result<Vec<GraphEdge>> {
         let query = format!(
             "g.V('{}').has('namespace', '{}').bothE().elementMap()",
-            gremlin_escape(node_id), self.config.namespace
+            gremlin_escape(node_id),
+            self.config.namespace
         );
 
         let results = self.execute(&query).await?;
@@ -1029,10 +1019,7 @@ impl GraphStorage for NeptuneGraphStorage {
         );
 
         let results = self.execute(&query).await?;
-        let count = results
-            .first()
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize;
+        let count = results.first().and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
         Ok(count)
     }
@@ -1044,10 +1031,7 @@ impl GraphStorage for NeptuneGraphStorage {
         );
 
         let results = self.execute(&query).await?;
-        let count = results
-            .first()
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize;
+        let count = results.first().and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
         Ok(count)
     }
@@ -1058,10 +1042,7 @@ impl GraphStorage for NeptuneGraphStorage {
             self.config.namespace
         );
 
-        let query = format!(
-            "g.V().has('namespace', '{}').drop()",
-            self.config.namespace
-        );
+        let query = format!("g.V().has('namespace', '{}').drop()", self.config.namespace);
 
         self.execute(&query).await?;
         Ok(())

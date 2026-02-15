@@ -38,7 +38,10 @@ impl DomainExtractionPrompts {
         let mut prompt = String::with_capacity(8192);
 
         // --- Role ---
-        prompt.push_str(&format!("---Role---\n{}\n", self.config.prompts.role_description));
+        prompt.push_str(&format!(
+            "---Role---\n{}\n",
+            self.config.prompts.role_description
+        ));
 
         // --- Entity Types ---
         prompt.push_str(&format!(
@@ -146,10 +149,7 @@ impl DomainExtractionPrompts {
         if !self.config.examples.is_empty() {
             prompt.push_str("\n---Examples---\n");
             for (i, example) in self.config.examples.iter().enumerate() {
-                let output = example
-                    .output
-                    .replace("{td}", td)
-                    .replace("{cd}", cd);
+                let output = example.output.replace("{td}", td).replace("{cd}", cd);
                 prompt.push_str(&format!(
                     "\nExample {} ({}):\n<Input Text>\n{}\n\n<Output>\n{}",
                     i + 1,

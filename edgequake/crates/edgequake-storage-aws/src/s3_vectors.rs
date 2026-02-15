@@ -11,9 +11,7 @@
 //! - Pay-per-request pricing
 
 use async_trait::async_trait;
-use aws_sdk_s3vectors::types::{
-    DataType, DistanceMetric, PutInputVector, VectorData,
-};
+use aws_sdk_s3vectors::types::{DataType, DistanceMetric, PutInputVector, VectorData};
 use aws_sdk_s3vectors::Client;
 use aws_smithy_types::Document;
 use edgequake_storage::traits::{VectorSearchResult, VectorStorage};
@@ -247,10 +245,7 @@ impl VectorStorage for S3VectorsStorage {
                 builder = builder.vectors(vector);
             }
 
-            builder
-                .send()
-                .await
-                .map_err(s3v_err)?;
+            builder.send().await.map_err(s3v_err)?;
         }
 
         debug!(count = data.len(), "Put vectors to S3 Vectors");
@@ -333,10 +328,7 @@ impl VectorStorage for S3VectorsStorage {
                 builder = builder.keys(id);
             }
 
-            builder
-                .send()
-                .await
-                .map_err(s3v_err)?;
+            builder.send().await.map_err(s3v_err)?;
         }
 
         debug!(count = ids.len(), "Deleted vectors from S3 Vectors");
@@ -373,7 +365,11 @@ impl VectorStorage for S3VectorsStorage {
         let keys: Vec<String> = resp.vectors().iter().map(|v| v.key().to_string()).collect();
         if !keys.is_empty() {
             self.delete(&keys).await?;
-            debug!(entity = entity_name, count = keys.len(), "Deleted entity vectors");
+            debug!(
+                entity = entity_name,
+                count = keys.len(),
+                "Deleted entity vectors"
+            );
         }
 
         Ok(())
@@ -388,10 +384,7 @@ impl VectorStorage for S3VectorsStorage {
         for field in ["source", "target"] {
             let filter = {
                 let mut map = HashMap::new();
-                map.insert(
-                    field.to_string(),
-                    Document::String(entity_name.to_string()),
-                );
+                map.insert(field.to_string(), Document::String(entity_name.to_string()));
                 Document::Object(map)
             };
 
@@ -467,10 +460,7 @@ impl VectorStorage for S3VectorsStorage {
                 builder = builder.keys(id);
             }
 
-            let resp = builder
-                .send()
-                .await
-                .map_err(s3v_err)?;
+            let resp = builder.send().await.map_err(s3v_err)?;
 
             for v in resp.vectors() {
                 if let Some(VectorData::Float32(data)) = v.data() {
@@ -512,10 +502,7 @@ impl VectorStorage for S3VectorsStorage {
                 builder = builder.next_token(token);
             }
 
-            let resp = builder
-                .send()
-                .await
-                .map_err(s3v_err)?;
+            let resp = builder.send().await.map_err(s3v_err)?;
 
             total += resp.vectors().len();
             next_token = resp.next_token().map(|s| s.to_string());

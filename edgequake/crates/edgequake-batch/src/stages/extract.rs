@@ -69,7 +69,9 @@ pub async fn run_extract(
         job.input_file_ids.push(file_id.clone());
 
         // Step 2: Create batch job
-        let batch = client.create_batch(&file_id, &config.extraction_model).await?;
+        let batch = client
+            .create_batch(&file_id, &config.extraction_model)
+            .await?;
         let batch_id = batch.id.clone();
         job.batch_ids.push(batch.id);
 
@@ -194,7 +196,8 @@ async fn poll_single_batch(
                 info!(batch_id = %batch_id, "Batch completed successfully");
                 return Ok(status.output_file_id);
             } else {
-                let mut error_msg = format!("Batch {} failed with status {:?}", batch_id, status.status);
+                let mut error_msg =
+                    format!("Batch {} failed with status {:?}", batch_id, status.status);
                 if let Some(errors) = &status.errors {
                     for err in &errors.data {
                         warn!(
@@ -239,8 +242,7 @@ pub fn load_cached_results(
                 info!(path = %cache_path.display(), "Loaded cached extraction results");
                 let resolver = build_resolver(domain_config);
                 for extraction in results.values_mut() {
-                    let resolved =
-                        resolver.resolve_extraction(std::mem::take(extraction));
+                    let resolved = resolver.resolve_extraction(std::mem::take(extraction));
                     *extraction = resolved;
                 }
                 info!("Applied entity resolution to cached results");
@@ -252,7 +254,10 @@ pub fn load_cached_results(
             }
         },
         Err(_) => {
-            info!("No cached extraction results found at {}", cache_path.display());
+            info!(
+                "No cached extraction results found at {}",
+                cache_path.display()
+            );
             None
         }
     }

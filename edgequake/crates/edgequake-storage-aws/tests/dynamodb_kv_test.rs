@@ -80,7 +80,10 @@ async fn test_dynamodb_upsert_and_get() {
     assert_eq!(value["age"], 30);
 
     // Get multiple items
-    let results = storage.get_by_ids(&["key1".to_string(), "key2".to_string()]).await.unwrap();
+    let results = storage
+        .get_by_ids(&["key1".to_string(), "key2".to_string()])
+        .await
+        .unwrap();
     assert_eq!(results.len(), 2);
 
     // Clean up
@@ -100,15 +103,11 @@ async fn test_dynamodb_update() {
     storage.clear().await.unwrap();
 
     // Insert initial data
-    let data = vec![
-        ("user1".to_string(), json!({"name": "Alice", "score": 10})),
-    ];
+    let data = vec![("user1".to_string(), json!({"name": "Alice", "score": 10}))];
     storage.upsert(&data).await.unwrap();
 
     // Update data
-    let updated_data = vec![
-        ("user1".to_string(), json!({"name": "Alice", "score": 20})),
-    ];
+    let updated_data = vec![("user1".to_string(), json!({"name": "Alice", "score": 20}))];
     storage.upsert(&updated_data).await.unwrap();
 
     // Verify update
@@ -273,21 +272,31 @@ async fn test_dynamodb_transition_if_status() {
     storage.clear().await.unwrap();
 
     // Insert document with status
-    let data = vec![
-        ("doc1".to_string(), json!({"title": "Document", "status": "pending"})),
-    ];
+    let data = vec![(
+        "doc1".to_string(),
+        json!({"title": "Document", "status": "pending"}),
+    )];
     storage.upsert(&data).await.unwrap();
 
     // Transition from pending to processing (should succeed)
-    let result = storage.transition_if_status("doc1", "pending", "processing").await.unwrap();
+    let result = storage
+        .transition_if_status("doc1", "pending", "processing")
+        .await
+        .unwrap();
     assert!(result, "Transition should succeed");
 
     // Try to transition from pending to completed (should fail - status is now processing)
-    let result = storage.transition_if_status("doc1", "pending", "completed").await.unwrap();
+    let result = storage
+        .transition_if_status("doc1", "pending", "completed")
+        .await
+        .unwrap();
     assert!(!result, "Transition should fail due to status mismatch");
 
     // Transition from processing to completed (should succeed)
-    let result = storage.transition_if_status("doc1", "processing", "completed").await.unwrap();
+    let result = storage
+        .transition_if_status("doc1", "processing", "completed")
+        .await
+        .unwrap();
     assert!(result, "Transition should succeed");
 
     // Clean up

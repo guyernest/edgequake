@@ -23,7 +23,11 @@ pub struct Cli {
     pub model: String,
 
     /// OpenAI model for embeddings (default: text-embedding-3-small)
-    #[arg(long, default_value = "text-embedding-3-small", env = "BATCH_EMBEDDING_MODEL")]
+    #[arg(
+        long,
+        default_value = "text-embedding-3-small",
+        env = "BATCH_EMBEDDING_MODEL"
+    )]
     pub embedding_model: String,
 
     /// DynamoDB table name for state management

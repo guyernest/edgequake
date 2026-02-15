@@ -42,7 +42,11 @@ pub async fn run_bulk_load(
 
     let (vertex_count, edge_count) =
         generate_csv(extractions, &bulk_dir, &config.namespace, progress)?;
-    info!(vertices = vertex_count, edges = edge_count, "CSV generation complete");
+    info!(
+        vertices = vertex_count,
+        edges = edge_count,
+        "CSV generation complete"
+    );
 
     if vertex_count == 0 {
         warn!("No vertices to load, skipping bulk load");
@@ -103,8 +107,14 @@ pub async fn run_bulk_load(
     if edge_count > 0 {
         info!("Starting Neptune bulk load for edges");
         let edges_source = format!("s3://{}/{}/edges.csv", s3_bucket, s3_prefix);
-        let edges_load_id =
-            start_load(&neptune_client, &edges_source, neptune_role_arn, &region, None).await?;
+        let edges_load_id = start_load(
+            &neptune_client,
+            &edges_source,
+            neptune_role_arn,
+            &region,
+            None,
+        )
+        .await?;
         info!(load_id = %edges_load_id, "Edges load job started");
 
         poll_load(&neptune_client, &edges_load_id, "edges").await?;
@@ -354,7 +364,10 @@ fn generate_csv(
 
     vertex_writer.flush()?;
     if missing_count > 0 {
-        info!(count = missing_count, "Auto-created vertices for relationship endpoints");
+        info!(
+            count = missing_count,
+            "Auto-created vertices for relationship endpoints"
+        );
     }
     bar.finish_with_message(format!("Generated {} vertices", vertex_count));
 
@@ -429,8 +442,8 @@ async fn upload_to_s3(
     let key = format!("{}/{}", prefix, filename);
 
     // Read file into memory (CSVs are small) to avoid async stream timeouts
-    let data = std::fs::read(local_path)
-        .context(format!("Failed to read {}", local_path.display()))?;
+    let data =
+        std::fs::read(local_path).context(format!("Failed to read {}", local_path.display()))?;
     let content_length = data.len() as i64;
     info!(file = %filename, bytes = content_length, "Uploading to S3");
     let body = aws_sdk_s3::primitives::ByteStream::from(data);
@@ -443,7 +456,10 @@ async fn upload_to_s3(
         .body(body)
         .send()
         .await
-        .context(format!("Failed to upload {} to s3://{}/{}", filename, bucket, key))?;
+        .context(format!(
+            "Failed to upload {} to s3://{}/{}",
+            filename, bucket, key
+        ))?;
 
     info!(key = %key, "Uploaded to S3");
     Ok(())
@@ -499,7 +515,10 @@ async fn start_load(
         }
     }
 
-    let resp = req.send().await.context("Failed to start Neptune loader job")?;
+    let resp = req
+        .send()
+        .await
+        .context("Failed to start Neptune loader job")?;
 
     // payload() returns &HashMap<String, String> with a "loadId" key
     let load_id = resp
@@ -532,11 +551,7 @@ async fn poll_load(
     for attempt in 0..max_polls {
         tokio::time::sleep(poll_interval).await;
 
-        let resp = client
-            .get_loader_job_status()
-            .load_id(load_id)
-            .send()
-            .await;
+        let resp = client.get_loader_job_status().load_id(load_id).send().await;
 
         match resp {
             Ok(status) => {
@@ -546,12 +561,11 @@ async fn poll_load(
                 let overall_status =
                     doc_string(payload, &["overallStatus", "status"]).unwrap_or("UNKNOWN");
 
-                let total_records = doc_string(payload, &["overallStatus", "totalRecords"])
-                    .unwrap_or("?");
+                let total_records =
+                    doc_string(payload, &["overallStatus", "totalRecords"]).unwrap_or("?");
 
                 let total_errors =
-                    doc_string(payload, &["overallStatus", "errors", "errorCount"])
-                        .unwrap_or("0");
+                    doc_string(payload, &["overallStatus", "errors", "errorCount"]).unwrap_or("0");
 
                 info!(
                     label = label,

@@ -21,8 +21,7 @@ fn should_run_neptune_tests() -> bool {
 
 /// Get Neptune endpoint from environment.
 fn get_neptune_endpoint() -> String {
-    std::env::var("NEPTUNE_ENDPOINT")
-        .unwrap_or_else(|_| "localhost:8182".to_string())
+    std::env::var("NEPTUNE_ENDPOINT").unwrap_or_else(|_| "localhost:8182".to_string())
 }
 
 #[tokio::test]
@@ -32,8 +31,7 @@ async fn test_neptune_initialization() {
         return;
     }
 
-    let config = NeptuneConfig::new(get_neptune_endpoint())
-        .with_namespace("test-init");
+    let config = NeptuneConfig::new(get_neptune_endpoint()).with_namespace("test-init");
 
     let storage = NeptuneGraphStorage::new(config).await.unwrap();
     let result = storage.initialize().await;
@@ -48,8 +46,7 @@ async fn test_neptune_node_operations() {
         return;
     }
 
-    let config = NeptuneConfig::new(get_neptune_endpoint())
-        .with_namespace("test-nodes");
+    let config = NeptuneConfig::new(get_neptune_endpoint()).with_namespace("test-nodes");
 
     let storage = NeptuneGraphStorage::new(config).await.unwrap();
     storage.initialize().await.unwrap();
@@ -99,20 +96,15 @@ async fn test_neptune_edge_operations() {
         return;
     }
 
-    let config = NeptuneConfig::new(get_neptune_endpoint())
-        .with_namespace("test-edges");
+    let config = NeptuneConfig::new(get_neptune_endpoint()).with_namespace("test-edges");
 
     let storage = NeptuneGraphStorage::new(config).await.unwrap();
     storage.initialize().await.unwrap();
     storage.clear().await.unwrap();
 
     // Create nodes
-    let props1 = HashMap::from([
-        ("name".to_string(), json!("Alice")),
-    ]);
-    let props2 = HashMap::from([
-        ("name".to_string(), json!("Bob")),
-    ]);
+    let props1 = HashMap::from([("name".to_string(), json!("Alice"))]);
+    let props2 = HashMap::from([("name".to_string(), json!("Bob"))]);
 
     storage.upsert_node("user1", props1).await.unwrap();
     storage.upsert_node("user2", props2).await.unwrap();
@@ -123,7 +115,10 @@ async fn test_neptune_edge_operations() {
         ("since".to_string(), json!(2020)),
     ]);
 
-    storage.upsert_edge("user1", "user2", edge_props).await.unwrap();
+    storage
+        .upsert_edge("user1", "user2", edge_props)
+        .await
+        .unwrap();
 
     // Check edge exists
     assert!(storage.has_edge("user1", "user2").await.unwrap());
@@ -151,17 +146,25 @@ async fn test_neptune_graph_traversal() {
         return;
     }
 
-    let config = NeptuneConfig::new(get_neptune_endpoint())
-        .with_namespace("test-traversal");
+    let config = NeptuneConfig::new(get_neptune_endpoint()).with_namespace("test-traversal");
 
     let storage = NeptuneGraphStorage::new(config).await.unwrap();
     storage.initialize().await.unwrap();
     storage.clear().await.unwrap();
 
     // Create a small graph: A -> B -> C
-    storage.upsert_node("A", HashMap::from([("label".to_string(), json!("Start"))])).await.unwrap();
-    storage.upsert_node("B", HashMap::from([("label".to_string(), json!("Middle"))])).await.unwrap();
-    storage.upsert_node("C", HashMap::from([("label".to_string(), json!("End"))])).await.unwrap();
+    storage
+        .upsert_node("A", HashMap::from([("label".to_string(), json!("Start"))]))
+        .await
+        .unwrap();
+    storage
+        .upsert_node("B", HashMap::from([("label".to_string(), json!("Middle"))]))
+        .await
+        .unwrap();
+    storage
+        .upsert_node("C", HashMap::from([("label".to_string(), json!("End"))]))
+        .await
+        .unwrap();
 
     storage.upsert_edge("A", "B", HashMap::new()).await.unwrap();
     storage.upsert_edge("B", "C", HashMap::new()).await.unwrap();
@@ -194,8 +197,7 @@ async fn test_neptune_batch_operations() {
         return;
     }
 
-    let config = NeptuneConfig::new(get_neptune_endpoint())
-        .with_namespace("test-batch");
+    let config = NeptuneConfig::new(get_neptune_endpoint()).with_namespace("test-batch");
 
     let storage = NeptuneGraphStorage::new(config).await.unwrap();
     storage.initialize().await.unwrap();
@@ -203,9 +205,18 @@ async fn test_neptune_batch_operations() {
 
     // Batch upsert nodes
     let nodes = vec![
-        ("n1".to_string(), HashMap::from([("index".to_string(), json!(1))])),
-        ("n2".to_string(), HashMap::from([("index".to_string(), json!(2))])),
-        ("n3".to_string(), HashMap::from([("index".to_string(), json!(3))])),
+        (
+            "n1".to_string(),
+            HashMap::from([("index".to_string(), json!(1))]),
+        ),
+        (
+            "n2".to_string(),
+            HashMap::from([("index".to_string(), json!(2))]),
+        ),
+        (
+            "n3".to_string(),
+            HashMap::from([("index".to_string(), json!(3))]),
+        ),
     ];
 
     storage.upsert_nodes_batch(&nodes).await.unwrap();
@@ -235,8 +246,7 @@ async fn test_neptune_node_degree() {
         return;
     }
 
-    let config = NeptuneConfig::new(get_neptune_endpoint())
-        .with_namespace("test-degree");
+    let config = NeptuneConfig::new(get_neptune_endpoint()).with_namespace("test-degree");
 
     let storage = NeptuneGraphStorage::new(config).await.unwrap();
     storage.initialize().await.unwrap();
@@ -248,9 +258,18 @@ async fn test_neptune_node_degree() {
     storage.upsert_node("leaf2", HashMap::new()).await.unwrap();
     storage.upsert_node("leaf3", HashMap::new()).await.unwrap();
 
-    storage.upsert_edge("hub", "leaf1", HashMap::new()).await.unwrap();
-    storage.upsert_edge("hub", "leaf2", HashMap::new()).await.unwrap();
-    storage.upsert_edge("hub", "leaf3", HashMap::new()).await.unwrap();
+    storage
+        .upsert_edge("hub", "leaf1", HashMap::new())
+        .await
+        .unwrap();
+    storage
+        .upsert_edge("hub", "leaf2", HashMap::new())
+        .await
+        .unwrap();
+    storage
+        .upsert_edge("hub", "leaf3", HashMap::new())
+        .await
+        .unwrap();
 
     // Check degree
     let degree = storage.node_degree("hub").await.unwrap();
@@ -270,28 +289,45 @@ async fn test_neptune_search() {
         return;
     }
 
-    let config = NeptuneConfig::new(get_neptune_endpoint())
-        .with_namespace("test-search");
+    let config = NeptuneConfig::new(get_neptune_endpoint()).with_namespace("test-search");
 
     let storage = NeptuneGraphStorage::new(config).await.unwrap();
     storage.initialize().await.unwrap();
     storage.clear().await.unwrap();
 
     // Create nodes with descriptions
-    storage.upsert_node("doc1", HashMap::from([
-        ("description".to_string(), json!("Rust programming language")),
-    ])).await.unwrap();
+    storage
+        .upsert_node(
+            "doc1",
+            HashMap::from([(
+                "description".to_string(),
+                json!("Rust programming language"),
+            )]),
+        )
+        .await
+        .unwrap();
 
-    storage.upsert_node("doc2", HashMap::from([
-        ("description".to_string(), json!("Python programming guide")),
-    ])).await.unwrap();
+    storage
+        .upsert_node(
+            "doc2",
+            HashMap::from([("description".to_string(), json!("Python programming guide"))]),
+        )
+        .await
+        .unwrap();
 
-    storage.upsert_node("doc3", HashMap::from([
-        ("description".to_string(), json!("JavaScript framework")),
-    ])).await.unwrap();
+    storage
+        .upsert_node(
+            "doc3",
+            HashMap::from([("description".to_string(), json!("JavaScript framework"))]),
+        )
+        .await
+        .unwrap();
 
     // Search for "programming"
-    let results = storage.search_nodes("programming", 10, None, None, None).await.unwrap();
+    let results = storage
+        .search_nodes("programming", 10, None, None, None)
+        .await
+        .unwrap();
 
     // Should find doc1 and doc2
     assert!(results.len() >= 2);

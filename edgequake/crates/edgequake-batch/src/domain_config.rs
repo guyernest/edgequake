@@ -158,10 +158,20 @@ impl DomainConfig {
 
     /// Load from a TOML file.
     pub fn from_file(path: &Path) -> anyhow::Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| anyhow::anyhow!("Failed to read domain config from {}: {}", path.display(), e))?;
-        let config: Self = toml::from_str(&content)
-            .map_err(|e| anyhow::anyhow!("Failed to parse domain config from {}: {}", path.display(), e))?;
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to read domain config from {}: {}",
+                path.display(),
+                e
+            )
+        })?;
+        let config: Self = toml::from_str(&content).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to parse domain config from {}: {}",
+                path.display(),
+                e
+            )
+        })?;
         config.validate()?;
         Ok(config)
     }
@@ -197,189 +207,382 @@ impl DomainConfig {
     pub fn builtin_epstein() -> Self {
         let mut entity_types = IndexMap::new();
         entity_types.insert("PERSON".to_string(), "Named individuals (Jeffrey Epstein, Ghislaine Maxwell, Bill Clinton, Donald Trump, etc.)".to_string());
-        entity_types.insert("ORGANIZATION".to_string(), "Companies, foundations, government agencies (J. Epstein & Co, DOJ, FBI, SEC, etc.)".to_string());
+        entity_types.insert(
+            "ORGANIZATION".to_string(),
+            "Companies, foundations, government agencies (J. Epstein & Co, DOJ, FBI, SEC, etc.)"
+                .to_string(),
+        );
         entity_types.insert("LOCATION".to_string(), "Places, addresses, properties (Palm Beach, Little St. James, Manhattan townhouse, etc.)".to_string());
-        entity_types.insert("LEGAL_CASE".to_string(), "Court cases, indictments, complaints (US v. Epstein, civil suit 08-80736, etc.)".to_string());
-        entity_types.insert("FINANCIAL_ITEM".to_string(), "Money flows, transactions, assets (wire transfer, trust fund, property sale, etc.)".to_string());
-        entity_types.insert("ALLEGATION".to_string(), "Specific alleged criminal acts (trafficking, obstruction, perjury, etc.)".to_string());
+        entity_types.insert(
+            "LEGAL_CASE".to_string(),
+            "Court cases, indictments, complaints (US v. Epstein, civil suit 08-80736, etc.)"
+                .to_string(),
+        );
+        entity_types.insert(
+            "FINANCIAL_ITEM".to_string(),
+            "Money flows, transactions, assets (wire transfer, trust fund, property sale, etc.)"
+                .to_string(),
+        );
+        entity_types.insert(
+            "ALLEGATION".to_string(),
+            "Specific alleged criminal acts (trafficking, obstruction, perjury, etc.)".to_string(),
+        );
         entity_types.insert("COMMUNICATION".to_string(), "Documented contacts between parties (phone call, email, meeting, flight log entry, etc.)".to_string());
-        entity_types.insert("DOCUMENT".to_string(), "Referenced documents, filings, records (NPA, flight log, subpoena, deposition, etc.)".to_string());
+        entity_types.insert(
+            "DOCUMENT".to_string(),
+            "Referenced documents, filings, records (NPA, flight log, subpoena, deposition, etc.)"
+                .to_string(),
+        );
 
         let mut aliases = IndexMap::new();
         // Virginia Giuffre
-        aliases.insert("VIRGINIA_GIUFFRE".to_string(), vec![
-            "VIRGINIA_ROBERTS".to_string(),
-            "VIRGINIA_ROBERTS_GIUFFRE".to_string(),
-            "VIRGINIA_L._GIUFFRE".to_string(),
-            "VIRGINIA_L._ROBERTS".to_string(),
-            "MS._GIUFFRE".to_string(),
-            "MS._ROBERTS".to_string(),
-        ]);
+        aliases.insert(
+            "VIRGINIA_GIUFFRE".to_string(),
+            vec![
+                "VIRGINIA_ROBERTS".to_string(),
+                "VIRGINIA_ROBERTS_GIUFFRE".to_string(),
+                "VIRGINIA_L._GIUFFRE".to_string(),
+                "VIRGINIA_L._ROBERTS".to_string(),
+                "MS._GIUFFRE".to_string(),
+                "MS._ROBERTS".to_string(),
+            ],
+        );
         // Donald Trump
-        aliases.insert("DONALD_TRUMP".to_string(), vec![
-            "DONALD_J._TRUMP".to_string(),
-            "DONALD_J_TRUMP".to_string(),
-            "PRESIDENT_TRUMP".to_string(),
-            "TRUMP".to_string(),
-        ]);
+        aliases.insert(
+            "DONALD_TRUMP".to_string(),
+            vec![
+                "DONALD_J._TRUMP".to_string(),
+                "DONALD_J_TRUMP".to_string(),
+                "PRESIDENT_TRUMP".to_string(),
+                "TRUMP".to_string(),
+            ],
+        );
         // Jeffrey Epstein
-        aliases.insert("JEFFREY_EPSTEIN".to_string(), vec![
-            "J._EPSTEIN".to_string(),
-            "J_EPSTEIN".to_string(),
-            "EPSTEIN".to_string(),
-            "MR._EPSTEIN".to_string(),
-        ]);
+        aliases.insert(
+            "JEFFREY_EPSTEIN".to_string(),
+            vec![
+                "J._EPSTEIN".to_string(),
+                "J_EPSTEIN".to_string(),
+                "EPSTEIN".to_string(),
+                "MR._EPSTEIN".to_string(),
+            ],
+        );
         // Ghislaine Maxwell
-        aliases.insert("GHISLAINE_MAXWELL".to_string(), vec![
-            "G._MAXWELL".to_string(),
-            "MS._MAXWELL".to_string(),
-            "MAXWELL".to_string(),
-        ]);
+        aliases.insert(
+            "GHISLAINE_MAXWELL".to_string(),
+            vec![
+                "G._MAXWELL".to_string(),
+                "MS._MAXWELL".to_string(),
+                "MAXWELL".to_string(),
+            ],
+        );
         // Bill Clinton
-        aliases.insert("BILL_CLINTON".to_string(), vec![
-            "WILLIAM_CLINTON".to_string(),
-            "WILLIAM_J._CLINTON".to_string(),
-            "WILLIAM_JEFFERSON_CLINTON".to_string(),
-            "PRESIDENT_CLINTON".to_string(),
-            "CLINTON".to_string(),
-        ]);
+        aliases.insert(
+            "BILL_CLINTON".to_string(),
+            vec![
+                "WILLIAM_CLINTON".to_string(),
+                "WILLIAM_J._CLINTON".to_string(),
+                "WILLIAM_JEFFERSON_CLINTON".to_string(),
+                "PRESIDENT_CLINTON".to_string(),
+                "CLINTON".to_string(),
+            ],
+        );
         // Prince Andrew
-        aliases.insert("ANDREW_DUKE_OF_YORK".to_string(), vec![
-            "PRINCE_ANDREW".to_string(),
-            "ANDREW_WINDSOR".to_string(),
-            "DUKE_OF_YORK".to_string(),
-            "THE_DUKE_OF_YORK".to_string(),
-        ]);
+        aliases.insert(
+            "ANDREW_DUKE_OF_YORK".to_string(),
+            vec![
+                "PRINCE_ANDREW".to_string(),
+                "ANDREW_WINDSOR".to_string(),
+                "DUKE_OF_YORK".to_string(),
+                "THE_DUKE_OF_YORK".to_string(),
+            ],
+        );
         // Alan Dershowitz
-        aliases.insert("ALAN_DERSHOWITZ".to_string(), vec![
-            "ALAN_M._DERSHOWITZ".to_string(),
-            "PROFESSOR_DERSHOWITZ".to_string(),
-            "DERSHOWITZ".to_string(),
-        ]);
+        aliases.insert(
+            "ALAN_DERSHOWITZ".to_string(),
+            vec![
+                "ALAN_M._DERSHOWITZ".to_string(),
+                "PROFESSOR_DERSHOWITZ".to_string(),
+                "DERSHOWITZ".to_string(),
+            ],
+        );
         // Les Wexner
-        aliases.insert("LES_WEXNER".to_string(), vec![
-            "LESLIE_WEXNER".to_string(),
-            "LESLIE_H._WEXNER".to_string(),
-            "L._WEXNER".to_string(),
-            "WEXNER".to_string(),
-        ]);
+        aliases.insert(
+            "LES_WEXNER".to_string(),
+            vec![
+                "LESLIE_WEXNER".to_string(),
+                "LESLIE_H._WEXNER".to_string(),
+                "L._WEXNER".to_string(),
+                "WEXNER".to_string(),
+            ],
+        );
         // Jean-Luc Brunel
-        aliases.insert("JEAN-LUC_BRUNEL".to_string(), vec![
-            "JEAN_LUC_BRUNEL".to_string(),
-            "BRUNEL".to_string(),
-            "J.L._BRUNEL".to_string(),
-            "JL_BRUNEL".to_string(),
-        ]);
+        aliases.insert(
+            "JEAN-LUC_BRUNEL".to_string(),
+            vec![
+                "JEAN_LUC_BRUNEL".to_string(),
+                "BRUNEL".to_string(),
+                "J.L._BRUNEL".to_string(),
+                "JL_BRUNEL".to_string(),
+            ],
+        );
         // Sarah Kellen
-        aliases.insert("SARAH_KELLEN".to_string(), vec![
-            "SARAH_KELLEN_VICKERS".to_string(),
-            "KELLEN".to_string(),
-        ]);
+        aliases.insert(
+            "SARAH_KELLEN".to_string(),
+            vec!["SARAH_KELLEN_VICKERS".to_string(), "KELLEN".to_string()],
+        );
         // Nadia Marcinkova
-        aliases.insert("NADIA_MARCINKOVA".to_string(), vec![
-            "NADIA_MARCINKO".to_string(),
-            "NADA_MARCINKOVA".to_string(),
-        ]);
+        aliases.insert(
+            "NADIA_MARCINKOVA".to_string(),
+            vec!["NADIA_MARCINKO".to_string(), "NADA_MARCINKOVA".to_string()],
+        );
         // Location aliases
-        aliases.insert("MAR-A-LAGO".to_string(), vec![
-            "MAR-A-LAGO_CLUB".to_string(),
-            "MAR-A-LAGO_RESORT".to_string(),
-            "MAR-A-LAGO_ESTATE".to_string(),
-        ]);
-        aliases.insert("LITTLE_ST._JAMES".to_string(), vec![
-            "LITTLE_SAINT_JAMES".to_string(),
-            "LITTLE_ST_JAMES".to_string(),
-            "LITTLE_SAINT_JAMES_ISLAND".to_string(),
-            "LITTLE_ST._JAMES_ISLAND".to_string(),
-        ]);
-        aliases.insert("ZORRO_RANCH".to_string(), vec![
-            "ZORRO_RANCH".to_string(),
-        ]);
+        aliases.insert(
+            "MAR-A-LAGO".to_string(),
+            vec![
+                "MAR-A-LAGO_CLUB".to_string(),
+                "MAR-A-LAGO_RESORT".to_string(),
+                "MAR-A-LAGO_ESTATE".to_string(),
+            ],
+        );
+        aliases.insert(
+            "LITTLE_ST._JAMES".to_string(),
+            vec![
+                "LITTLE_SAINT_JAMES".to_string(),
+                "LITTLE_ST_JAMES".to_string(),
+                "LITTLE_SAINT_JAMES_ISLAND".to_string(),
+                "LITTLE_ST._JAMES_ISLAND".to_string(),
+            ],
+        );
+        aliases.insert("ZORRO_RANCH".to_string(), vec!["ZORRO_RANCH".to_string()]);
         // Organization aliases
-        aliases.insert("JEFFREY_EPSTEIN_FOUNDATION".to_string(), vec![
-            "EPSTEIN_FOUNDATION".to_string(),
-        ]);
-        aliases.insert("J._EPSTEIN_&_CO.".to_string(), vec![
-            "J._EPSTEIN_&_COMPANY".to_string(),
-            "J._EPSTEIN_AND_COMPANY".to_string(),
-        ]);
-        aliases.insert("WEXNER_FOUNDATION".to_string(), vec![
-            "THE_WEXNER_FOUNDATION".to_string(),
-        ]);
+        aliases.insert(
+            "JEFFREY_EPSTEIN_FOUNDATION".to_string(),
+            vec!["EPSTEIN_FOUNDATION".to_string()],
+        );
+        aliases.insert(
+            "J._EPSTEIN_&_CO.".to_string(),
+            vec![
+                "J._EPSTEIN_&_COMPANY".to_string(),
+                "J._EPSTEIN_AND_COMPANY".to_string(),
+            ],
+        );
+        aliases.insert(
+            "WEXNER_FOUNDATION".to_string(),
+            vec!["THE_WEXNER_FOUNDATION".to_string()],
+        );
         // FBI / DOJ / SDNY / Palm Beach PD
-        aliases.insert("FBI".to_string(), vec![
-            "FEDERAL_BUREAU_OF_INVESTIGATION".to_string(),
-            "F.B.I.".to_string(),
-        ]);
-        aliases.insert("DOJ".to_string(), vec![
-            "DEPARTMENT_OF_JUSTICE".to_string(),
-            "DEPT._OF_JUSTICE".to_string(),
-            "U.S._DEPARTMENT_OF_JUSTICE".to_string(),
-        ]);
-        aliases.insert("SDNY".to_string(), vec![
-            "SOUTHERN_DISTRICT_OF_NEW_YORK".to_string(),
-            "S.D.N.Y.".to_string(),
-            "U.S._ATTORNEY'S_OFFICE_SDNY".to_string(),
-        ]);
-        aliases.insert("PALM_BEACH_POLICE_DEPARTMENT".to_string(), vec![
-            "PALM_BEACH_POLICE".to_string(),
-            "PBPD".to_string(),
-        ]);
+        aliases.insert(
+            "FBI".to_string(),
+            vec![
+                "FEDERAL_BUREAU_OF_INVESTIGATION".to_string(),
+                "F.B.I.".to_string(),
+            ],
+        );
+        aliases.insert(
+            "DOJ".to_string(),
+            vec![
+                "DEPARTMENT_OF_JUSTICE".to_string(),
+                "DEPT._OF_JUSTICE".to_string(),
+                "U.S._DEPARTMENT_OF_JUSTICE".to_string(),
+            ],
+        );
+        aliases.insert(
+            "SDNY".to_string(),
+            vec![
+                "SOUTHERN_DISTRICT_OF_NEW_YORK".to_string(),
+                "S.D.N.Y.".to_string(),
+                "U.S._ATTORNEY'S_OFFICE_SDNY".to_string(),
+            ],
+        );
+        aliases.insert(
+            "PALM_BEACH_POLICE_DEPARTMENT".to_string(),
+            vec!["PALM_BEACH_POLICE".to_string(), "PBPD".to_string()],
+        );
 
         let mut relationship_keywords = IndexMap::new();
-        relationship_keywords.insert("financial".to_string(), vec![
-            RelationshipKeyword { keyword: "financial_transaction".to_string(), description: "payments, wire transfers".to_string() },
-            RelationshipKeyword { keyword: "financial_control".to_string(), description: "owns, manages assets".to_string() },
-            RelationshipKeyword { keyword: "financial_benefit".to_string(), description: "gifts, loans, trust beneficiary".to_string() },
-        ]);
-        relationship_keywords.insert("legal".to_string(), vec![
-            RelationshipKeyword { keyword: "legal_representation".to_string(), description: "attorney-client".to_string() },
-            RelationshipKeyword { keyword: "defendant".to_string(), description: "accused in case".to_string() },
-            RelationshipKeyword { keyword: "plaintiff".to_string(), description: "accuser in case".to_string() },
-            RelationshipKeyword { keyword: "witness_testimony".to_string(), description: "testified about".to_string() },
-            RelationshipKeyword { keyword: "plea_agreement".to_string(), description: "NPA, cooperation deal".to_string() },
-            RelationshipKeyword { keyword: "legal_filing".to_string(), description: "filed motion, subpoena".to_string() },
-        ]);
-        relationship_keywords.insert("travel".to_string(), vec![
-            RelationshipKeyword { keyword: "travel_companion".to_string(), description: "traveled together".to_string() },
-            RelationshipKeyword { keyword: "travel_destination".to_string(), description: "visited location".to_string() },
-            RelationshipKeyword { keyword: "flight_log".to_string(), description: "documented on flight".to_string() },
-        ]);
-        relationship_keywords.insert("employment".to_string(), vec![
-            RelationshipKeyword { keyword: "employer".to_string(), description: "hired, employed".to_string() },
-            RelationshipKeyword { keyword: "employee".to_string(), description: "worked for".to_string() },
-            RelationshipKeyword { keyword: "associate".to_string(), description: "business associate".to_string() },
-        ]);
-        relationship_keywords.insert("social".to_string(), vec![
-            RelationshipKeyword { keyword: "personal_relationship".to_string(), description: "friend, romantic, familial".to_string() },
-            RelationshipKeyword { keyword: "introduced_by".to_string(), description: "connected two parties".to_string() },
-            RelationshipKeyword { keyword: "recruited".to_string(), description: "recruited for activities".to_string() },
-        ]);
-        relationship_keywords.insert("communication".to_string(), vec![
-            RelationshipKeyword { keyword: "communicated_with".to_string(), description: "email, phone, letter".to_string() },
-            RelationshipKeyword { keyword: "meeting".to_string(), description: "in-person meeting".to_string() },
-        ]);
-        relationship_keywords.insert("property".to_string(), vec![
-            RelationshipKeyword { keyword: "property_owner".to_string(), description: "owns property".to_string() },
-            RelationshipKeyword { keyword: "resided_at".to_string(), description: "lived at location".to_string() },
-            RelationshipKeyword { keyword: "visited".to_string(), description: "visited location".to_string() },
-        ]);
-        relationship_keywords.insert("organizational".to_string(), vec![
-            RelationshipKeyword { keyword: "member_of".to_string(), description: "belongs to organization".to_string() },
-            RelationshipKeyword { keyword: "founded".to_string(), description: "created organization".to_string() },
-            RelationshipKeyword { keyword: "donated_to".to_string(), description: "charitable contribution".to_string() },
-        ]);
-        relationship_keywords.insert("criminal".to_string(), vec![
-            RelationshipKeyword { keyword: "alleged_abuse".to_string(), description: "alleged criminal conduct".to_string() },
-            RelationshipKeyword { keyword: "conspiracy".to_string(), description: "coordinated illegal activity".to_string() },
-            RelationshipKeyword { keyword: "obstruction".to_string(), description: "interfered with investigation".to_string() },
-            RelationshipKeyword { keyword: "trafficking".to_string(), description: "human trafficking".to_string() },
-        ]);
-        relationship_keywords.insert("evidentiary".to_string(), vec![
-            RelationshipKeyword { keyword: "mentioned_in".to_string(), description: "referenced in document".to_string() },
-            RelationshipKeyword { keyword: "evidence_of".to_string(), description: "proves/supports claim".to_string() },
-            RelationshipKeyword { keyword: "contradicts".to_string(), description: "conflicts with testimony".to_string() },
-        ]);
+        relationship_keywords.insert(
+            "financial".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "financial_transaction".to_string(),
+                    description: "payments, wire transfers".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "financial_control".to_string(),
+                    description: "owns, manages assets".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "financial_benefit".to_string(),
+                    description: "gifts, loans, trust beneficiary".to_string(),
+                },
+            ],
+        );
+        relationship_keywords.insert(
+            "legal".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "legal_representation".to_string(),
+                    description: "attorney-client".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "defendant".to_string(),
+                    description: "accused in case".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "plaintiff".to_string(),
+                    description: "accuser in case".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "witness_testimony".to_string(),
+                    description: "testified about".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "plea_agreement".to_string(),
+                    description: "NPA, cooperation deal".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "legal_filing".to_string(),
+                    description: "filed motion, subpoena".to_string(),
+                },
+            ],
+        );
+        relationship_keywords.insert(
+            "travel".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "travel_companion".to_string(),
+                    description: "traveled together".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "travel_destination".to_string(),
+                    description: "visited location".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "flight_log".to_string(),
+                    description: "documented on flight".to_string(),
+                },
+            ],
+        );
+        relationship_keywords.insert(
+            "employment".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "employer".to_string(),
+                    description: "hired, employed".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "employee".to_string(),
+                    description: "worked for".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "associate".to_string(),
+                    description: "business associate".to_string(),
+                },
+            ],
+        );
+        relationship_keywords.insert(
+            "social".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "personal_relationship".to_string(),
+                    description: "friend, romantic, familial".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "introduced_by".to_string(),
+                    description: "connected two parties".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "recruited".to_string(),
+                    description: "recruited for activities".to_string(),
+                },
+            ],
+        );
+        relationship_keywords.insert(
+            "communication".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "communicated_with".to_string(),
+                    description: "email, phone, letter".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "meeting".to_string(),
+                    description: "in-person meeting".to_string(),
+                },
+            ],
+        );
+        relationship_keywords.insert(
+            "property".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "property_owner".to_string(),
+                    description: "owns property".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "resided_at".to_string(),
+                    description: "lived at location".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "visited".to_string(),
+                    description: "visited location".to_string(),
+                },
+            ],
+        );
+        relationship_keywords.insert(
+            "organizational".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "member_of".to_string(),
+                    description: "belongs to organization".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "founded".to_string(),
+                    description: "created organization".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "donated_to".to_string(),
+                    description: "charitable contribution".to_string(),
+                },
+            ],
+        );
+        relationship_keywords.insert(
+            "criminal".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "alleged_abuse".to_string(),
+                    description: "alleged criminal conduct".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "conspiracy".to_string(),
+                    description: "coordinated illegal activity".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "obstruction".to_string(),
+                    description: "interfered with investigation".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "trafficking".to_string(),
+                    description: "human trafficking".to_string(),
+                },
+            ],
+        );
+        relationship_keywords.insert(
+            "evidentiary".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "mentioned_in".to_string(),
+                    description: "referenced in document".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "evidence_of".to_string(),
+                    description: "proves/supports claim".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "contradicts".to_string(),
+                    description: "conflicts with testimony".to_string(),
+                },
+            ],
+        );
 
         let examples = vec![
             FewShotExample {
@@ -529,9 +732,15 @@ mod tests {
         let pairs = config.alias_pairs();
 
         // Check a few key alias pairs
-        assert!(pairs.contains(&("VIRGINIA_ROBERTS".to_string(), "VIRGINIA_GIUFFRE".to_string())));
+        assert!(pairs.contains(&(
+            "VIRGINIA_ROBERTS".to_string(),
+            "VIRGINIA_GIUFFRE".to_string()
+        )));
         assert!(pairs.contains(&("DONALD_J._TRUMP".to_string(), "DONALD_TRUMP".to_string())));
-        assert!(pairs.contains(&("FEDERAL_BUREAU_OF_INVESTIGATION".to_string(), "FBI".to_string())));
+        assert!(pairs.contains(&(
+            "FEDERAL_BUREAU_OF_INVESTIGATION".to_string(),
+            "FBI".to_string()
+        )));
         assert!(pairs.contains(&("WILLIAM_CLINTON".to_string(), "BILL_CLINTON".to_string())));
     }
 

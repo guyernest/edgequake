@@ -41,8 +41,8 @@ mod athena_tests {
     use edgequake_storage_aws::{AthenaConfig, AthenaQueryEngine, QueryBuilder};
 
     fn get_test_config() -> AthenaConfig {
-        let database = std::env::var("TEST_ATHENA_DATABASE")
-            .unwrap_or_else(|_| "edgequake_test".to_string());
+        let database =
+            std::env::var("TEST_ATHENA_DATABASE").unwrap_or_else(|_| "edgequake_test".to_string());
 
         let output_location = std::env::var("TEST_ATHENA_OUTPUT_LOCATION")
             .unwrap_or_else(|_| "s3://edgequake-test-results/".to_string());

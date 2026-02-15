@@ -90,7 +90,10 @@ pub fn read_parquet_documents(path: &Path) -> anyhow::Result<Vec<ReconstructedDo
             // Check if this row starts a new document (has "filename.txt," prefix)
             if let Some(comma_pos) = row_text.find(',') {
                 let candidate = &row_text[..comma_pos];
-                if candidate.ends_with(".txt") || candidate.ends_with(".pdf") || candidate.ends_with(".doc") {
+                if candidate.ends_with(".txt")
+                    || candidate.ends_with(".pdf")
+                    || candidate.ends_with(".doc")
+                {
                     let filename = candidate.trim().to_string();
                     let text = row_text[comma_pos + 1..].to_string();
 
@@ -107,7 +110,10 @@ pub fn read_parquet_documents(path: &Path) -> anyhow::Result<Vec<ReconstructedDo
 
             // Continuation line — append to current document
             if let Some(ref filename) = current_filename {
-                documents.entry(filename.clone()).or_default().push(row_text.to_string());
+                documents
+                    .entry(filename.clone())
+                    .or_default()
+                    .push(row_text.to_string());
             } else {
                 // No document started yet, skip orphan lines
                 skipped_rows += 1;
