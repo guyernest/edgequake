@@ -1,0 +1,63 @@
+[book]
+title = "Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake"
+authors = ["EdgeQuake Team"]
+description = "Build production knowledge bases using graph-enhanced RAG in Rust"
+language = "en"
+multilingual = false
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = true
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "coal"
+additional-css = ["src/custom.css", "src/theme/exercises.css"]
+additional-js = ["src/theme/exercises.js"]
+git-repository-url = "https://github.com/edgequake/edgequake"
+site-url = "/edgequake-course/"
+cname = ""
+input-404 = "not-found.md"
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.playground]
+editable = true
+copy-js = true
+line-numbers = true
+
+[output.html.code]
+hidelines = { rust = "#" }
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-hierarchical-index = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[preprocessor.quiz]
+command = "mdbook-quiz"
+fullscreen = true
+cache-answers = true
+
+[preprocessor.exercises]
+command = "mdbook-exercises"
+enabled = true
+manage_assets = true
+reveal_hints = false
+reveal_solution = false
+playground = true
+progress_tracking = true
+
+[output.html.redirect]

@@ -1,0 +1,91 @@
+# Quiz: Embeddings and Chunking
+
+id = "ch02-embeddings-chunking"
+title = "Embeddings and Chunking"
+lesson_id = "ch02"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "In BPE (Byte Pair Encoding) tokenization, how are rare or unseen words handled?"
+prompt.distractors = [
+    "They are replaced with an <UNK> unknown token",
+    "They are skipped entirely during encoding",
+    "They are mapped to the closest word in the vocabulary"
+]
+answer.answer = "They are broken into smaller subword units that exist in the vocabulary, down to individual characters if needed"
+context = """
+BPE builds a vocabulary by iteratively merging the most frequent byte pairs. When
+encoding text, common words may be single tokens ('the'), while rare words are
+decomposed into subword pieces. For example, 'EdgeQuake' might become ['Edge', 'Qu',
+'ake']. This ensures any input can be tokenized without out-of-vocabulary errors,
+which is why BPE is used by most modern LLMs and embedding models.
+"""
+id = "c2b3d4e5-2222-4b00-b200-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What is the key architectural difference between bi-encoders and cross-encoders for semantic similarity?"
+prompt.distractors = [
+    "Bi-encoders use transformers while cross-encoders use RNNs",
+    "Bi-encoders work on words while cross-encoders work on sentences",
+    "Bi-encoders are unsupervised while cross-encoders require labeled data"
+]
+answer.answer = "Bi-encoders embed each text independently for fast comparison, while cross-encoders process both texts jointly for higher accuracy"
+context = """
+Bi-encoders produce a single embedding per text independently, enabling precomputation
+and fast nearest-neighbor search across millions of documents. Cross-encoders take
+both texts as a concatenated input and produce a single relevance score, allowing
+deep token-level interaction. Cross-encoders are more accurate but O(n) per comparison,
+making them suitable for reranking a small candidate set, not full corpus search.
+"""
+id = "c2b3d4e5-2222-4b00-b200-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What is the primary tradeoff when choosing a larger chunk size for document chunking?"
+prompt.distractors = [
+    "Larger chunks are faster to embed but slower to retrieve",
+    "Larger chunks use less storage but more memory at query time",
+    "Larger chunks improve recall but increase embedding model cost"
+]
+answer.answer = "Larger chunks preserve more context but may dilute relevance by mixing multiple topics in a single chunk"
+context = """
+Large chunks (e.g., 1000+ tokens) retain surrounding context and document structure,
+reducing the lost context problem. However, they may contain multiple topics, making
+the embedding a blurred average that matches less precisely to specific queries. Small
+chunks are more focused but lose context. The optimal size depends on document type
+and query patterns.
+"""
+id = "c2b3d4e5-2222-4b00-b200-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Why do chunking strategies use overlap between consecutive chunks?"
+prompt.distractors = [
+    "Overlap increases the total number of chunks for better coverage",
+    "Overlap allows parallel processing of chunks across multiple threads",
+    "Overlap reduces the total storage needed by compressing repeated sections"
+]
+answer.answer = "Overlap ensures that sentences or ideas split at chunk boundaries still appear complete in at least one chunk"
+context = """
+Without overlap, a critical sentence that falls exactly at a chunk boundary would be
+split across two chunks, potentially losing meaning in both. Overlap (typically 10-20%
+of chunk size) creates a sliding window effect where boundary content appears in full
+in at least one adjacent chunk. This prevents information loss at split points while
+only modestly increasing the total number of chunks.
+"""
+id = "c2b3d4e5-2222-4b00-b200-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What is the typical dimensionality of embeddings produced by modern models like OpenAI's text-embedding-3-large?"
+answer.answer = "3072"
+context = """
+OpenAI's text-embedding-3-large produces 3072-dimensional vectors by default. Higher
+dimensions capture more nuanced semantic distinctions but require more storage and
+computation. Some models offer dimension reduction (e.g., Matryoshka embeddings)
+where you can truncate to fewer dimensions with graceful accuracy degradation. Common
+dimensions across models range from 384 to 3072.
+"""
+id = "c2b3d4e5-2222-4b00-b200-000000000005"

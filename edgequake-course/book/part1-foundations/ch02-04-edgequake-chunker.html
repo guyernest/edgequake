@@ -1,0 +1,616 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>EdgeQuake&#x27;s Chunker - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="24-edgequakes-chunker"><a class="header" href="#24-edgequakes-chunker">2.4 EdgeQuake's Chunker</a></h1>
+<p>Now that we understand tokenization, embedding models, and chunking
+strategies in the abstract, let us see how the EdgeQuake framework
+implements these concepts in production Rust code.</p>
+<p>EdgeQuake's chunking lives in the <code>edgequake-pipeline</code> crate and is
+designed to be configurable, composable, and token-aware.</p>
+<h2 id="architecture-overview"><a class="header" href="#architecture-overview">Architecture Overview</a></h2>
+<pre class="mermaid">flowchart LR
+    subgraph Pipeline[&quot;edgequake-pipeline&quot;]
+        direction TB
+        D[Document] --&gt; P[Parser]
+        P --&gt; C[Chunker]
+        C --&gt; E[Embedder]
+        E --&gt; S[Storage]
+    end
+
+    subgraph Config[&quot;ChunkerConfig&quot;]
+        CS[chunk_size: usize]
+        OV[overlap: usize]
+        ST[strategy: ChunkStrategy]
+    end
+
+    Config -.-&gt; C
+</pre>
+<p>The Chunker sits between the Parser (which extracts clean text from raw
+documents) and the Embedder (which converts chunks into vectors). It is
+configured via <code>ChunkerConfig</code> and produces <code>Chunk</code> structs that carry
+both the text and metadata through the rest of the pipeline.</p>
+<h2 id="chunkerconfig"><a class="header" href="#chunkerconfig">ChunkerConfig</a></h2>
+<p>The <code>ChunkerConfig</code> struct controls how documents are split:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Configuration for the document chunker
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkerConfig {
+    /// Maximum number of tokens per chunk
+    pub chunk_size: usize,
+
+    /// Number of overlapping tokens between adjacent chunks
+    pub overlap: usize,
+
+    /// Chunking strategy to use
+    pub strategy: ChunkStrategy,
+}
+
+/// Available chunking strategies
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ChunkStrategy {
+    /// Fixed-size chunks by token count
+    FixedSize,
+
+    /// Recursive character splitting with configurable separators
+    Recursive {
+        separators: Vec&lt;String&gt;,
+    },
+
+    /// Split on markdown headers, then sub-chunk if needed
+    Markdown,
+}
+
+impl Default for ChunkerConfig {
+    fn default() -&gt; Self {
+        Self {
+            chunk_size: 512,
+            overlap: 64,
+            strategy: ChunkStrategy::Recursive {
+                separators: vec![
+                    "\n\n".to_string(),
+                    "\n".to_string(),
+                    ". ".to_string(),
+                    " ".to_string(),
+                ],
+            },
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="configuration-from-environment"><a class="header" href="#configuration-from-environment">Configuration from Environment</a></h3>
+<p>In production, ChunkerConfig is typically loaded from environment variables
+or a configuration file:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl ChunkerConfig {
+    /// Load from environment variables with sensible defaults
+    pub fn from_env() -&gt; Self {
+        Self {
+            chunk_size: std::env::var("CHUNK_SIZE")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(512),
+            overlap: std::env::var("CHUNK_OVERLAP")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(64),
+            strategy: match std::env::var("CHUNK_STRATEGY")
+                .unwrap_or_default()
+                .as_str()
+            {
+                "fixed" =&gt; ChunkStrategy::FixedSize,
+                "markdown" =&gt; ChunkStrategy::Markdown,
+                _ =&gt; ChunkStrategy::default_recursive(),
+            },
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="the-chunk-struct"><a class="header" href="#the-chunk-struct">The Chunk Struct</a></h2>
+<p>Each chunk carries its text content along with provenance metadata that
+flows through the entire pipeline:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A chunk of text extracted from a document
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Chunk {
+    /// Unique identifier for this chunk
+    pub id: String,
+
+    /// The chunk text content
+    pub text: String,
+
+    /// Source document identifier
+    pub document_id: String,
+
+    /// Position of this chunk within the document (0-indexed)
+    pub chunk_index: usize,
+
+    /// Total number of chunks from this document
+    pub total_chunks: usize,
+
+    /// Token count of the chunk text
+    pub token_count: usize,
+
+    /// Metadata inherited from the source document
+    pub metadata: HashMap&lt;String, String&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>document_id</code> and <code>chunk_index</code> fields are essential for:</p>
+<ul>
+<li><strong>Citation</strong>: Linking retrieved chunks back to source documents</li>
+<li><strong>Deduplication</strong>: Avoiding duplicate results from overlapping chunks</li>
+<li><strong>Reassembly</strong>: Reconstructing context by fetching adjacent chunks</li>
+</ul>
+<h2 id="the-chunker-implementation"><a class="header" href="#the-chunker-implementation">The Chunker Implementation</a></h2>
+<p>The <code>Chunker</code> struct ties configuration to execution:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Document chunker that splits text into embeddable segments
+pub struct Chunker {
+    config: ChunkerConfig,
+}
+
+impl Chunker {
+    pub fn new(config: ChunkerConfig) -&gt; Self {
+        Self { config }
+    }
+
+    /// Chunk a document into embeddable segments
+    pub fn chunk_document(
+        &amp;self,
+        document_id: &amp;str,
+        text: &amp;str,
+        metadata: HashMap&lt;String, String&gt;,
+    ) -&gt; Vec&lt;Chunk&gt; {
+        let raw_chunks = match &amp;self.config.strategy {
+            ChunkStrategy::FixedSize =&gt; {
+                self.fixed_size_chunk(text)
+            }
+            ChunkStrategy::Recursive { separators } =&gt; {
+                self.recursive_chunk(text, separators)
+            }
+            ChunkStrategy::Markdown =&gt; {
+                self.markdown_chunk(text)
+            }
+        };
+
+        let total = raw_chunks.len();
+
+        raw_chunks
+            .into_iter()
+            .enumerate()
+            .map(|(i, chunk_text)| {
+                let token_count = count_tokens(&amp;chunk_text);
+                Chunk {
+                    id: format!("{}-chunk-{}", document_id, i),
+                    text: chunk_text,
+                    document_id: document_id.to_string(),
+                    chunk_index: i,
+                    total_chunks: total,
+                    token_count,
+                    metadata: metadata.clone(),
+                }
+            })
+            .collect()
+    }
+
+    fn fixed_size_chunk(&amp;self, text: &amp;str) -&gt; Vec&lt;String&gt; {
+        // Implementation as shown in Section 2.3
+        // Uses self.config.chunk_size and self.config.overlap
+        todo!()
+    }
+
+    fn recursive_chunk(&amp;self, text: &amp;str, separators: &amp;[String]) -&gt; Vec&lt;String&gt; {
+        // Implementation as shown in Section 2.3
+        todo!()
+    }
+
+    fn markdown_chunk(&amp;self, text: &amp;str) -&gt; Vec&lt;String&gt; {
+        // Implementation as shown in Section 2.3
+        todo!()
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="pipeline-integration"><a class="header" href="#pipeline-integration">Pipeline Integration</a></h2>
+<p>The Chunker integrates into EdgeQuake's processing pipeline through the
+<code>ProcessingResult</code> type. Here is how a document flows through the full
+pipeline:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use edgequake_pipeline::{Chunker, ChunkerConfig, ProcessingResult};
+
+/// Process a batch of documents through the full pipeline
+async fn process_documents(
+    documents: Vec&lt;Document&gt;,
+    chunker_config: ChunkerConfig,
+    embedder: &amp;dyn Embedder,
+) -&gt; Result&lt;ProcessingResult&gt; {
+    let chunker = Chunker::new(chunker_config);
+    let mut all_chunks = Vec::new();
+
+    // Phase 1: Chunk all documents
+    for doc in &amp;documents {
+        let chunks = chunker.chunk_document(
+            &amp;doc.id,
+            &amp;doc.content,
+            doc.metadata.clone(),
+        );
+        all_chunks.extend(chunks);
+    }
+
+    println!(
+        "Chunked {} documents into {} chunks",
+        documents.len(),
+        all_chunks.len()
+    );
+
+    // Phase 2: Embed all chunks in batches
+    let texts: Vec&lt;&amp;str&gt; = all_chunks.iter().map(|c| c.text.as_str()).collect();
+    let embeddings = embedder.embed_batch(&amp;texts).await?;
+
+    // Phase 3: Pair chunks with embeddings
+    let embedded_chunks: Vec&lt;EmbeddedChunk&gt; = all_chunks
+        .into_iter()
+        .zip(embeddings)
+        .map(|(chunk, embedding)| EmbeddedChunk { chunk, embedding })
+        .collect();
+
+    Ok(ProcessingResult {
+        chunks: embedded_chunks,
+        // ... other fields
+    })
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="batch-ingestion-integration"><a class="header" href="#batch-ingestion-integration">Batch Ingestion Integration</a></h2>
+<p>EdgeQuake's batch ingestion pipeline (<code>edgequake-batch</code>) uses the Chunker
+in its Prepare phase. The batch pipeline processes thousands of documents
+and checkpoints progress via DynamoDB:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// The Prepare phase of batch ingestion
+async fn prepare_phase(
+    documents: Vec&lt;Document&gt;,
+    config: &amp;BatchConfig,
+) -&gt; Result&lt;PrepareOutput&gt; {
+    let chunker = Chunker::new(config.chunker_config.clone());
+
+    let mut prepared_chunks = Vec::new();
+
+    for doc in documents {
+        let chunks = chunker.chunk_document(
+            &amp;doc.id,
+            &amp;doc.content,
+            doc.metadata,
+        );
+
+        // Track chunk count per document for monitoring
+        tracing::info!(
+            document_id = %doc.id,
+            chunk_count = chunks.len(),
+            "document chunked"
+        );
+
+        prepared_chunks.extend(chunks);
+    }
+
+    // Checkpoint progress to DynamoDB
+    checkpoint_progress(&amp;prepared_chunks, &amp;config.state_table).await?;
+
+    Ok(PrepareOutput {
+        chunks: prepared_chunks,
+        total_documents: documents.len(),
+    })
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="tuning-for-your-domain"><a class="header" href="#tuning-for-your-domain">Tuning for Your Domain</a></h2>
+<p>Different document types benefit from different configurations:</p>
+<div class="table-wrapper"><table><thead><tr><th>Document Type</th><th>Strategy</th><th>Chunk Size</th><th>Overlap</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Legal contracts</td><td>Recursive</td><td>384</td><td>48</td><td>Smaller chunks for precise clause retrieval</td></tr>
+<tr><td>Technical docs</td><td>Markdown</td><td>512</td><td>64</td><td>Leverage header structure</td></tr>
+<tr><td>Chat transcripts</td><td>Fixed</td><td>256</td><td>32</td><td>Short, uniform messages</td></tr>
+<tr><td>Research papers</td><td>Recursive</td><td>768</td><td>96</td><td>Longer chunks for complex arguments</td></tr>
+<tr><td>Code files</td><td>Markdown</td><td>512</td><td>64</td><td>Treat function/class definitions as headers</td></tr>
+</tbody></table>
+</div>
+<h3 id="validation"><a class="header" href="#validation">Validation</a></h3>
+<p>Always validate your chunking configuration against your actual data:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Analyze chunk statistics for quality validation
+fn analyze_chunks(chunks: &amp;[Chunk]) {
+    let token_counts: Vec&lt;usize&gt; = chunks.iter().map(|c| c.token_count).collect();
+
+    let min = token_counts.iter().min().unwrap_or(&amp;0);
+    let max = token_counts.iter().max().unwrap_or(&amp;0);
+    let mean = token_counts.iter().sum::&lt;usize&gt;() as f64 / token_counts.len() as f64;
+    let very_small = token_counts.iter().filter(|&amp;&amp;t| t &lt; 50).count();
+    let oversized = token_counts.iter().filter(|&amp;&amp;t| t &gt; 512).count();
+
+    println!("Chunk Statistics:");
+    println!("  Total chunks: {}", chunks.len());
+    println!("  Token range:  {} - {}", min, max);
+    println!("  Mean tokens:  {:.1}", mean);
+    println!("  Very small (&lt;50 tokens): {} ({:.1}%)",
+        very_small,
+        very_small as f64 / chunks.len() as f64 * 100.0
+    );
+    println!("  Oversized (&gt;512 tokens): {} ({:.1}%)",
+        oversized,
+        oversized as f64 / chunks.len() as f64 * 100.0
+    );
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Red flags to watch for:</p>
+<ul>
+<li>More than 10% of chunks under 50 tokens (too fragmented)</li>
+<li>More than 5% of chunks exceeding the embedding model's token limit</li>
+<li>Mean token count less than 50% of the configured chunk size</li>
+</ul>
+<h2 id="summary"><a class="header" href="#summary">Summary</a></h2>
+<p>EdgeQuake's Chunker provides a production-ready, configurable chunking
+system that integrates seamlessly with the pipeline's processing phases.
+The <code>ChunkerConfig</code> struct makes it easy to swap strategies and tune
+parameters, while the <code>Chunk</code> struct preserves provenance metadata
+throughout the pipeline. In the batch ingestion path, the chunker handles
+thousands of documents with DynamoDB-backed progress checkpointing.</p>
+<hr />
+<p><em>Next: <a href="ch03-advanced-retrieval.html">Chapter 3: Advanced Retrieval Techniques</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part1-foundations/ch02-03-chunking-strategies.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../exercises/ch02/markdown-chunking.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part1-foundations/ch02-03-chunking-strategies.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../exercises/ch02/markdown-chunking.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

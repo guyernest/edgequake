@@ -1,0 +1,575 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Structured Logging - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="131-structured-logging"><a class="header" href="#131-structured-logging">13.1 Structured Logging</a></h2>
+<p>Traditional logging produces freeform text lines that are easy for humans to
+read but difficult for machines to parse. When you have a single server and
+ten requests per second, <code>println!</code> debugging works. When you have a
+distributed system processing thousands of requests across multiple
+services, you need structured logging -- log entries with typed, queryable
+fields that can be aggregated, filtered, and correlated.</p>
+<p>The <code>tracing</code> crate is the Rust ecosystem's standard for structured
+diagnostics. Unlike <code>log</code>, which produces flat text lines, <code>tracing</code> provides
+<strong>spans</strong> (regions of execution with duration) and <strong>events</strong> (point-in-time
+occurrences) with arbitrary key-value fields.</p>
+<h3 id="setting-up-tracing"><a class="header" href="#setting-up-tracing">Setting Up tracing</a></h3>
+<p>Add the required dependencies to your <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[dependencies]
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+uuid = { version = "1", features = ["v4"] }
+</code></pre>
+<p>Initialize the subscriber at application startup. The subscriber determines
+how span and event data is collected and formatted:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use tracing_subscriber::{
+    fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter,
+};
+
+/// Initialize the tracing subscriber for structured logging.
+///
+/// Configuration is driven by the `RUST_LOG` environment variable:
+///   - RUST_LOG=info           -- info level for all crates
+///   - RUST_LOG=edgequake=debug -- debug level for EdgeQuake crates only
+///   - RUST_LOG=warn,edgequake=trace -- trace for EdgeQuake, warn for everything else
+pub fn init_tracing() {
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| {
+            // Default: info for EdgeQuake crates, warn for dependencies.
+            EnvFilter::new("warn,edgequake=info,edgequake_api=info,edgequake_batch=info")
+        });
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(
+            fmt::layer()
+                .json()                    // JSON output for machine parsing
+                .with_target(true)         // Include module path
+                .with_thread_ids(true)     // Include thread ID
+                .with_span_list(true)      // Include active span hierarchy
+                .with_timer(fmt::time::UtcTime::rfc_3339())
+        )
+        .init();
+
+    tracing::info!("tracing initialized");
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="structured-log-output"><a class="header" href="#structured-log-output">Structured Log Output</a></h3>
+<p>With JSON formatting enabled, a log entry looks like this:</p>
+<pre><code class="language-json">{
+  "timestamp": "2025-03-15T14:32:01.456Z",
+  "level": "INFO",
+  "target": "edgequake_api::handlers::query",
+  "message": "query completed",
+  "span": {
+    "name": "handle_query",
+    "request_id": "req-abc-123",
+    "workspace_id": "acme"
+  },
+  "fields": {
+    "entities_found": 12,
+    "relationships_found": 34,
+    "duration_ms": 247
+  },
+  "threadId": 7
+}
+</code></pre>
+<p>Every field is queryable. In CloudWatch Logs Insights, you can write:</p>
+<pre><code class="language-sql">fields @timestamp, fields.duration_ms, span.workspace_id
+| filter span.workspace_id = "acme"
+| filter fields.duration_ms &gt; 1000
+| sort @timestamp desc
+| limit 50
+</code></pre>
+<h3 id="span-hierarchies"><a class="header" href="#span-hierarchies">Span Hierarchies</a></h3>
+<p>Spans create a tree structure that mirrors the call hierarchy. When a query
+handler calls the graph storage, which calls the database, the spans nest
+naturally:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use tracing::{info, info_span, instrument, Instrument};
+
+/// Handle a query request.
+///
+/// The #[instrument] macro automatically creates a span with
+/// the function name and any parameters marked for inclusion.
+#[instrument(
+    name = "handle_query",
+    skip(factory, query),
+    fields(
+        request_id = %request_id,
+        workspace_id = %claims.workspace_id,
+        query_mode = %query.mode,
+    )
+)]
+async fn handle_query(
+    Extension(claims): Extension&lt;Claims&gt;,
+    Extension(factory): Extension&lt;Arc&lt;StorageFactory&gt;&gt;,
+    Json(query): Json&lt;QueryRequest&gt;,
+    request_id: String,
+) -&gt; Result&lt;Json&lt;QueryResponse&gt;, AppError&gt; {
+    // This span is active for the entire handler execution.
+    // All tracing calls within this function are children of this span.
+
+    info!("starting query processing");
+
+    let storage = factory.for_workspace(&amp;claims.workspace_id);
+
+    // Extract keywords -- creates a child span.
+    let keywords = extract_keywords(&amp;query.text)
+        .instrument(info_span!("extract_keywords"))
+        .await?;
+
+    info!(keyword_count = keywords.len(), "keywords extracted");
+
+    // Query the graph -- creates another child span.
+    let graph_results = query_graph(&amp;storage, &amp;keywords)
+        .instrument(info_span!("query_graph", keyword_count = keywords.len()))
+        .await?;
+
+    // Query vectors -- creates another child span.
+    let vector_results = query_vectors(&amp;storage, &amp;query.text)
+        .instrument(info_span!("query_vectors"))
+        .await?;
+
+    info!(
+        graph_entities = graph_results.entities.len(),
+        vector_chunks = vector_results.chunks.len(),
+        "retrieval complete"
+    );
+
+    // Synthesize the answer.
+    let response = synthesize(&amp;graph_results, &amp;vector_results, &amp;query)
+        .instrument(info_span!("synthesize"))
+        .await?;
+
+    info!(
+        response_tokens = response.token_count,
+        "query completed"
+    );
+
+    Ok(Json(response))
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The resulting span hierarchy:</p>
+<pre><code class="language-text">handle_query [request_id=req-abc-123, workspace_id=acme, query_mode=hybrid]
+  |-- extract_keywords                    (12ms)
+  |-- query_graph [keyword_count=5]       (89ms)
+  |-- query_vectors                       (134ms)
+  |-- synthesize                          (1,240ms)
+</code></pre>
+<p>This hierarchy immediately tells you that synthesis (the LLM call) dominates
+latency, not the retrieval steps.</p>
+<h3 id="request-correlation-ids"><a class="header" href="#request-correlation-ids">Request Correlation IDs</a></h3>
+<p>Every request should carry a unique correlation ID that ties together all log
+entries for that request. This is essential for debugging in multi-tenant
+systems where logs from different tenants are interleaved:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use axum::{extract::Request, middleware::Next, response::Response};
+use uuid::Uuid;
+
+/// Middleware that generates a request correlation ID.
+///
+/// The ID is added to the request extensions and included in
+/// the response headers for client-side correlation.
+pub async fn correlation_id_middleware(
+    mut request: Request,
+    next: Next,
+) -&gt; Response {
+    let request_id = request
+        .headers()
+        .get("X-Request-ID")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+    // Store in request extensions for handlers to access.
+    request.extensions_mut().insert(RequestId(request_id.clone()));
+
+    // Create a tracing span for the entire request.
+    let span = tracing::info_span!(
+        "http_request",
+        request_id = %request_id,
+        method = %request.method(),
+        path = %request.uri().path(),
+    );
+
+    // Execute the rest of the middleware stack within this span.
+    let response = {
+        let _guard = span.enter();
+        next.run(request).await
+    };
+
+    // Include the request ID in the response headers.
+    let mut response = response;
+    response.headers_mut().insert(
+        "X-Request-ID",
+        request_id.parse().unwrap(),
+    );
+
+    response
+}
+
+/// Newtype wrapper for the request ID, used as an Axum extension.
+#[derive(Clone, Debug)]
+pub struct RequestId(pub String);
+<span class="boring">}</span></code></pre></pre>
+<h3 id="log-levels-by-component"><a class="header" href="#log-levels-by-component">Log Levels by Component</a></h3>
+<p>Different components warrant different log levels in production:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// In your RUST_LOG configuration:
+// RUST_LOG=warn,edgequake_api=info,edgequake_storage=info,edgequake_batch=info,edgequake_llm=debug
+
+// API handlers: info level -- log request start/end, not internals.
+#[instrument(skip_all, fields(workspace_id = %claims.workspace_id))]
+async fn handle_ingest(claims: Claims, payload: IngestRequest) -&gt; Result&lt;()&gt; {
+    tracing::info!(documents = payload.documents.len(), "ingestion started");
+    // ... processing ...
+    tracing::info!(entities = stats.entities, "ingestion complete");
+    Ok(())
+}
+
+// Storage operations: info for lifecycle, debug for details.
+async fn upsert_entities(entities: &amp;[Entity]) -&gt; Result&lt;()&gt; {
+    tracing::info!(count = entities.len(), "upserting entities");
+    for entity in entities {
+        tracing::debug!(name = %entity.name, entity_type = %entity.entity_type, "upserting entity");
+    }
+    Ok(())
+}
+
+// LLM calls: debug level with token counts for cost tracking.
+async fn call_llm(prompt: &amp;str) -&gt; Result&lt;LlmResponse&gt; {
+    tracing::debug!(prompt_tokens = prompt.len() / 4, "calling LLM"); // rough estimate
+    let response = client.chat(prompt).await?;
+    tracing::debug!(
+        completion_tokens = response.usage.completion_tokens,
+        total_tokens = response.usage.total_tokens,
+        model = %response.model,
+        "LLM response received"
+    );
+    Ok(response)
+}
+
+// Errors: always warn or error level, with full context.
+async fn query_graph(storage: &amp;dyn GraphStorage, keywords: &amp;[String]) -&gt; Result&lt;GraphResults&gt; {
+    match storage.get_entities(&amp;query).await {
+        Ok(entities) =&gt; {
+            tracing::info!(count = entities.len(), "graph query succeeded");
+            Ok(GraphResults { entities })
+        }
+        Err(e) =&gt; {
+            tracing::error!(
+                error = %e,
+                keywords = ?keywords,
+                "graph query failed"
+            );
+            Err(e.into())
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="recommended-log-level-guidelines"><a class="header" href="#recommended-log-level-guidelines">Recommended Log Level Guidelines</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Level</th><th>Use For</th><th>Example</th></tr></thead><tbody>
+<tr><td><code>error</code></td><td>Failures that require attention</td><td>Database connection lost, LLM API 500</td></tr>
+<tr><td><code>warn</code></td><td>Unexpected but recoverable situations</td><td>Token approaching limit, slow query</td></tr>
+<tr><td><code>info</code></td><td>Business-significant events</td><td>Request start/end, ingestion complete</td></tr>
+<tr><td><code>debug</code></td><td>Diagnostic detail for troubleshooting</td><td>Individual entity upserts, LLM token counts</td></tr>
+<tr><td><code>trace</code></td><td>Fine-grained execution flow</td><td>SQL queries, HTTP headers, serialization steps</td></tr>
+</tbody></table>
+</div>
+<h3 id="conditional-compilation-for-performance"><a class="header" href="#conditional-compilation-for-performance">Conditional Compilation for Performance</a></h3>
+<p>In hot paths, even constructing the log message has a cost. The <code>tracing</code>
+crate's macros are zero-cost when the level is disabled, but you should still
+be mindful:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Good: the tracing macro checks the level before evaluating arguments.
+tracing::trace!(embedding_dim = embedding.len(), "processing embedding");
+
+// Potentially expensive: building a debug representation on every call.
+// Only do this at trace level inside hot loops.
+tracing::trace!(embedding = ?embedding, "full embedding vector");
+
+// For very hot paths, use the enabled! macro for conditional logic:
+if tracing::enabled!(tracing::Level::TRACE) {
+    let similarity = compute_cosine_similarity(a, b);
+    tracing::trace!(similarity = %similarity, "vector similarity computed");
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>Structured logging with <code>tracing</code> produces machine-parseable JSON output
+with typed fields, enabling powerful log queries.</li>
+<li>Span hierarchies mirror the call tree, making it easy to trace execution
+flow and identify latency bottlenecks.</li>
+<li>Every request should carry a correlation ID that appears in all log entries,
+enabling end-to-end request tracing.</li>
+<li>Use appropriate log levels: <code>info</code> for business events, <code>debug</code> for
+diagnostics, <code>error</code> for failures requiring attention.</li>
+<li>The <code>#[instrument]</code> macro is the simplest way to create spans with
+function-level granularity.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch13-02-middleware-stack.html">13.2 Middleware Stack</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part4-enterprise/ch13-observability.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part4-enterprise/ch13-02-middleware-stack.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part4-enterprise/ch13-observability.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part4-enterprise/ch13-02-middleware-stack.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

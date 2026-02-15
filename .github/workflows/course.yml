@@ -1,0 +1,118 @@
+name: Build and Deploy EdgeQuake Course
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'edgequake-course/**'
+      - '.github/workflows/course.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'edgequake-course/**'
+      - '.github/workflows/course.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "course-build"
+  cancel-in-progress: true
+
+jobs:
+  # Build the course book
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install mdBook
+        run: |
+          curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.52/mdbook-v0.4.52-x86_64-unknown-linux-gnu.tar.gz | tar -xz
+          chmod +x mdbook
+          sudo mv mdbook /usr/local/bin/
+
+      - name: Install mdbook-mermaid
+        run: |
+          cargo install mdbook-mermaid --locked || echo "mdbook-mermaid installation failed, continuing without mermaid support"
+
+      - name: Install mdbook-quiz
+        run: |
+          cargo install mdbook-quiz --locked || echo "mdbook-quiz installation failed, continuing without quiz support"
+
+      - name: Install mdbook-exercises
+        run: |
+          cargo install mdbook-exercises --locked || echo "mdbook-exercises installation failed, continuing without exercise support"
+
+      - name: Build Course Book
+        run: |
+          cd edgequake-course
+          mdbook build
+
+      - name: Upload book artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: course-book
+          path: edgequake-course/book
+          retention-days: 7
+
+  # Package course content for consumption
+  package-content:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Create course content package
+        run: |
+          tar -czf course-content.tar.gz \
+            --transform 's,^edgequake-course/src/,,' \
+            --transform 's,^edgequake-course/,,' \
+            edgequake-course/src/ \
+            edgequake-course/metadata.toml
+
+          echo "Package contents:"
+          tar -tzf course-content.tar.gz | head -50
+
+          ls -lh course-content.tar.gz
+
+      - name: Upload content artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: course-content
+          path: course-content.tar.gz
+          retention-days: 30
+
+  # Upload content package to release (only on release)
+  upload-to-release:
+    if: github.event_name == 'release'
+    needs: [build, package-content]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download content artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: course-content
+
+      - name: Rename with version
+        run: |
+          mv course-content.tar.gz course-content-${{ github.ref_name }}.tar.gz
+          ls -lh course-content-*.tar.gz
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: course-content-${{ github.ref_name }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

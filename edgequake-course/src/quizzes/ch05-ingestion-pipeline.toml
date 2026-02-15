@@ -1,0 +1,94 @@
+# Quiz: The Ingestion Pipeline
+
+id = "ch05-ingestion-pipeline"
+title = "The Ingestion Pipeline"
+lesson_id = "ch05"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What are the four main stages of EdgeQuake's ingestion pipeline in order?"
+prompt.distractors = [
+    "Parse, Tokenize, Index, Query",
+    "Upload, Validate, Transform, Deploy",
+    "Chunk, Search, Rank, Generate"
+]
+answer.answer = "Prepare (chunk documents), Extract (identify entities and relationships), Embed (generate vectors), Store (persist to backends)"
+context = """
+EdgeQuake's ingestion pipeline follows four phases: (1) Prepare splits documents into
+chunks with overlap; (2) Extract uses an LLM to identify entities, relationships,
+and key facts from each chunk; (3) Embed generates vector embeddings for entities,
+relationships, and chunks; (4) Store persists everything to the configured graph,
+vector, and key-value storage backends. This separation enables checkpointing and
+resumption between phases.
+"""
+id = "f5e6a7b8-5555-4e00-b500-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "During entity extraction, what does the LLM produce for each chunk?"
+prompt.distractors = [
+    "A list of keywords and their TF-IDF scores",
+    "A compressed summary and a set of embedding coordinates",
+    "A dependency parse tree and named entity labels"
+]
+answer.answer = "A structured list of entities (with names, types, and descriptions) and relationships (with source, target, type, and description)"
+context = """
+The extraction LLM analyzes each chunk and outputs structured data: entities with
+a canonical name, entity type (Person, Organization, Location, etc.), and a natural
+language description; plus relationships with source entity, target entity,
+relationship type, description, and weight. This structured output is what gets
+stored in the knowledge graph, turning unstructured text into a queryable graph.
+"""
+id = "f5e6a7b8-5555-4e00-b500-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Why is entity normalization important during the extraction phase?"
+prompt.distractors = [
+    "It reduces the number of LLM calls needed per document",
+    "It converts all entity names to lowercase for case-insensitive search",
+    "It removes duplicate chunks that contain the same entities"
+]
+answer.answer = "It merges references like 'J. Epstein', 'Jeffrey Epstein', and 'Epstein' into a single canonical entity to prevent graph fragmentation"
+context = """
+Without normalization, the same real-world entity mentioned differently across
+documents creates multiple disconnected nodes in the graph. 'Jeffrey Epstein',
+'J. Epstein', 'Mr. Epstein', and 'Epstein' would each be separate nodes with
+their own edges, fragmenting the relationship network. Normalization consolidates
+these into one canonical node, ensuring all relationships are properly connected
+and multi-hop queries traverse the complete graph.
+"""
+id = "f5e6a7b8-5555-4e00-b500-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What is 'gleaning' in the context of entity extraction?"
+prompt.distractors = [
+    "Removing low-confidence entities that fall below a threshold score",
+    "Splitting large entities into smaller sub-entities for finer granularity",
+    "Caching extracted entities to avoid re-processing the same chunks"
+]
+answer.answer = "Running additional extraction passes on the same chunk to catch entities and relationships missed in the first pass"
+context = """
+Gleaning performs multiple LLM extraction passes on each chunk. The first pass may
+miss subtle entities or implicit relationships. Subsequent passes receive the
+previously extracted results and are prompted to find anything missed. This iterative
+approach improves recall, especially for complex documents where entities may be
+mentioned indirectly or relationships are implied rather than stated explicitly.
+The number of gleaning passes is configurable via PipelineConfig.
+"""
+id = "f5e6a7b8-5555-4e00-b500-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What struct in EdgeQuake holds the configuration for chunk size, overlap, gleaning passes, and other ingestion parameters?"
+answer.answer = "PipelineConfig"
+context = """
+PipelineConfig is the central configuration struct for the ingestion pipeline. It
+controls parameters like chunk_size (token count per chunk), chunk_overlap (tokens
+shared between adjacent chunks), max_gleaning_passes (number of additional extraction
+iterations), and other settings that tune the tradeoff between extraction thoroughness
+and processing cost.
+"""
+id = "f5e6a7b8-5555-4e00-b500-000000000005"

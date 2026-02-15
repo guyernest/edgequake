@@ -1,0 +1,90 @@
+# Quiz: Batch Ingestion Pipeline
+
+id = "ch12-batch-ingestion"
+title = "Batch Ingestion Pipeline"
+lesson_id = "ch12"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What are the four sequential phases of EdgeQuake's batch ingestion pipeline?"
+prompt.distractors = [
+    "Upload, Parse, Index, Query",
+    "Ingest, Transform, Load, Verify",
+    "Scan, Classify, Vectorize, Publish"
+]
+answer.answer = "Prepare, Extract, Embed, Store"
+context = """
+The batch ingestion pipeline follows four distinct phases: (1) Prepare — documents are loaded, chunked, and \
+readied for processing; (2) Extract — entities and relationships are extracted from chunks using LLM calls \
+via the OpenAI Batch API; (3) Embed — text chunks and entities are converted into vector embeddings; \
+(4) Store — the extracted graph data and embeddings are persisted to the configured storage backends. Each \
+phase checkpoints its state so the pipeline can resume from any phase after failure.
+"""
+id = "e5f6a7b8-5001-4e4c-f001-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Why does EdgeQuake use the OpenAI Batch API instead of standard API calls for the extraction phase?"
+prompt.distractors = [
+    "The Batch API returns higher quality extractions because it uses a more capable model",
+    "The Batch API processes requests in real-time with lower latency than standard calls",
+    "The Batch API is the only way to send prompts longer than the standard context window"
+]
+answer.answer = "The Batch API offers approximately 50% cost savings by processing requests asynchronously in bulk"
+context = """
+The OpenAI Batch API is designed for high-volume, non-time-sensitive workloads. By submitting extraction \
+requests as a batch rather than individual API calls, EdgeQuake benefits from approximately 50% cost \
+reduction. The tradeoff is higher latency — batch requests are processed asynchronously over a longer time \
+window — but since batch ingestion is not a real-time operation, this tradeoff is acceptable. The quality \
+of results is the same as standard API calls; only the pricing and latency differ.
+"""
+id = "e5f6a7b8-5001-4e4c-f001-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "How does DynamoDB-based checkpointing help when a batch ingestion job fails partway through?"
+prompt.distractors = [
+    "It automatically retries the failed operation until it succeeds without any manual intervention",
+    "It rolls back all changes made during the current phase to maintain data consistency",
+    "It sends an alert notification so an operator can manually restart the entire pipeline"
+]
+answer.answer = "It records the completed phase and progress state so the pipeline can resume from where it left off instead of restarting from the beginning"
+context = """
+DynamoDB stores the pipeline's state including which phase is complete, which items have been processed, \
+and any intermediate results. If the pipeline fails during the Embed phase, for example, the checkpoint \
+data shows that Prepare and Extract completed successfully. When the pipeline is resumed, it reads this \
+state and skips directly to the Embed phase, avoiding the cost and time of re-extracting entities. This \
+is especially important for large ingestion jobs that may take hours to complete.
+"""
+id = "e5f6a7b8-5001-4e4c-f001-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Why is it important that the Store phase operations are idempotent in the batch ingestion pipeline?"
+prompt.distractors = [
+    "Because idempotent operations run faster than non-idempotent ones due to database optimizations",
+    "Because the storage backends require all writes to include a unique idempotency key in the request",
+    "Because idempotent operations automatically compress data to reduce storage costs"
+]
+answer.answer = "Because if the Store phase is interrupted and retried, re-storing the same data will not create duplicates or corrupt existing records"
+context = """
+An idempotent operation produces the same result whether it is executed once or multiple times. In the Store \
+phase, this means that writing the same entity, relationship, or embedding vector a second time will result \
+in an upsert (update-or-insert) rather than creating a duplicate. This is critical for fault tolerance: if \
+the Store phase processes 80% of items and then fails, resuming it will re-process some already-stored items, \
+but idempotency ensures no data corruption or duplication occurs.
+"""
+id = "e5f6a7b8-5001-4e4c-f001-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What Makefile target would you use to continue a batch ingestion job that was previously interrupted?"
+answer.answer = "batch-resume"
+context = """
+The Makefile provides several batch-related targets: batch-build, batch-run, batch-prepare, batch-extract, \
+batch-embed, batch-store, batch-status, and batch-resume. The batch-resume target reads the checkpoint state \
+from DynamoDB to determine which phase was last completed, then continues execution from the next incomplete \
+phase. This avoids reprocessing work that was already successfully completed before the interruption.
+"""
+id = "e5f6a7b8-5001-4e4c-f001-000000000005"

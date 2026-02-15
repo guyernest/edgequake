@@ -1,0 +1,1049 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Exercise: Query Mode Selector - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../../src/custom.css">
+        <link rel="stylesheet" href="../../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <div class="exercise-container">
+<article class="exercise" data-exercise-id="query-mode-selector" data-difficulty="intermediate">
+<header class="exercise-header">
+  <h2 id="query-mode-selection" class="exercise-title"><a class="header" href="#query-mode-selection">Query Mode Selection</a></h2>
+  <code class=\"exercise-id\">query-mode-selector</code>
+  <div class="exercise-meta">
+    <span class="badge difficulty intermediate">⭐⭐ intermediate</span>
+    <span class="badge time">⏱️ 25 min</span>
+  </div>
+</header>
+<nav class="exercise-nav" aria-label="Exercise sections"><ul><li><a href="#query-mode-selector-description" data-section="description">📖 Overview</a></li><li><a href="#query-mode-selector-objectives" data-section="objectives">🎯 Objectives</a></li><li><a href="#query-mode-selector-starter" data-section="starter">💻 Code</a></li><li><a href="#query-mode-selector-hints" data-section="hints">💡 Hints</a></li><li><a href="#query-mode-selector-solution" data-section="solution">✅ Solution</a></li><li><a href="#query-mode-selector-tests" data-section="tests">🧪 Tests</a></li><li><a href="#query-mode-selector-reflection" data-section="reflection">🤔 Reflect</a></li></ul></nav>
+<section class="exercise-description" id="query-mode-selector-description">
+<p>Graph RAG supports multiple query modes, each optimized for different kinds of
+questions. Choosing the wrong mode wastes compute and degrades answer quality.
+In this exercise you will implement heuristic-based query mode selection that
+analyzes the structure of a query to route it to the most appropriate retrieval
+strategy.</p>
+</section>
+<section class="exercise-objectives" id="query-mode-selector-objectives">
+  <h3 id="-learning-objectives"><a class="header" href="#-learning-objectives">🎯 Learning Objectives</a></h3>
+  <div class="objectives-grid">
+    <div class="objectives-thinking">
+      <h4 id="thinking"><a class="header" href="#thinking">Thinking</a></h4>
+      <ul>
+        <li><input type="checkbox" id="query-mode-selector-thinking-0" class="objective-checkbox"><label for="query-mode-selector-thinking-0">Understand the four Graph RAG query modes and their strengths</label></li>
+        <li><input type="checkbox" id="query-mode-selector-thinking-1" class="objective-checkbox"><label for="query-mode-selector-thinking-1">Reason about which query characteristics signal each mode</label></li>
+      </ul>
+    </div>
+    <div class="objectives-doing">
+      <h4 id="doing"><a class="header" href="#doing">Doing</a></h4>
+      <ul>
+        <li><input type="checkbox" id="query-mode-selector-doing-0" class="objective-checkbox"><label for="query-mode-selector-doing-0">Implement pattern-matching heuristics for query classification</label></li>
+        <li><input type="checkbox" id="query-mode-selector-doing-1" class="objective-checkbox"><label for="query-mode-selector-doing-1">Handle ambiguous queries with a sensible default</label></li>
+        <li><input type="checkbox" id="query-mode-selector-doing-2" class="objective-checkbox"><label for="query-mode-selector-doing-2">Support entity name detection for Local mode routing</label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+<section class="exercise-discussion">
+  <h3 id="-discussion"><a class="header" href="#-discussion">💬 Discussion</a></h3>
+  <ul>
+    <li>Why not always use Hybrid mode if it combines the best of Local and Global?</li>
+    <li>How would a production system decide the query mode differently than heuristics?</li>
+    <li>What happens if the mode selector makes the wrong choice? How bad is the degradation?</li>
+  </ul>
+</section>
+<section class="exercise-starter" id="query-mode-selector-starter">
+  <div class="code-header">
+    <span class="filename">src/main.rs</span>
+    <div class="code-actions">
+      <button class="btn btn-copy" data-target="code-query-mode-selector" title="Copy code">📋 Copy</button>
+      <button class="btn btn-reset" data-target="code-query-mode-selector" title="Reset to original">↺ Reset</button>
+    </div>
+  </div>
+  <textarea class="code-editor" id="code-query-mode-selector" data-language="rust" data-original="/// The query modes supported by the Graph RAG system.&#10;#[derive(Debug, Clone, PartialEq)]&#10;enum QueryMode {&#10;    /// Simple vector similarity search. Best for short, keyword-like queries.&#10;    Naive,&#10;    /// Entity-centric subgraph traversal. Best for &quot;who/what&quot; questions&#10;    /// about specific entities.&#10;    Local,&#10;    /// Community summary search. Best for broad &quot;why/how&quot; analytical&#10;    /// questions about themes and patterns.&#10;    Global,&#10;    /// Combines Local and Global. Best for complex multi-part questions.&#10;    Hybrid,&#10;}&#10;&#10;/// Metadata about a query that informs mode selection.&#10;#[derive(Debug)]&#10;struct QueryAnalysis {&#10;    /// The original query text.&#10;    query: String,&#10;    /// The query converted to lowercase for matching.&#10;    query_lower: String,&#10;    /// Number of words in the query.&#10;    word_count: usize,&#10;    /// Whether the query contains a known entity name.&#10;    has_entity_mention: bool,&#10;    /// Whether the query contains question words (who, what, where, etc.).&#10;    has_question_word: bool,&#10;    /// Whether the query contains analytical words (why, how, explain, etc.).&#10;    has_analytical_word: bool,&#10;    /// Whether the query contains boolean connectors (and, or, both, also).&#10;    has_connector: bool,&#10;}&#10;&#10;/// A set of known entity names for entity detection.&#10;/// In a real system, this would come from the knowledge graph.&#10;struct KnownEntities {&#10;    names: Vec&lt;String&gt;,&#10;}&#10;&#10;impl KnownEntities {&#10;    fn new(names: Vec&lt;String&gt;) -&gt; Self {&#10;        KnownEntities { names }&#10;    }&#10;&#10;    fn contains_any(&amp;self, text: &amp;str) -&gt; bool {&#10;        let text_lower = text.to_lowercase();&#10;        self.names.iter().any(|name| text_lower.contains(&amp;name.to_lowercase()))&#10;    }&#10;}&#10;&#10;/// Analyze a query to extract features for mode selection.&#10;fn analyze_query(query: &amp;str, known_entities: &amp;KnownEntities) -&gt; QueryAnalysis {&#10;    // TODO: Implement query analysis&#10;    //&#10;    // 1. Convert to lowercase.&#10;    // 2. Count words.&#10;    // 3. Check for known entity mentions.&#10;    // 4. Check for question words: who, what, which, where, when&#10;    // 5. Check for analytical words: why, how, explain, describe,&#10;    //    compare, analyze, summarize, overview, theme, pattern&#10;    // 6. Check for boolean connectors: and, or, both, also, as well as&#10;    todo!(&quot;Implement analyze_query&quot;)&#10;}&#10;&#10;/// Select the query mode based on query analysis.&#10;///&#10;/// Heuristics:&#10;/// - Naive: Very short queries (1-3 words) with no question/analytical words.&#10;/// - Local: Contains entity mention + question word, but not analytical.&#10;/// - Global: Contains analytical words, no specific entity mention.&#10;/// - Hybrid: Contains both entity mention and analytical words, OR has&#10;///           boolean connectors suggesting a multi-part question.&#10;fn select_mode(analysis: &amp;QueryAnalysis) -&gt; QueryMode {&#10;    // TODO: Implement mode selection heuristics&#10;    //&#10;    // Start with the most specific rules and fall back to broader ones.&#10;    // The order of checks matters -- more specific modes should be tested first.&#10;    todo!(&quot;Implement select_mode&quot;)&#10;}&#10;&#10;fn main() {&#10;    let entities = KnownEntities::new(vec![&#10;        &quot;Alice Johnson&quot;.into(),&#10;        &quot;TechCorp&quot;.into(),&#10;        &quot;Bob Smith&quot;.into(),&#10;        &quot;CloudBase&quot;.into(),&#10;    ]);&#10;&#10;    let test_queries = vec![&#10;        &quot;TechCorp CEO&quot;,&#10;        &quot;Who is Alice Johnson?&quot;,&#10;        &quot;Why did TechCorp acquire CloudBase?&quot;,&#10;        &quot;Explain the main themes in the dataset&quot;,&#10;        &quot;Who is Bob Smith and how does he relate to TechCorp?&quot;,&#10;        &quot;overview of organizational patterns&quot;,&#10;        &quot;CloudBase&quot;,&#10;        &quot;Compare the roles of Alice Johnson and Bob Smith at TechCorp&quot;,&#10;    ];&#10;&#10;    println!(&quot;Query Mode Selection:&quot;);&#10;    println!(&quot;{:-&lt;70}&quot;, &quot;&quot;);&#10;    for query in test_queries {&#10;        let analysis = analyze_query(query, &amp;entities);&#10;        let mode = select_mode(&amp;analysis);&#10;        println!(&quot;  {:?:&lt;8} | {}&quot;, mode, query);&#10;    }&#10;}" spellcheck="false"></textarea>
+</section>
+<section class="exercise-hints" id="query-mode-selector-hints">
+  <h3 id="-hints"><a class="header" href="#-hints">💡 Hints</a></h3>
+  <details class="hint" data-level="1">
+    <summary>Hint 1: Analyzing query features</summary>
+    <div class="hint-content">
+<p>Use simple string checks for word detection. Check for word boundaries to avoid
+false matches (e.g., "how" inside "showdown"):</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn contains_word(text: &amp;str, word: &amp;str) -&gt; bool {
+    text.split_whitespace().any(|w| {
+        w.trim_matches(|c: char| !c.is_alphanumeric()) == word
+    })
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Then use this in <code>analyze_query</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let question_words = ["who", "what", "which", "where", "when"];
+let has_question_word = question_words.iter().any(|w| contains_word(&amp;query_lower, w));
+<span class="boring">}</span></code></pre></pre>
+    </div>
+  </details>
+  <details class="hint" data-level="2">
+    <summary>Hint 2: Mode selection logic</summary>
+    <div class="hint-content">
+<p>Think of mode selection as a decision tree. Check the most specific conditions
+first:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn select_mode(analysis: &amp;QueryAnalysis) -&gt; QueryMode {
+    // Hybrid: multi-part (has connector) OR both entity + analytical
+    if (analysis.has_entity_mention &amp;&amp; analysis.has_analytical_word)
+        || (analysis.has_connector &amp;&amp; analysis.word_count &gt; 5) {
+        return QueryMode::Hybrid;
+    }
+<pre><code>// Global: analytical without specific entity
+if analysis.has_analytical_word &amp;amp;&amp;amp; !analysis.has_entity_mention {
+    return QueryMode::Global;
+}
+
+// Local: specific entity question
+if analysis.has_entity_mention &amp;amp;&amp;amp; (analysis.has_question_word || analysis.word_count &amp;gt; 3) {
+    return QueryMode::Local;
+}
+
+// Naive: short keyword queries
+QueryMode::Naive
+<span class="boring">}</span></code></pre></pre>
+<p>}
+</code></pre>
+</div></p>
+  </details>
+</section>
+<section class="exercise-solution" id="query-mode-selector-solution">
+  <details class="solution">
+    <summary><span class="solution-warning">⚠️ Try the exercise first!</span><span class="solution-toggle">Show Solution</span></summary>
+    <div class="solution-content">
+      <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Debug, Clone, PartialEq)]
+enum QueryMode {
+    Naive,
+    Local,
+    Global,
+    Hybrid,
+}
+<p>#[derive(Debug)]
+struct QueryAnalysis {
+query: String,
+query_lower: String,
+word_count: usize,
+has_entity_mention: bool,
+has_question_word: bool,
+has_analytical_word: bool,
+has_connector: bool,
+}</p>
+<p>struct KnownEntities {
+names: Vec&lt;String&gt;,
+}</p>
+<p>impl KnownEntities {
+fn new(names: Vec&lt;String&gt;) -&gt; Self {
+KnownEntities { names }
+}</p>
+<pre><code>fn contains_any(&amp;amp;self, text: &amp;amp;str) -&amp;gt; bool {
+    let text_lower = text.to_lowercase();
+    self.names
+        .iter()
+        .any(|name| text_lower.contains(&amp;amp;name.to_lowercase()))
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</p>
+<p>fn contains_word(text: &amp;str, word: &amp;str) -&gt; bool {
+text.split_whitespace()
+.any(|w| w.trim_matches(|c: char| !c.is_alphanumeric()) == word)
+}</p>
+<p>fn analyze_query(query: &amp;str, known_entities: &amp;KnownEntities) -&gt; QueryAnalysis {
+let query_lower = query.to_lowercase();
+let word_count = query.split_whitespace().count();
+let has_entity_mention = known_entities.contains_any(query);</p>
+<pre><code>let question_words = [&amp;quot;who&amp;quot;, &amp;quot;what&amp;quot;, &amp;quot;which&amp;quot;, &amp;quot;where&amp;quot;, &amp;quot;when&amp;quot;];
+let has_question_word = question_words
+    .iter()
+    .any(|w| contains_word(&amp;amp;query_lower, w));
+
+let analytical_words = [
+    &amp;quot;why&amp;quot;, &amp;quot;how&amp;quot;, &amp;quot;explain&amp;quot;, &amp;quot;describe&amp;quot;, &amp;quot;compare&amp;quot;, &amp;quot;analyze&amp;quot;,
+    &amp;quot;summarize&amp;quot;, &amp;quot;overview&amp;quot;, &amp;quot;theme&amp;quot;, &amp;quot;themes&amp;quot;, &amp;quot;pattern&amp;quot;, &amp;quot;patterns&amp;quot;,
+];
+let has_analytical_word = analytical_words
+    .iter()
+    .any(|w| contains_word(&amp;amp;query_lower, w));
+
+let connectors = [&amp;quot;and&amp;quot;, &amp;quot;or&amp;quot;, &amp;quot;both&amp;quot;, &amp;quot;also&amp;quot;];
+let has_connector = connectors
+    .iter()
+    .any(|w| contains_word(&amp;amp;query_lower, w));
+
+QueryAnalysis {
+    query: query.to_string(),
+    query_lower,
+    word_count,
+    has_entity_mention,
+    has_question_word,
+    has_analytical_word,
+    has_connector,
+}
+</code></pre>
+<p>}</p>
+<p>fn select_mode(analysis: &amp;QueryAnalysis) -&gt; QueryMode {
+// Hybrid: multi-part question (connector + substance) OR entity + analytical
+if (analysis.has_entity_mention &amp;&amp; analysis.has_analytical_word)
+|| (analysis.has_connector &amp;&amp; analysis.word_count &gt; 5)
+{
+return QueryMode::Hybrid;
+}</p>
+<pre><code>// Global: broad analytical questions without specific entities
+if analysis.has_analytical_word &amp;amp;&amp;amp; !analysis.has_entity_mention {
+    return QueryMode::Global;
+}
+
+// Local: entity-focused questions
+if analysis.has_entity_mention
+    &amp;amp;&amp;amp; (analysis.has_question_word || analysis.word_count &amp;gt; 3)
+{
+    return QueryMode::Local;
+}
+
+// Naive: short keyword lookups and simple queries
+QueryMode::Naive
+</code></pre>
+<p>}</p>
+<p>fn main() {
+let entities = KnownEntities::new(vec![
+"Alice Johnson".into(),
+"TechCorp".into(),
+"Bob Smith".into(),
+"CloudBase".into(),
+]);</p>
+<pre><code>let test_queries = vec![
+    &amp;quot;TechCorp CEO&amp;quot;,
+    &amp;quot;Who is Alice Johnson?&amp;quot;,
+    &amp;quot;Why did TechCorp acquire CloudBase?&amp;quot;,
+    &amp;quot;Explain the main themes in the dataset&amp;quot;,
+    &amp;quot;Who is Bob Smith and how does he relate to TechCorp?&amp;quot;,
+    &amp;quot;overview of organizational patterns&amp;quot;,
+    &amp;quot;CloudBase&amp;quot;,
+    &amp;quot;Compare the roles of Alice Johnson and Bob Smith at TechCorp&amp;quot;,
+];
+
+println!(&amp;quot;Query Mode Selection:&amp;quot;);
+println!(&amp;quot;{:-&amp;lt;70}&amp;quot;, &amp;quot;&amp;quot;);
+for query in test_queries {
+    let analysis = analyze_query(query, &amp;amp;entities);
+    let mode = select_mode(&amp;amp;analysis);
+    println!(&amp;quot;  {:?:&amp;lt;8} | {}&amp;quot;, mode, query);
+}
+</code></pre>
+<p>}</code></pre>
+<div class="solution-explanation"><h4 id="explanation"><a class="header" href="#explanation">Explanation</a></h4><p>The mode selector uses a two-phase approach: first <strong>analyze</strong> the query to
+extract boolean features, then <strong>select</strong> the mode using a decision tree.</p></p>
+<p><strong>Analysis</strong> checks for: question words (who/what/where), analytical words
+(why/how/explain/compare), boolean connectors (and/or/both), known entity
+mentions, and query length. The <code>contains_word</code> helper avoids false positives
+by checking word boundaries.</p>
+<p><strong>Selection</strong> uses a priority ordering: Hybrid is checked first (most specific:
+requires both entity + analytical signals, or multi-part structure), then
+Global (analytical without entity), then Local (entity-focused), and finally
+Naive as the default for short keyword queries.</p>
+<p>This heuristic approach is simple and interpretable but imperfect -- ambiguous
+queries like "What happened?" will default to Naive. A production system would
+likely use a lightweight classifier or ask the LLM itself to choose the mode.</p>
+</div>
+    </div>
+  </details>
+</section>
+<section class="exercise-tests" id="query-mode-selector-tests" data-mode="local">
+  <h3 id="-tests"><a class="header" href="#-tests">🧪 Tests</a></h3>
+  <div class="test-actions">
+    <div class="local-test-info"><p>Run these tests locally with:</p><pre><code>cargo test</code></pre></div>
+  </div>
+  <div class="test-results" id="results-query-mode-selector" hidden></div>
+  <details class="tests-code"><summary>View Test Code</summary>
+    <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+<pre><code>fn test_entities() -&amp;gt; KnownEntities {
+    KnownEntities::new(vec![
+        &amp;quot;Alice&amp;quot;.into(),
+        &amp;quot;TechCorp&amp;quot;.into(),
+        &amp;quot;Bob&amp;quot;.into(),
+    ])
+}
+
+#[test]
+fn test_naive_short_query() {
+    let entities = test_entities();
+    let analysis = analyze_query(&amp;quot;search terms&amp;quot;, &amp;amp;entities);
+    let mode = select_mode(&amp;amp;analysis);
+    assert_eq!(mode, QueryMode::Naive, &amp;quot;Short generic queries should be Naive&amp;quot;);
+}
+
+#[test]
+fn test_naive_single_unknown_word() {
+    let entities = test_entities();
+    let analysis = analyze_query(&amp;quot;quantum&amp;quot;, &amp;amp;entities);
+    let mode = select_mode(&amp;amp;analysis);
+    assert_eq!(mode, QueryMode::Naive, &amp;quot;Single unknown word should be Naive&amp;quot;);
+}
+
+#[test]
+fn test_local_who_question() {
+    let entities = test_entities();
+    let analysis = analyze_query(&amp;quot;Who is Alice?&amp;quot;, &amp;amp;entities);
+    let mode = select_mode(&amp;amp;analysis);
+    assert_eq!(mode, QueryMode::Local, &amp;quot;&amp;#x27;Who is [entity]&amp;#x27; should be Local&amp;quot;);
+}
+
+#[test]
+fn test_local_what_question() {
+    let entities = test_entities();
+    let analysis = analyze_query(&amp;quot;What does TechCorp do?&amp;quot;, &amp;amp;entities);
+    let mode = select_mode(&amp;amp;analysis);
+    assert_eq!(mode, QueryMode::Local, &amp;quot;&amp;#x27;What does [entity]&amp;#x27; should be Local&amp;quot;);
+}
+
+#[test]
+fn test_global_analytical_no_entity() {
+    let entities = test_entities();
+    let analysis = analyze_query(&amp;quot;Explain the main themes&amp;quot;, &amp;amp;entities);
+    let mode = select_mode(&amp;amp;analysis);
+    assert_eq!(mode, QueryMode::Global, &amp;quot;Analytical without entity should be Global&amp;quot;);
+}
+
+#[test]
+fn test_global_overview() {
+    let entities = test_entities();
+    let analysis = analyze_query(&amp;quot;overview of organizational patterns&amp;quot;, &amp;amp;entities);
+    let mode = select_mode(&amp;amp;analysis);
+    assert_eq!(mode, QueryMode::Global, &amp;quot;&amp;#x27;overview of patterns&amp;#x27; should be Global&amp;quot;);
+}
+
+#[test]
+fn test_hybrid_entity_plus_analytical() {
+    let entities = test_entities();
+    let analysis = analyze_query(&amp;quot;Why did TechCorp fail?&amp;quot;, &amp;amp;entities);
+    let mode = select_mode(&amp;amp;analysis);
+    assert_eq!(mode, QueryMode::Hybrid, &amp;quot;Entity + analytical should be Hybrid&amp;quot;);
+}
+
+#[test]
+fn test_hybrid_multi_part() {
+    let entities = test_entities();
+    let analysis = analyze_query(&amp;quot;Who is Alice and what is her role at TechCorp?&amp;quot;, &amp;amp;entities);
+    let mode = select_mode(&amp;amp;analysis);
+    assert_eq!(mode, QueryMode::Hybrid, &amp;quot;Multi-part question with connector should be Hybrid&amp;quot;);
+}
+
+#[test]
+fn test_analysis_word_count() {
+    let entities = test_entities();
+    let analysis = analyze_query(&amp;quot;one two three&amp;quot;, &amp;amp;entities);
+    assert_eq!(analysis.word_count, 3);
+}
+
+#[test]
+fn test_entity_detection_case_insensitive() {
+    let entities = test_entities();
+    let analysis = analyze_query(&amp;quot;tell me about techcorp&amp;quot;, &amp;amp;entities);
+    assert!(analysis.has_entity_mention, &amp;quot;Entity detection should be case-insensitive&amp;quot;);
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</code></pre></p>
+  </details>
+</section>
+<section class="exercise-reflection" id="query-mode-selector-reflection">
+  <h3 id="-reflection"><a class="header" href="#-reflection">🤔 Reflection</a></h3>
+  <ul>
+    <li>What queries would your heuristics classify incorrectly? How would you handle those edge cases?</li>
+    <li>How would you use user feedback (e.g., &quot;this answer was not helpful&quot;) to improve mode selection over time?</li>
+    <li>Could you use the LLM itself to classify queries? What are the latency tradeoffs?</li>
+  </ul>
+</section>
+<footer class="exercise-footer">
+  <button class="btn btn-complete" data-exercise-id="query-mode-selector">✓ Mark Complete</button>
+</footer>
+</article>
+</div>
+<h1 id="query-mode-selection-1"><a class="header" href="#query-mode-selection-1">Query Mode Selection</a></h1>
+<p>Graph RAG supports multiple query modes, each optimized for different kinds of
+questions. Choosing the wrong mode wastes compute and degrades answer quality.
+In this exercise you will implement heuristic-based query mode selection that
+analyzes the structure of a query to route it to the most appropriate retrieval
+strategy.</p>
+<p>::: objectives
+thinking:</p>
+<ul>
+<li>Understand the four Graph RAG query modes and their strengths</li>
+<li>Reason about which query characteristics signal each mode
+doing:</li>
+<li>Implement pattern-matching heuristics for query classification</li>
+<li>Handle ambiguous queries with a sensible default</li>
+<li>Support entity name detection for Local mode routing
+:::</li>
+</ul>
+<p>::: discussion</p>
+<ul>
+<li>Why not always use Hybrid mode if it combines the best of Local and Global?</li>
+<li>How would a production system decide the query mode differently than heuristics?</li>
+<li>What happens if the mode selector makes the wrong choice? How bad is the degradation?
+:::</li>
+</ul>
+<p>::: starter file="src/main.rs"</p>
+<pre><pre class="playground"><code class="language-rust">/// The query modes supported by the Graph RAG system.
+#[derive(Debug, Clone, PartialEq)]
+enum QueryMode {
+    /// Simple vector similarity search. Best for short, keyword-like queries.
+    Naive,
+    /// Entity-centric subgraph traversal. Best for "who/what" questions
+    /// about specific entities.
+    Local,
+    /// Community summary search. Best for broad "why/how" analytical
+    /// questions about themes and patterns.
+    Global,
+    /// Combines Local and Global. Best for complex multi-part questions.
+    Hybrid,
+}
+
+/// Metadata about a query that informs mode selection.
+#[derive(Debug)]
+struct QueryAnalysis {
+    /// The original query text.
+    query: String,
+    /// The query converted to lowercase for matching.
+    query_lower: String,
+    /// Number of words in the query.
+    word_count: usize,
+    /// Whether the query contains a known entity name.
+    has_entity_mention: bool,
+    /// Whether the query contains question words (who, what, where, etc.).
+    has_question_word: bool,
+    /// Whether the query contains analytical words (why, how, explain, etc.).
+    has_analytical_word: bool,
+    /// Whether the query contains boolean connectors (and, or, both, also).
+    has_connector: bool,
+}
+
+/// A set of known entity names for entity detection.
+/// In a real system, this would come from the knowledge graph.
+struct KnownEntities {
+    names: Vec&lt;String&gt;,
+}
+
+impl KnownEntities {
+    fn new(names: Vec&lt;String&gt;) -&gt; Self {
+        KnownEntities { names }
+    }
+
+    fn contains_any(&amp;self, text: &amp;str) -&gt; bool {
+        let text_lower = text.to_lowercase();
+        self.names.iter().any(|name| text_lower.contains(&amp;name.to_lowercase()))
+    }
+}
+
+/// Analyze a query to extract features for mode selection.
+fn analyze_query(query: &amp;str, known_entities: &amp;KnownEntities) -&gt; QueryAnalysis {
+    // TODO: Implement query analysis
+    //
+    // 1. Convert to lowercase.
+    // 2. Count words.
+    // 3. Check for known entity mentions.
+    // 4. Check for question words: who, what, which, where, when
+    // 5. Check for analytical words: why, how, explain, describe,
+    //    compare, analyze, summarize, overview, theme, pattern
+    // 6. Check for boolean connectors: and, or, both, also, as well as
+    todo!("Implement analyze_query")
+}
+
+/// Select the query mode based on query analysis.
+///
+/// Heuristics:
+/// - Naive: Very short queries (1-3 words) with no question/analytical words.
+/// - Local: Contains entity mention + question word, but not analytical.
+/// - Global: Contains analytical words, no specific entity mention.
+/// - Hybrid: Contains both entity mention and analytical words, OR has
+///           boolean connectors suggesting a multi-part question.
+fn select_mode(analysis: &amp;QueryAnalysis) -&gt; QueryMode {
+    // TODO: Implement mode selection heuristics
+    //
+    // Start with the most specific rules and fall back to broader ones.
+    // The order of checks matters -- more specific modes should be tested first.
+    todo!("Implement select_mode")
+}
+
+fn main() {
+    let entities = KnownEntities::new(vec![
+        "Alice Johnson".into(),
+        "TechCorp".into(),
+        "Bob Smith".into(),
+        "CloudBase".into(),
+    ]);
+
+    let test_queries = vec![
+        "TechCorp CEO",
+        "Who is Alice Johnson?",
+        "Why did TechCorp acquire CloudBase?",
+        "Explain the main themes in the dataset",
+        "Who is Bob Smith and how does he relate to TechCorp?",
+        "overview of organizational patterns",
+        "CloudBase",
+        "Compare the roles of Alice Johnson and Bob Smith at TechCorp",
+    ];
+
+    println!("Query Mode Selection:");
+    println!("{:-&lt;70}", "");
+    for query in test_queries {
+        let analysis = analyze_query(query, &amp;entities);
+        let mode = select_mode(&amp;analysis);
+        println!("  {:?:&lt;8} | {}", mode, query);
+    }
+}</code></pre></pre>
+<p>:::</p>
+<p>::: hint level=1 title="Analyzing query features"
+Use simple string checks for word detection. Check for word boundaries to avoid
+false matches (e.g., "how" inside "showdown"):</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn contains_word(text: &amp;str, word: &amp;str) -&gt; bool {
+    text.split_whitespace().any(|w| {
+        w.trim_matches(|c: char| !c.is_alphanumeric()) == word
+    })
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Then use this in <code>analyze_query</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let question_words = ["who", "what", "which", "where", "when"];
+let has_question_word = question_words.iter().any(|w| contains_word(&amp;query_lower, w));
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: hint level=2 title="Mode selection logic"
+Think of mode selection as a decision tree. Check the most specific conditions
+first:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn select_mode(analysis: &amp;QueryAnalysis) -&gt; QueryMode {
+    // Hybrid: multi-part (has connector) OR both entity + analytical
+    if (analysis.has_entity_mention &amp;&amp; analysis.has_analytical_word)
+        || (analysis.has_connector &amp;&amp; analysis.word_count &gt; 5) {
+        return QueryMode::Hybrid;
+    }
+
+    // Global: analytical without specific entity
+    if analysis.has_analytical_word &amp;&amp; !analysis.has_entity_mention {
+        return QueryMode::Global;
+    }
+
+    // Local: specific entity question
+    if analysis.has_entity_mention &amp;&amp; (analysis.has_question_word || analysis.word_count &gt; 3) {
+        return QueryMode::Local;
+    }
+
+    // Naive: short keyword queries
+    QueryMode::Naive
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: solution</p>
+<pre><pre class="playground"><code class="language-rust">#[derive(Debug, Clone, PartialEq)]
+enum QueryMode {
+    Naive,
+    Local,
+    Global,
+    Hybrid,
+}
+
+#[derive(Debug)]
+struct QueryAnalysis {
+    query: String,
+    query_lower: String,
+    word_count: usize,
+    has_entity_mention: bool,
+    has_question_word: bool,
+    has_analytical_word: bool,
+    has_connector: bool,
+}
+
+struct KnownEntities {
+    names: Vec&lt;String&gt;,
+}
+
+impl KnownEntities {
+    fn new(names: Vec&lt;String&gt;) -&gt; Self {
+        KnownEntities { names }
+    }
+
+    fn contains_any(&amp;self, text: &amp;str) -&gt; bool {
+        let text_lower = text.to_lowercase();
+        self.names
+            .iter()
+            .any(|name| text_lower.contains(&amp;name.to_lowercase()))
+    }
+}
+
+fn contains_word(text: &amp;str, word: &amp;str) -&gt; bool {
+    text.split_whitespace()
+        .any(|w| w.trim_matches(|c: char| !c.is_alphanumeric()) == word)
+}
+
+fn analyze_query(query: &amp;str, known_entities: &amp;KnownEntities) -&gt; QueryAnalysis {
+    let query_lower = query.to_lowercase();
+    let word_count = query.split_whitespace().count();
+    let has_entity_mention = known_entities.contains_any(query);
+
+    let question_words = ["who", "what", "which", "where", "when"];
+    let has_question_word = question_words
+        .iter()
+        .any(|w| contains_word(&amp;query_lower, w));
+
+    let analytical_words = [
+        "why", "how", "explain", "describe", "compare", "analyze",
+        "summarize", "overview", "theme", "themes", "pattern", "patterns",
+    ];
+    let has_analytical_word = analytical_words
+        .iter()
+        .any(|w| contains_word(&amp;query_lower, w));
+
+    let connectors = ["and", "or", "both", "also"];
+    let has_connector = connectors
+        .iter()
+        .any(|w| contains_word(&amp;query_lower, w));
+
+    QueryAnalysis {
+        query: query.to_string(),
+        query_lower,
+        word_count,
+        has_entity_mention,
+        has_question_word,
+        has_analytical_word,
+        has_connector,
+    }
+}
+
+fn select_mode(analysis: &amp;QueryAnalysis) -&gt; QueryMode {
+    // Hybrid: multi-part question (connector + substance) OR entity + analytical
+    if (analysis.has_entity_mention &amp;&amp; analysis.has_analytical_word)
+        || (analysis.has_connector &amp;&amp; analysis.word_count &gt; 5)
+    {
+        return QueryMode::Hybrid;
+    }
+
+    // Global: broad analytical questions without specific entities
+    if analysis.has_analytical_word &amp;&amp; !analysis.has_entity_mention {
+        return QueryMode::Global;
+    }
+
+    // Local: entity-focused questions
+    if analysis.has_entity_mention
+        &amp;&amp; (analysis.has_question_word || analysis.word_count &gt; 3)
+    {
+        return QueryMode::Local;
+    }
+
+    // Naive: short keyword lookups and simple queries
+    QueryMode::Naive
+}
+
+fn main() {
+    let entities = KnownEntities::new(vec![
+        "Alice Johnson".into(),
+        "TechCorp".into(),
+        "Bob Smith".into(),
+        "CloudBase".into(),
+    ]);
+
+    let test_queries = vec![
+        "TechCorp CEO",
+        "Who is Alice Johnson?",
+        "Why did TechCorp acquire CloudBase?",
+        "Explain the main themes in the dataset",
+        "Who is Bob Smith and how does he relate to TechCorp?",
+        "overview of organizational patterns",
+        "CloudBase",
+        "Compare the roles of Alice Johnson and Bob Smith at TechCorp",
+    ];
+
+    println!("Query Mode Selection:");
+    println!("{:-&lt;70}", "");
+    for query in test_queries {
+        let analysis = analyze_query(query, &amp;entities);
+        let mode = select_mode(&amp;analysis);
+        println!("  {:?:&lt;8} | {}", mode, query);
+    }
+}</code></pre></pre>
+<h3 id="explanation-1"><a class="header" href="#explanation-1">Explanation</a></h3>
+<p>The mode selector uses a two-phase approach: first <strong>analyze</strong> the query to
+extract boolean features, then <strong>select</strong> the mode using a decision tree.</p>
+<p><strong>Analysis</strong> checks for: question words (who/what/where), analytical words
+(why/how/explain/compare), boolean connectors (and/or/both), known entity
+mentions, and query length. The <code>contains_word</code> helper avoids false positives
+by checking word boundaries.</p>
+<p><strong>Selection</strong> uses a priority ordering: Hybrid is checked first (most specific:
+requires both entity + analytical signals, or multi-part structure), then
+Global (analytical without entity), then Local (entity-focused), and finally
+Naive as the default for short keyword queries.</p>
+<p>This heuristic approach is simple and interpretable but imperfect -- ambiguous
+queries like "What happened?" will default to Naive. A production system would
+likely use a lightweight classifier or ask the LLM itself to choose the mode.
+:::</p>
+<p>::: tests mode=local</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_entities() -&gt; KnownEntities {
+        KnownEntities::new(vec![
+            "Alice".into(),
+            "TechCorp".into(),
+            "Bob".into(),
+        ])
+    }
+
+    #[test]
+    fn test_naive_short_query() {
+        let entities = test_entities();
+        let analysis = analyze_query("search terms", &amp;entities);
+        let mode = select_mode(&amp;analysis);
+        assert_eq!(mode, QueryMode::Naive, "Short generic queries should be Naive");
+    }
+
+    #[test]
+    fn test_naive_single_unknown_word() {
+        let entities = test_entities();
+        let analysis = analyze_query("quantum", &amp;entities);
+        let mode = select_mode(&amp;analysis);
+        assert_eq!(mode, QueryMode::Naive, "Single unknown word should be Naive");
+    }
+
+    #[test]
+    fn test_local_who_question() {
+        let entities = test_entities();
+        let analysis = analyze_query("Who is Alice?", &amp;entities);
+        let mode = select_mode(&amp;analysis);
+        assert_eq!(mode, QueryMode::Local, "'Who is [entity]' should be Local");
+    }
+
+    #[test]
+    fn test_local_what_question() {
+        let entities = test_entities();
+        let analysis = analyze_query("What does TechCorp do?", &amp;entities);
+        let mode = select_mode(&amp;analysis);
+        assert_eq!(mode, QueryMode::Local, "'What does [entity]' should be Local");
+    }
+
+    #[test]
+    fn test_global_analytical_no_entity() {
+        let entities = test_entities();
+        let analysis = analyze_query("Explain the main themes", &amp;entities);
+        let mode = select_mode(&amp;analysis);
+        assert_eq!(mode, QueryMode::Global, "Analytical without entity should be Global");
+    }
+
+    #[test]
+    fn test_global_overview() {
+        let entities = test_entities();
+        let analysis = analyze_query("overview of organizational patterns", &amp;entities);
+        let mode = select_mode(&amp;analysis);
+        assert_eq!(mode, QueryMode::Global, "'overview of patterns' should be Global");
+    }
+
+    #[test]
+    fn test_hybrid_entity_plus_analytical() {
+        let entities = test_entities();
+        let analysis = analyze_query("Why did TechCorp fail?", &amp;entities);
+        let mode = select_mode(&amp;analysis);
+        assert_eq!(mode, QueryMode::Hybrid, "Entity + analytical should be Hybrid");
+    }
+
+    #[test]
+    fn test_hybrid_multi_part() {
+        let entities = test_entities();
+        let analysis = analyze_query("Who is Alice and what is her role at TechCorp?", &amp;entities);
+        let mode = select_mode(&amp;analysis);
+        assert_eq!(mode, QueryMode::Hybrid, "Multi-part question with connector should be Hybrid");
+    }
+
+    #[test]
+    fn test_analysis_word_count() {
+        let entities = test_entities();
+        let analysis = analyze_query("one two three", &amp;entities);
+        assert_eq!(analysis.word_count, 3);
+    }
+
+    #[test]
+    fn test_entity_detection_case_insensitive() {
+        let entities = test_entities();
+        let analysis = analyze_query("tell me about techcorp", &amp;entities);
+        assert!(analysis.has_entity_mention, "Entity detection should be case-insensitive");
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: reflection</p>
+<ul>
+<li>What queries would your heuristics classify incorrectly? How would you handle those edge cases?</li>
+<li>How would you use user feedback (e.g., "this answer was not helpful") to improve mode selection over time?</li>
+<li>Could you use the LLM itself to classify queries? What are the latency tradeoffs?
+:::</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../part2-graph/ch06-03-token-budgeting.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../part2-graph/ch07-orchestrator.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../part2-graph/ch06-03-token-budgeting.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../part2-graph/ch07-orchestrator.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../../ace.js"></script>
+        <script src="../../mode-rust.js"></script>
+        <script src="../../editor.js"></script>
+        <script src="../../theme-dawn.js"></script>
+        <script src="../../theme-tomorrow_night.js"></script>
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,878 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Exercise: CDK Stack Design - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../../src/custom.css">
+        <link rel="stylesheet" href="../../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="exercise-cdk-stack-design"><a class="header" href="#exercise-cdk-stack-design">Exercise: CDK Stack Design</a></h1>
+<div class="exercise-container">
+<article class="exercise" data-exercise-id="ch10-cdk-stack" data-difficulty="intermediate">
+<header class="exercise-header">
+  <h2 id="exercise-cdk-stack-design-1" class="exercise-title"><a class="header" href="#exercise-cdk-stack-design-1">Exercise: CDK Stack Design</a></h2>
+  <code class=\"exercise-id\">ch10-cdk-stack</code>
+  <div class="exercise-meta">
+    <span class="badge difficulty intermediate">⭐⭐ intermediate</span>
+    <span class="badge time">⏱️ 30 min</span>
+  </div>
+</header>
+<nav class="exercise-nav" aria-label="Exercise sections"><ul><li><a href="#ch10-cdk-stack-description" data-section="description">📖 Overview</a></li><li><a href="#ch10-cdk-stack-objectives" data-section="objectives">🎯 Objectives</a></li><li><a href="#ch10-cdk-stack-starter" data-section="starter">💻 Code</a></li><li><a href="#ch10-cdk-stack-hints" data-section="hints">💡 Hints</a></li><li><a href="#ch10-cdk-stack-solution" data-section="solution">✅ Solution</a></li><li><a href="#ch10-cdk-stack-tests" data-section="tests">🧪 Tests</a></li><li><a href="#ch10-cdk-stack-reflection" data-section="reflection">🤔 Reflect</a></li></ul></nav>
+<section class="exercise-description" id="ch10-cdk-stack-description">
+<p>In chapter 10 you learned how EdgeQuake deploys to AWS using S3 Vectors for
+embeddings, DynamoDB for key-value storage, and IAM for access control. AWS CDK
+lets you define this infrastructure as TypeScript code, making deployments
+reproducible, version-controlled, and testable.</p>
+<p>In this exercise you will design a CDK stack that provisions the core storage
+infrastructure for EdgeQuake: an S3 Vectors bucket with an index, a DynamoDB
+table, and an IAM role with least-privilege permissions.</p>
+</section>
+<section class="exercise-objectives" id="ch10-cdk-stack-objectives">
+  <h3 id="-learning-objectives"><a class="header" href="#-learning-objectives">🎯 Learning Objectives</a></h3>
+  <div class="objectives-grid">
+    <div class="objectives-thinking">
+      <h4 id="thinking"><a class="header" href="#thinking">Thinking</a></h4>
+      <ul>
+        <li><input type="checkbox" id="ch10-cdk-stack-thinking-0" class="objective-checkbox"><label for="ch10-cdk-stack-thinking-0">Understand the CDK construct hierarchy (App, Stack, Construct)</label></li>
+        <li><input type="checkbox" id="ch10-cdk-stack-thinking-1" class="objective-checkbox"><label for="ch10-cdk-stack-thinking-1">Recognize why Infrastructure as Code is essential for reproducible deployments</label></li>
+        <li><input type="checkbox" id="ch10-cdk-stack-thinking-2" class="objective-checkbox"><label for="ch10-cdk-stack-thinking-2">Reason about least-privilege IAM policies for production services</label></li>
+      </ul>
+    </div>
+    <div class="objectives-doing">
+      <h4 id="doing"><a class="header" href="#doing">Doing</a></h4>
+      <ul>
+        <li><input type="checkbox" id="ch10-cdk-stack-doing-0" class="objective-checkbox"><label for="ch10-cdk-stack-doing-0">Define an S3 Vectors bucket and index with correct dimensions</label></li>
+        <li><input type="checkbox" id="ch10-cdk-stack-doing-1" class="objective-checkbox"><label for="ch10-cdk-stack-doing-1">Create a DynamoDB table with appropriate key schema</label></li>
+        <li><input type="checkbox" id="ch10-cdk-stack-doing-2" class="objective-checkbox"><label for="ch10-cdk-stack-doing-2">Configure IAM roles with scoped permissions</label></li>
+        <li><input type="checkbox" id="ch10-cdk-stack-doing-3" class="objective-checkbox"><label for="ch10-cdk-stack-doing-3">Export resource ARNs via CfnOutput</label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+<section class="exercise-discussion">
+  <h3 id="-discussion"><a class="header" href="#-discussion">💬 Discussion</a></h3>
+  <ul>
+    <li>Why does EdgeQuake use CDK (TypeScript) instead of raw CloudFormation YAML?</li>
+    <li>What would happen if you set RemovalPolicy.DESTROY on a production DynamoDB table?</li>
+    <li>How does the vector dimension in the CDK stack relate to the embedding model?</li>
+  </ul>
+</section>
+<section class="exercise-starter" id="ch10-cdk-stack-starter">
+  <div class="code-header">
+    <span class="filename">test/edgequake-storage-stack.test.ts</span>
+    <div class="code-actions">
+      <button class="btn btn-copy" data-target="code-ch10-cdk-stack" title="Copy code">📋 Copy</button>
+      <button class="btn btn-reset" data-target="code-ch10-cdk-stack" title="Reset to original">↺ Reset</button>
+    </div>
+  </div>
+  <textarea class="code-editor" id="code-ch10-cdk-stack" data-language="typescript" data-original="import * as cdk from &#x27;aws-cdk-lib&#x27;;&#10;import { Template } from &#x27;aws-cdk-lib/assertions&#x27;;&#10;import { EdgeQuakeStorageStack } from &#x27;../lib/edgequake-storage-stack&#x27;;&#10;&#10;describe(&#x27;EdgeQuakeStorageStack&#x27;, () =&gt; {&#10;  let template: Template;&#10;&#10;  beforeAll(() =&gt; {&#10;    const app = new cdk.App();&#10;    const stack = new EdgeQuakeStorageStack(app, &#x27;TestStack&#x27;, {&#10;      vectorDimension: 1536,&#10;      environment: &#x27;dev&#x27;,&#10;    });&#10;    template = Template.fromStack(stack);&#10;  });&#10;&#10;  test(&#x27;creates S3 Vectors bucket&#x27;, () =&gt; {&#10;    template.hasResourceProperties(&#x27;AWS::S3Vectors::VectorBucket&#x27;, {});&#10;  });&#10;&#10;  test(&#x27;creates S3 Vectors index with correct dimension&#x27;, () =&gt; {&#10;    template.hasResourceProperties(&#x27;AWS::S3Vectors::VectorIndex&#x27;, {&#10;      Dimension: 1536,&#10;      DistanceMetric: &#x27;cosine&#x27;,&#10;    });&#10;  });&#10;&#10;  test(&#x27;creates DynamoDB table with correct key schema&#x27;, () =&gt; {&#10;    template.hasResourceProperties(&#x27;AWS::DynamoDB::Table&#x27;, {&#10;      KeySchema: [&#10;        { AttributeName: &#x27;namespace&#x27;, KeyType: &#x27;HASH&#x27; },&#10;        { AttributeName: &#x27;id&#x27;, KeyType: &#x27;RANGE&#x27; },&#10;      ],&#10;      BillingMode: &#x27;PAY_PER_REQUEST&#x27;,&#10;    });&#10;  });&#10;&#10;  test(&#x27;creates IAM role with scoped permissions&#x27;, () =&gt; {&#10;    template.hasResourceProperties(&#x27;AWS::IAM::Role&#x27;, {&#10;      AssumeRolePolicyDocument: {&#10;        Statement: [&#10;          {&#10;            Effect: &#x27;Allow&#x27;,&#10;            Principal: { Service: &#x27;ecs-tasks.amazonaws.com&#x27; },&#10;            Action: &#x27;sts:AssumeRole&#x27;,&#10;          },&#10;        ],&#10;      },&#10;    });&#10;  });&#10;&#10;  test(&#x27;does not grant wildcard permissions&#x27;, () =&gt; {&#10;    const roles = template.findResources(&#x27;AWS::IAM::Policy&#x27;);&#10;    const roleJson = JSON.stringify(roles);&#10;    // Verify no &quot;Action&quot;: &quot;*&quot; in any policy&#10;    expect(roleJson).not.toContain(&#x27;&quot;Action&quot;:&quot;*&quot;&#x27;);&#10;  });&#10;&#10;  test(&#x27;exports resource identifiers&#x27;, () =&gt; {&#10;    template.hasOutput(&#x27;VectorBucketArn&#x27;, {});&#10;    template.hasOutput(&#x27;KVTableName&#x27;, {});&#10;    template.hasOutput(&#x27;AppRoleArn&#x27;, {});&#10;  });&#10;});" spellcheck="false"></textarea>
+</section>
+<section class="exercise-hints" id="ch10-cdk-stack-hints">
+  <h3 id="-hints"><a class="header" href="#-hints">💡 Hints</a></h3>
+  <details class="hint" data-level="1">
+    <summary>Hint 1: S3 Vectors resources</summary>
+    <div class="hint-content">
+<pre><code class="language-typescript">const vectorBucket = new s3vectors.CfnVectorBucket(this, 'VectorBucket', {
+  vectorBucketName: `edgequake-vectors-${environment}`,
+});
+</code></pre>
+<p>The <code>CfnVectorIndex</code> references the bucket and specifies dimension and distance metric.</p>
+    </div>
+  </details>
+  <details class="hint" data-level="2">
+    <summary>Hint 2: DynamoDB conditional configuration</summary>
+    <div class="hint-content">
+<p>Use a ternary to switch between dev and prod settings:</p>
+<pre><code class="language-typescript">const kvTable = new dynamodb.Table(this, 'KVTable', {
+  tableName: `edgequake-kv-${environment}`,
+  partitionKey: { name: 'namespace', type: dynamodb.AttributeType.STRING },
+  sortKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+  billingMode: environment === 'prod'
+    ? dynamodb.BillingMode.PROVISIONED
+    : dynamodb.BillingMode.PAY_PER_REQUEST,
+  removalPolicy: environment === 'prod'
+    ? cdk.RemovalPolicy.RETAIN
+    : cdk.RemovalPolicy.DESTROY,
+});
+</code></pre>
+    </div>
+  </details>
+  <details class="hint" data-level="3">
+    <summary>Hint 3: Scoped IAM policy</summary>
+    <div class="hint-content">
+<pre><code class="language-typescript">appRole.addToPolicy(new iam.PolicyStatement({
+  actions: [
+    'dynamodb:GetItem',
+    'dynamodb:PutItem',
+    'dynamodb:DeleteItem',
+    'dynamodb:Query',
+    'dynamodb:BatchWriteItem',
+  ],
+  resources: [kvTable.tableArn],
+}));
+</code></pre>
+    </div>
+  </details>
+</section>
+<section class="exercise-solution" id="ch10-cdk-stack-solution">
+  <details class="solution">
+    <summary><span class="solution-warning">⚠️ Try the exercise first!</span><span class="solution-toggle">Show Solution</span></summary>
+    <div class="solution-content">
+      <pre><code class="language-typescript">import * as cdk from &#x27;aws-cdk-lib&#x27;;
+import * as dynamodb from &#x27;aws-cdk-lib/aws-dynamodb&#x27;;
+import * as iam from &#x27;aws-cdk-lib/aws-iam&#x27;;
+import * as s3vectors from &#x27;aws-cdk-lib/aws-s3vectors&#x27;;
+import { Construct } from &#x27;constructs&#x27;;
+<p>export interface EdgeQuakeStorageProps extends cdk.StackProps {
+vectorDimension: number;
+environment: string;
+}</p>
+<p>export class EdgeQuakeStorageStack extends cdk.Stack {
+public readonly vectorBucketArn: string;
+public readonly kvTableName: string;
+public readonly appRoleArn: string;</p>
+<p>constructor(scope: Construct, id: string, props: EdgeQuakeStorageProps) {
+super(scope, id, props);</p>
+<pre><code>const { vectorDimension, environment } = props;
+
+// 1. S3 Vectors Bucket and Index
+const vectorBucket = new s3vectors.CfnVectorBucket(this, &amp;#x27;VectorBucket&amp;#x27;, {
+  vectorBucketName: `edgequake-vectors-${environment}`,
+});
+
+const vectorIndex = new s3vectors.CfnVectorIndex(this, &amp;#x27;VectorIndex&amp;#x27;, {
+  vectorBucketName: vectorBucket.vectorBucketName!,
+  indexName: `edgequake-embeddings-${environment}`,
+  dimension: vectorDimension,
+  distanceMetric: &amp;#x27;cosine&amp;#x27;,
+});
+vectorIndex.addDependency(vectorBucket);
+
+// 2. DynamoDB Table for KV Storage
+const kvTable = new dynamodb.Table(this, &amp;#x27;KVTable&amp;#x27;, {
+  tableName: `edgequake-kv-${environment}`,
+  partitionKey: { name: &amp;#x27;namespace&amp;#x27;, type: dynamodb.AttributeType.STRING },
+  sortKey: { name: &amp;#x27;id&amp;#x27;, type: dynamodb.AttributeType.STRING },
+  billingMode: environment === &amp;#x27;prod&amp;#x27;
+    ? dynamodb.BillingMode.PROVISIONED
+    : dynamodb.BillingMode.PAY_PER_REQUEST,
+  removalPolicy: environment === &amp;#x27;prod&amp;#x27;
+    ? cdk.RemovalPolicy.RETAIN
+    : cdk.RemovalPolicy.DESTROY,
+});
+
+// 3. IAM Role for the Application
+const appRole = new iam.Role(this, &amp;#x27;AppRole&amp;#x27;, {
+  roleName: `edgequake-app-${environment}`,
+  assumedBy: new iam.ServicePrincipal(&amp;#x27;ecs-tasks.amazonaws.com&amp;#x27;),
+  description: &amp;#x27;IAM role for EdgeQuake application tasks&amp;#x27;,
+});
+
+// S3 Vectors permissions
+appRole.addToPolicy(new iam.PolicyStatement({
+  actions: [
+    &amp;#x27;s3vectors:PutVectors&amp;#x27;,
+    &amp;#x27;s3vectors:GetVectors&amp;#x27;,
+    &amp;#x27;s3vectors:QueryVectors&amp;#x27;,
+    &amp;#x27;s3vectors:DeleteVectors&amp;#x27;,
+  ],
+  resources: [vectorBucket.attrVectorBucketArn],
+}));
+
+// DynamoDB permissions
+appRole.addToPolicy(new iam.PolicyStatement({
+  actions: [
+    &amp;#x27;dynamodb:GetItem&amp;#x27;,
+    &amp;#x27;dynamodb:PutItem&amp;#x27;,
+    &amp;#x27;dynamodb:DeleteItem&amp;#x27;,
+    &amp;#x27;dynamodb:Query&amp;#x27;,
+    &amp;#x27;dynamodb:BatchWriteItem&amp;#x27;,
+  ],
+  resources: [kvTable.tableArn],
+}));
+
+// 4. Outputs
+this.vectorBucketArn = vectorBucket.attrVectorBucketArn;
+this.kvTableName = kvTable.tableName;
+this.appRoleArn = appRole.roleArn;
+
+new cdk.CfnOutput(this, &amp;#x27;VectorBucketArn&amp;#x27;, {
+  value: vectorBucket.attrVectorBucketArn,
+  description: &amp;#x27;ARN of the S3 Vectors bucket&amp;#x27;,
+});
+
+new cdk.CfnOutput(this, &amp;#x27;KVTableName&amp;#x27;, {
+  value: kvTable.tableName,
+  description: &amp;#x27;Name of the DynamoDB KV table&amp;#x27;,
+});
+
+new cdk.CfnOutput(this, &amp;#x27;AppRoleArn&amp;#x27;, {
+  value: appRole.roleArn,
+  description: &amp;#x27;ARN of the application IAM role&amp;#x27;,
+});
+</code></pre>
+<p>}
+}</code></pre>
+<div class="solution-explanation"><h4 id="explanation"><a class="header" href="#explanation">Explanation</a></h4><p>The CDK stack provisions three resources:</p></p>
+<ul>
+<li>
+<p><strong>S3 Vectors bucket + index</strong>: The <code>CfnVectorBucket</code> creates the storage bucket,
+and <code>CfnVectorIndex</code> defines how vectors are indexed. The dimension (1536 for
+OpenAI's <code>text-embedding-3-small</code>) must match the embedding model. The distance
+metric is <code>cosine</code> because EdgeQuake converts distance to similarity with <code>1 - distance</code>.</p>
+</li>
+<li>
+<p><strong>DynamoDB table</strong>: Uses composite key (<code>namespace</code> + <code>id</code>) for tenant-isolated
+key-value storage. PAY_PER_REQUEST billing avoids capacity planning for development.
+<code>RemovalPolicy.RETAIN</code> in production prevents accidental data loss when updating stacks.</p>
+</li>
+<li>
+<p><strong>IAM role</strong>: Follows least-privilege by granting only the specific DynamoDB and
+S3 Vectors actions needed. The role is assumable by ECS tasks (for container deployments).
+No wildcard actions are used.</p>
+</li>
+<li>
+<p><strong>CfnOutput</strong>: Exports resource identifiers so deployment scripts and other stacks
+can reference them without hardcoding ARNs.</p>
+</li>
+</ul>
+</div>
+    </div>
+  </details>
+</section>
+<section class="exercise-tests" id="ch10-cdk-stack-tests" data-mode="local">
+  <h3 id="-tests"><a class="header" href="#-tests">🧪 Tests</a></h3>
+  <div class="test-actions">
+    <div class="local-test-info"><p>Run these tests locally with:</p><pre><code>cargo test</code></pre></div>
+  </div>
+  <div class="test-results" id="results-ch10-cdk-stack" hidden></div>
+  <details class="tests-code"><summary>View Test Code</summary>
+    <pre><code class="language-typescript">// Tests are in the starter code above (test/edgequake-storage-stack.test.ts).
+// Run with: npx jest
+//
+// The snapshot test verifies the synthesized CloudFormation template
+// matches expectations. If you intentionally change the stack, update
+// the snapshot with: npx jest --updateSnapshot</code></pre>
+  </details>
+</section>
+<section class="exercise-reflection" id="ch10-cdk-stack-reflection">
+  <h3 id="-reflection"><a class="header" href="#-reflection">🤔 Reflection</a></h3>
+  <ul>
+    <li>How would you add a Neptune Serverless graph database to this stack? What</li>
+    <li>The vector dimension is passed as a prop. What would break if you changed</li>
+    <li>How would you set up separate dev/staging/prod environments using this stack?</li>
+  </ul>
+</section>
+<footer class="exercise-footer">
+  <button class="btn btn-complete" data-exercise-id="ch10-cdk-stack">✓ Mark Complete</button>
+</footer>
+</article>
+</div>
+<p>In chapter 10 you learned how EdgeQuake deploys to AWS using S3 Vectors for
+embeddings, DynamoDB for key-value storage, and IAM for access control. AWS CDK
+lets you define this infrastructure as TypeScript code, making deployments
+reproducible, version-controlled, and testable.</p>
+<p>In this exercise you will design a CDK stack that provisions the core storage
+infrastructure for EdgeQuake: an S3 Vectors bucket with an index, a DynamoDB
+table, and an IAM role with least-privilege permissions.</p>
+<p>::: objectives
+thinking:</p>
+<ul>
+<li>Understand the CDK construct hierarchy (App, Stack, Construct)</li>
+<li>Recognize why Infrastructure as Code is essential for reproducible deployments</li>
+<li>Reason about least-privilege IAM policies for production services
+doing:</li>
+<li>Define an S3 Vectors bucket and index with correct dimensions</li>
+<li>Create a DynamoDB table with appropriate key schema</li>
+<li>Configure IAM roles with scoped permissions</li>
+<li>Export resource ARNs via CfnOutput
+:::</li>
+</ul>
+<p>::: discussion</p>
+<ul>
+<li>Why does EdgeQuake use CDK (TypeScript) instead of raw CloudFormation YAML?</li>
+<li>What would happen if you set RemovalPolicy.DESTROY on a production DynamoDB table?</li>
+<li>How does the vector dimension in the CDK stack relate to the embedding model?
+:::</li>
+</ul>
+<p>::: starter file="lib/edgequake-storage-stack.ts"</p>
+<pre><code class="language-typescript">import * as cdk from 'aws-cdk-lib';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3vectors from 'aws-cdk-lib/aws-s3vectors';
+import { Construct } from 'constructs';
+
+export interface EdgeQuakeStorageProps extends cdk.StackProps {
+  /** Embedding vector dimension (must match the model output). */
+  vectorDimension: number;
+  /** Environment name (e.g., 'dev', 'staging', 'prod'). */
+  environment: string;
+}
+
+export class EdgeQuakeStorageStack extends cdk.Stack {
+  /** ARN of the S3 Vectors bucket. */
+  public readonly vectorBucketArn: string;
+  /** Name of the DynamoDB table. */
+  public readonly kvTableName: string;
+  /** ARN of the application IAM role. */
+  public readonly appRoleArn: string;
+
+  constructor(scope: Construct, id: string, props: EdgeQuakeStorageProps) {
+    super(scope, id, props);
+
+    const { vectorDimension, environment } = props;
+
+    // -------------------------------------------------------
+    // 1. S3 Vectors Bucket and Index
+    // -------------------------------------------------------
+    // TODO: Create a CfnVectorBucket for storing embeddings.
+    // The bucket name should include the environment for uniqueness.
+    //
+    // Then create a CfnVectorIndex on that bucket with:
+    //   - dimension: vectorDimension
+    //   - distanceMetric: 'cosine'
+    //
+    // Hint: Use s3vectors.CfnVectorBucket and s3vectors.CfnVectorIndex
+
+    // const vectorBucket = ...
+    // const vectorIndex = ...
+
+    // -------------------------------------------------------
+    // 2. DynamoDB Table for KV Storage
+    // -------------------------------------------------------
+    // TODO: Create a DynamoDB table for key-value storage.
+    //   - Partition key: 'namespace' (string)
+    //   - Sort key: 'id' (string)
+    //   - Billing: PAY_PER_REQUEST for dev, PROVISIONED for prod
+    //   - Removal policy: DESTROY for dev, RETAIN for prod
+    //
+    // Hint: Use dynamodb.Table with appropriate props.
+
+    // const kvTable = ...
+
+    // -------------------------------------------------------
+    // 3. IAM Role for the Application
+    // -------------------------------------------------------
+    // TODO: Create an IAM role that the EdgeQuake application assumes.
+    // It needs permissions for:
+    //   - S3 Vectors: s3vectors:PutVectors, s3vectors:GetVectors,
+    //     s3vectors:QueryVectors, s3vectors:DeleteVectors
+    //   - DynamoDB: dynamodb:GetItem, dynamodb:PutItem,
+    //     dynamodb:DeleteItem, dynamodb:Query, dynamodb:BatchWriteItem
+    //
+    // DO NOT grant wildcard (*) permissions. Scope each policy
+    // to the specific resource ARN.
+
+    // const appRole = ...
+
+    // -------------------------------------------------------
+    // 4. Outputs
+    // -------------------------------------------------------
+    // TODO: Export the resource identifiers so other stacks or
+    // deployment scripts can reference them.
+    //
+    // new cdk.CfnOutput(this, 'VectorBucketArn', { value: ... });
+    // new cdk.CfnOutput(this, 'KVTableName', { value: ... });
+    // new cdk.CfnOutput(this, 'AppRoleArn', { value: ... });
+  }
+}
+</code></pre>
+<p>:::</p>
+<p>::: starter file="test/edgequake-storage-stack.test.ts"</p>
+<pre><code class="language-typescript">import * as cdk from 'aws-cdk-lib';
+import { Template } from 'aws-cdk-lib/assertions';
+import { EdgeQuakeStorageStack } from '../lib/edgequake-storage-stack';
+
+describe('EdgeQuakeStorageStack', () =&gt; {
+  let template: Template;
+
+  beforeAll(() =&gt; {
+    const app = new cdk.App();
+    const stack = new EdgeQuakeStorageStack(app, 'TestStack', {
+      vectorDimension: 1536,
+      environment: 'dev',
+    });
+    template = Template.fromStack(stack);
+  });
+
+  test('creates S3 Vectors bucket', () =&gt; {
+    template.hasResourceProperties('AWS::S3Vectors::VectorBucket', {});
+  });
+
+  test('creates S3 Vectors index with correct dimension', () =&gt; {
+    template.hasResourceProperties('AWS::S3Vectors::VectorIndex', {
+      Dimension: 1536,
+      DistanceMetric: 'cosine',
+    });
+  });
+
+  test('creates DynamoDB table with correct key schema', () =&gt; {
+    template.hasResourceProperties('AWS::DynamoDB::Table', {
+      KeySchema: [
+        { AttributeName: 'namespace', KeyType: 'HASH' },
+        { AttributeName: 'id', KeyType: 'RANGE' },
+      ],
+      BillingMode: 'PAY_PER_REQUEST',
+    });
+  });
+
+  test('creates IAM role with scoped permissions', () =&gt; {
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { Service: 'ecs-tasks.amazonaws.com' },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      },
+    });
+  });
+
+  test('does not grant wildcard permissions', () =&gt; {
+    const roles = template.findResources('AWS::IAM::Policy');
+    const roleJson = JSON.stringify(roles);
+    // Verify no "Action": "*" in any policy
+    expect(roleJson).not.toContain('"Action":"*"');
+  });
+
+  test('exports resource identifiers', () =&gt; {
+    template.hasOutput('VectorBucketArn', {});
+    template.hasOutput('KVTableName', {});
+    template.hasOutput('AppRoleArn', {});
+  });
+});
+</code></pre>
+<p>:::</p>
+<p>::: hint level=1 title="S3 Vectors resources"</p>
+<pre><code class="language-typescript">const vectorBucket = new s3vectors.CfnVectorBucket(this, 'VectorBucket', {
+  vectorBucketName: `edgequake-vectors-${environment}`,
+});
+</code></pre>
+<p>The <code>CfnVectorIndex</code> references the bucket and specifies dimension and distance metric.
+:::</p>
+<p>::: hint level=2 title="DynamoDB conditional configuration"
+Use a ternary to switch between dev and prod settings:</p>
+<pre><code class="language-typescript">const kvTable = new dynamodb.Table(this, 'KVTable', {
+  tableName: `edgequake-kv-${environment}`,
+  partitionKey: { name: 'namespace', type: dynamodb.AttributeType.STRING },
+  sortKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+  billingMode: environment === 'prod'
+    ? dynamodb.BillingMode.PROVISIONED
+    : dynamodb.BillingMode.PAY_PER_REQUEST,
+  removalPolicy: environment === 'prod'
+    ? cdk.RemovalPolicy.RETAIN
+    : cdk.RemovalPolicy.DESTROY,
+});
+</code></pre>
+<p>:::</p>
+<p>::: hint level=3 title="Scoped IAM policy"</p>
+<pre><code class="language-typescript">appRole.addToPolicy(new iam.PolicyStatement({
+  actions: [
+    'dynamodb:GetItem',
+    'dynamodb:PutItem',
+    'dynamodb:DeleteItem',
+    'dynamodb:Query',
+    'dynamodb:BatchWriteItem',
+  ],
+  resources: [kvTable.tableArn],
+}));
+</code></pre>
+<p>:::</p>
+<p>::: solution</p>
+<pre><code class="language-typescript">import * as cdk from 'aws-cdk-lib';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3vectors from 'aws-cdk-lib/aws-s3vectors';
+import { Construct } from 'constructs';
+
+export interface EdgeQuakeStorageProps extends cdk.StackProps {
+  vectorDimension: number;
+  environment: string;
+}
+
+export class EdgeQuakeStorageStack extends cdk.Stack {
+  public readonly vectorBucketArn: string;
+  public readonly kvTableName: string;
+  public readonly appRoleArn: string;
+
+  constructor(scope: Construct, id: string, props: EdgeQuakeStorageProps) {
+    super(scope, id, props);
+
+    const { vectorDimension, environment } = props;
+
+    // 1. S3 Vectors Bucket and Index
+    const vectorBucket = new s3vectors.CfnVectorBucket(this, 'VectorBucket', {
+      vectorBucketName: `edgequake-vectors-${environment}`,
+    });
+
+    const vectorIndex = new s3vectors.CfnVectorIndex(this, 'VectorIndex', {
+      vectorBucketName: vectorBucket.vectorBucketName!,
+      indexName: `edgequake-embeddings-${environment}`,
+      dimension: vectorDimension,
+      distanceMetric: 'cosine',
+    });
+    vectorIndex.addDependency(vectorBucket);
+
+    // 2. DynamoDB Table for KV Storage
+    const kvTable = new dynamodb.Table(this, 'KVTable', {
+      tableName: `edgequake-kv-${environment}`,
+      partitionKey: { name: 'namespace', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      billingMode: environment === 'prod'
+        ? dynamodb.BillingMode.PROVISIONED
+        : dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: environment === 'prod'
+        ? cdk.RemovalPolicy.RETAIN
+        : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // 3. IAM Role for the Application
+    const appRole = new iam.Role(this, 'AppRole', {
+      roleName: `edgequake-app-${environment}`,
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      description: 'IAM role for EdgeQuake application tasks',
+    });
+
+    // S3 Vectors permissions
+    appRole.addToPolicy(new iam.PolicyStatement({
+      actions: [
+        's3vectors:PutVectors',
+        's3vectors:GetVectors',
+        's3vectors:QueryVectors',
+        's3vectors:DeleteVectors',
+      ],
+      resources: [vectorBucket.attrVectorBucketArn],
+    }));
+
+    // DynamoDB permissions
+    appRole.addToPolicy(new iam.PolicyStatement({
+      actions: [
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+        'dynamodb:DeleteItem',
+        'dynamodb:Query',
+        'dynamodb:BatchWriteItem',
+      ],
+      resources: [kvTable.tableArn],
+    }));
+
+    // 4. Outputs
+    this.vectorBucketArn = vectorBucket.attrVectorBucketArn;
+    this.kvTableName = kvTable.tableName;
+    this.appRoleArn = appRole.roleArn;
+
+    new cdk.CfnOutput(this, 'VectorBucketArn', {
+      value: vectorBucket.attrVectorBucketArn,
+      description: 'ARN of the S3 Vectors bucket',
+    });
+
+    new cdk.CfnOutput(this, 'KVTableName', {
+      value: kvTable.tableName,
+      description: 'Name of the DynamoDB KV table',
+    });
+
+    new cdk.CfnOutput(this, 'AppRoleArn', {
+      value: appRole.roleArn,
+      description: 'ARN of the application IAM role',
+    });
+  }
+}
+</code></pre>
+<h3 id="explanation-1"><a class="header" href="#explanation-1">Explanation</a></h3>
+<p>The CDK stack provisions three resources:</p>
+<ul>
+<li>
+<p><strong>S3 Vectors bucket + index</strong>: The <code>CfnVectorBucket</code> creates the storage bucket,
+and <code>CfnVectorIndex</code> defines how vectors are indexed. The dimension (1536 for
+OpenAI's <code>text-embedding-3-small</code>) must match the embedding model. The distance
+metric is <code>cosine</code> because EdgeQuake converts distance to similarity with <code>1 - distance</code>.</p>
+</li>
+<li>
+<p><strong>DynamoDB table</strong>: Uses composite key (<code>namespace</code> + <code>id</code>) for tenant-isolated
+key-value storage. PAY_PER_REQUEST billing avoids capacity planning for development.
+<code>RemovalPolicy.RETAIN</code> in production prevents accidental data loss when updating stacks.</p>
+</li>
+<li>
+<p><strong>IAM role</strong>: Follows least-privilege by granting only the specific DynamoDB and
+S3 Vectors actions needed. The role is assumable by ECS tasks (for container deployments).
+No wildcard actions are used.</p>
+</li>
+<li>
+<p><strong>CfnOutput</strong>: Exports resource identifiers so deployment scripts and other stacks
+can reference them without hardcoding ARNs.
+:::</p>
+</li>
+</ul>
+<p>::: tests mode=local</p>
+<pre><code class="language-typescript">// Tests are in the starter code above (test/edgequake-storage-stack.test.ts).
+// Run with: npx jest
+//
+// The snapshot test verifies the synthesized CloudFormation template
+// matches expectations. If you intentionally change the stack, update
+// the snapshot with: npx jest --updateSnapshot
+</code></pre>
+<p>:::</p>
+<p>::: reflection</p>
+<ul>
+<li>How would you add a Neptune Serverless graph database to this stack? What
+additional IAM permissions would the application role need?</li>
+<li>The vector dimension is passed as a prop. What would break if you changed
+it after initial deployment with existing data?</li>
+<li>How would you set up separate dev/staging/prod environments using this stack?
+Would you use separate AWS accounts, separate stacks, or CDK stages?
+:::</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../part3-production/ch10-03-cdk-infrastructure.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../part4-enterprise/ch11-security.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../part3-production/ch10-03-cdk-infrastructure.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../part4-enterprise/ch11-security.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../../ace.js"></script>
+        <script src="../../mode-rust.js"></script>
+        <script src="../../editor.js"></script>
+        <script src="../../theme-dawn.js"></script>
+        <script src="../../theme-tomorrow_night.js"></script>
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

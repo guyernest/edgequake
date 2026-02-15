@@ -1,0 +1,1761 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Exercise: Wire Up EdgeQuake - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../../src/custom.css">
+        <link rel="stylesheet" href="../../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <div class="exercise-container">
+<article class="exercise" data-exercise-id="full-edgequake" data-difficulty="advanced">
+<header class="exercise-header">
+  <h2 id="full-edgequake-integration" class="exercise-title"><a class="header" href="#full-edgequake-integration">Full EdgeQuake Integration</a></h2>
+  <code class=\"exercise-id\">full-edgequake</code>
+  <div class="exercise-meta">
+    <span class="badge difficulty advanced">⭐⭐⭐ advanced</span>
+    <span class="badge time">⏱️ 35 min</span>
+  </div>
+</header>
+<nav class="exercise-nav" aria-label="Exercise sections"><ul><li><a href="#full-edgequake-description" data-section="description">📖 Overview</a></li><li><a href="#full-edgequake-objectives" data-section="objectives">🎯 Objectives</a></li><li><a href="#full-edgequake-starter" data-section="starter">💻 Code</a></li><li><a href="#full-edgequake-hints" data-section="hints">💡 Hints</a></li><li><a href="#full-edgequake-solution" data-section="solution">✅ Solution</a></li><li><a href="#full-edgequake-tests" data-section="tests">🧪 Tests</a></li><li><a href="#full-edgequake-reflection" data-section="reflection">🤔 Reflect</a></li></ul></nav>
+<section class="exercise-description" id="full-edgequake-description">
+<p>This is the capstone exercise. You will wire together all the components from
+previous chapters -- vector storage, graph storage, chunking, extraction, query
+mode selection, and retrieval -- into a simplified but complete Graph RAG system.
+The goal is to ingest a document and successfully query it end-to-end.</p>
+</section>
+<section class="exercise-objectives" id="full-edgequake-objectives">
+  <h3 id="-learning-objectives"><a class="header" href="#-learning-objectives">🎯 Learning Objectives</a></h3>
+  <div class="objectives-grid">
+    <div class="objectives-thinking">
+      <h4 id="thinking"><a class="header" href="#thinking">Thinking</a></h4>
+      <ul>
+        <li><input type="checkbox" id="full-edgequake-thinking-0" class="objective-checkbox"><label for="full-edgequake-thinking-0">Understand how all Graph RAG components compose into a pipeline</label></li>
+        <li><input type="checkbox" id="full-edgequake-thinking-1" class="objective-checkbox"><label for="full-edgequake-thinking-1">Reason about the flow of data from raw text to generated answer</label></li>
+      </ul>
+    </div>
+    <div class="objectives-doing">
+      <h4 id="doing"><a class="header" href="#doing">Doing</a></h4>
+      <ul>
+        <li><input type="checkbox" id="full-edgequake-doing-0" class="objective-checkbox"><label for="full-edgequake-doing-0">Initialize in-memory storage layers (vector + graph + key-value)</label></li>
+        <li><input type="checkbox" id="full-edgequake-doing-1" class="objective-checkbox"><label for="full-edgequake-doing-1">Wire the ingestion pipeline (chunk -&gt; extract -&gt; embed -&gt; store)</label></li>
+        <li><input type="checkbox" id="full-edgequake-doing-2" class="objective-checkbox"><label for="full-edgequake-doing-2">Wire the query engine (mode select -&gt; retrieve -&gt; assemble context -&gt; answer)</label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+<section class="exercise-discussion">
+  <h3 id="-discussion"><a class="header" href="#-discussion">💬 Discussion</a></h3>
+  <ul>
+    <li>What is the minimum viable Graph RAG system? Which components are essential vs nice-to-have?</li>
+    <li>How does EdgeQuake&#x27;s 13-crate workspace map to the layers in this simplified version?</li>
+    <li>What would break first if you scaled this to millions of documents?</li>
+  </ul>
+</section>
+<section class="exercise-starter" id="full-edgequake-starter">
+  <div class="code-header">
+    <span class="filename">src/main.rs</span>
+    <div class="code-actions">
+      <button class="btn btn-copy" data-target="code-full-edgequake" title="Copy code">📋 Copy</button>
+      <button class="btn btn-reset" data-target="code-full-edgequake" title="Reset to original">↺ Reset</button>
+    </div>
+  </div>
+  <textarea class="code-editor" id="code-full-edgequake" data-language="rust" data-original="use std::collections::HashMap;&#10;use std::cmp::Ordering;&#10;&#10;// ============================================================&#10;// Storage Layer (simplified from Ch01 + Ch04)&#10;// ============================================================&#10;&#10;#[derive(Debug, Clone)]&#10;struct VectorEntry {&#10;    id: String,&#10;    text: String,&#10;    embedding: Vec&lt;f64&gt;,&#10;    metadata: HashMap&lt;String, String&gt;,&#10;}&#10;&#10;struct VectorStore {&#10;    entries: Vec&lt;VectorEntry&gt;,&#10;}&#10;&#10;impl VectorStore {&#10;    fn new() -&gt; Self { VectorStore { entries: Vec::new() } }&#10;&#10;    fn insert(&amp;mut self, entry: VectorEntry) {&#10;        self.entries.push(entry);&#10;    }&#10;&#10;    fn search(&amp;self, query_embedding: &amp;[f64], top_k: usize) -&gt; Vec&lt;(String, f64)&gt; {&#10;        let mut results: Vec&lt;(String, f64)&gt; = self.entries.iter()&#10;            .map(|e| (e.id.clone(), cosine_similarity(query_embedding, &amp;e.embedding)))&#10;            .collect();&#10;        results.sort_by(|a, b| b.1.partial_cmp(&amp;a.1).unwrap_or(Ordering::Equal));&#10;        results.truncate(top_k);&#10;        results&#10;    }&#10;}&#10;&#10;fn cosine_similarity(a: &amp;[f64], b: &amp;[f64]) -&gt; f64 {&#10;    let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();&#10;    let mag_a: f64 = a.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();&#10;    let mag_b: f64 = b.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();&#10;    if mag_a == 0.0 || mag_b == 0.0 { 0.0 } else { dot / (mag_a * mag_b) }&#10;}&#10;&#10;#[derive(Debug, Clone)]&#10;struct GraphNode {&#10;    id: String,&#10;    label: String,&#10;    properties: HashMap&lt;String, String&gt;,&#10;}&#10;&#10;#[derive(Debug, Clone)]&#10;struct GraphEdge {&#10;    source: String,&#10;    target: String,&#10;    label: String,&#10;}&#10;&#10;struct GraphStore {&#10;    nodes: HashMap&lt;String, GraphNode&gt;,&#10;    edges: Vec&lt;GraphEdge&gt;,&#10;    adjacency: HashMap&lt;String, Vec&lt;usize&gt;&gt;, // node_id -&gt; edge indices&#10;}&#10;&#10;impl GraphStore {&#10;    fn new() -&gt; Self {&#10;        GraphStore {&#10;            nodes: HashMap::new(),&#10;            edges: Vec::new(),&#10;            adjacency: HashMap::new(),&#10;        }&#10;    }&#10;&#10;    fn upsert_node(&amp;mut self, node: GraphNode) {&#10;        self.nodes.insert(node.id.clone(), node);&#10;    }&#10;&#10;    fn upsert_edge(&amp;mut self, edge: GraphEdge) {&#10;        let idx = self.edges.len();&#10;        self.adjacency.entry(edge.source.clone()).or_default().push(idx);&#10;        self.edges.push(edge);&#10;    }&#10;&#10;    fn get_neighbors(&amp;self, node_id: &amp;str) -&gt; Vec&lt;&amp;GraphEdge&gt; {&#10;        self.adjacency.get(node_id)&#10;            .map(|indices| indices.iter().filter_map(|&amp;i| self.edges.get(i)).collect())&#10;            .unwrap_or_default()&#10;    }&#10;}&#10;&#10;/// Simple key-value store for chunk text and metadata.&#10;struct KVStore {&#10;    data: HashMap&lt;String, String&gt;,&#10;}&#10;&#10;impl KVStore {&#10;    fn new() -&gt; Self { KVStore { data: HashMap::new() } }&#10;    fn set(&amp;mut self, key: String, value: String) { self.data.insert(key, value); }&#10;    fn get(&amp;self, key: &amp;str) -&gt; Option&lt;&amp;String&gt; { self.data.get(key) }&#10;}&#10;&#10;// ============================================================&#10;// Ingestion Pipeline&#10;// ============================================================&#10;&#10;#[derive(Debug, Clone)]&#10;struct Chunk {&#10;    id: String,&#10;    text: String,&#10;    header_path: String,&#10;}&#10;&#10;#[derive(Debug, Clone)]&#10;struct ExtractedEntity {&#10;    name: String,&#10;    entity_type: String,&#10;}&#10;&#10;#[derive(Debug, Clone)]&#10;struct ExtractedRelationship {&#10;    source: String,&#10;    target: String,&#10;    label: String,&#10;}&#10;&#10;#[derive(Debug)]&#10;struct ExtractionResult {&#10;    entities: Vec&lt;ExtractedEntity&gt;,&#10;    relationships: Vec&lt;ExtractedRelationship&gt;,&#10;}&#10;&#10;/// The main EdgeQuake system that ties everything together.&#10;struct EdgeQuake {&#10;    vectors: VectorStore,&#10;    graph: GraphStore,&#10;    kv: KVStore,&#10;}&#10;&#10;impl EdgeQuake {&#10;    fn new() -&gt; Self {&#10;        // TODO: Initialize all three storage layers&#10;        todo!(&quot;Implement EdgeQuake::new&quot;)&#10;    }&#10;&#10;    /// Ingest a document: chunk it, extract entities, embed chunks, store everything.&#10;    fn ingest(&amp;mut self, document: &amp;str) {&#10;        // TODO: Implement the ingestion pipeline&#10;        //&#10;        // Step 1: Chunk the document.&#10;        // Use a simple chunking strategy (split by double newlines or&#10;        // a fixed size -- you can simplify from Ch02).&#10;        //&#10;        // Step 2: For each chunk, extract entities and relationships.&#10;        // Use mock_extract() below instead of a real LLM.&#10;        //&#10;        // Step 3: For each chunk, generate an embedding.&#10;        // Use mock_embed() below instead of a real embedding model.&#10;        //&#10;        // Step 4: Store everything:&#10;        //   - Chunk text in KVStore (key: chunk_id)&#10;        //   - Chunk embedding in VectorStore&#10;        //   - Entities as nodes in GraphStore&#10;        //   - Relationships as edges in GraphStore&#10;        todo!(&quot;Implement ingest&quot;)&#10;    }&#10;&#10;    /// Query the system: select mode, retrieve context, generate answer.&#10;    fn query(&amp;self, question: &amp;str) -&gt; String {&#10;        // TODO: Implement the query pipeline&#10;        //&#10;        // Step 1: Select query mode using simple heuristics (from Ch06).&#10;        // For this exercise, you can simplify to just two modes:&#10;        //   - &quot;local&quot; if the question mentions a known entity&#10;        //   - &quot;naive&quot; otherwise&#10;        //&#10;        // Step 2: Retrieve relevant chunks.&#10;        //   - Generate a query embedding using mock_embed().&#10;        //   - Search the VectorStore for top-3 similar chunks.&#10;        //   - If mode is &quot;local&quot;, also get graph neighbors for any&#10;        //     mentioned entity and include their connected chunks.&#10;        //&#10;        // Step 3: Assemble context from retrieved chunk texts.&#10;        //   - Look up chunk text from KVStore using the chunk IDs.&#10;        //&#10;        // Step 4: Generate answer using mock_generate().&#10;        //   - Pass the question and assembled context.&#10;        //&#10;        // Return the generated answer.&#10;        todo!(&quot;Implement query&quot;)&#10;    }&#10;}&#10;&#10;// ============================================================&#10;// Mock functions (simulating LLM and embedding model)&#10;// ============================================================&#10;&#10;/// Mock entity extraction. Extracts simple patterns from text.&#10;fn mock_extract(text: &amp;str) -&gt; ExtractionResult {&#10;    let mut entities = Vec::new();&#10;    let mut relationships = Vec::new();&#10;&#10;    // Simple heuristic: treat capitalized multi-word phrases as entities&#10;    let words: Vec&lt;&amp;str&gt; = text.split_whitespace().collect();&#10;    let mut i = 0;&#10;    while i &lt; words.len() {&#10;        let word = words[i].trim_matches(|c: char| !c.is_alphanumeric());&#10;        if !word.is_empty()&#10;            &amp;&amp; word.chars().next().map_or(false, |c| c.is_uppercase())&#10;            &amp;&amp; word.len() &gt; 1&#10;        {&#10;            // Check if next word is also capitalized (multi-word entity)&#10;            let mut name = word.to_string();&#10;            let mut j = i + 1;&#10;            while j &lt; words.len() {&#10;                let next = words[j].trim_matches(|c: char| !c.is_alphanumeric());&#10;                if !next.is_empty() &amp;&amp; next.chars().next().map_or(false, |c| c.is_uppercase()) {&#10;                    name.push(&#x27; &#x27;);&#10;                    name.push_str(next);&#10;                    j += 1;&#10;                } else {&#10;                    break;&#10;                }&#10;            }&#10;&#10;            let entity_type = if name.contains(&quot;Corp&quot;) || name.contains(&quot;Inc&quot;) {&#10;                &quot;Organization&quot;&#10;            } else {&#10;                &quot;Entity&quot;&#10;            };&#10;&#10;            entities.push(ExtractedEntity {&#10;                name: name.clone(),&#10;                entity_type: entity_type.to_string(),&#10;            });&#10;            i = j;&#10;        } else {&#10;            i += 1;&#10;        }&#10;    }&#10;&#10;    // Create relationships between consecutive entities&#10;    for pair in entities.windows(2) {&#10;        relationships.push(ExtractedRelationship {&#10;            source: pair[0].name.clone(),&#10;            target: pair[1].name.clone(),&#10;            label: &quot;RELATED_TO&quot;.into(),&#10;        });&#10;    }&#10;&#10;    ExtractionResult {&#10;        entities,&#10;        relationships,&#10;    }&#10;}&#10;&#10;/// Mock embedding function. Creates a deterministic embedding from text.&#10;fn mock_embed(text: &amp;str) -&gt; Vec&lt;f64&gt; {&#10;    // Simple hash-based embedding (NOT a real embedding -- just for testing)&#10;    let mut embedding = vec![0.0f64; 8];&#10;    for (i, byte) in text.bytes().enumerate() {&#10;        embedding[i % 8] += (byte as f64) / 256.0;&#10;    }&#10;    // Normalize&#10;    let mag: f64 = embedding.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();&#10;    if mag &gt; 0.0 {&#10;        for x in &amp;mut embedding {&#10;            *x /= mag;&#10;        }&#10;    }&#10;    embedding&#10;}&#10;&#10;/// Mock answer generation. Concatenates context with the question.&#10;fn mock_generate(question: &amp;str, context: &amp;[String]) -&gt; String {&#10;    if context.is_empty() {&#10;        return format!(&quot;I don&#x27;t have enough context to answer: {}&quot;, question);&#10;    }&#10;    let context_text = context.join(&quot;\n---\n&quot;);&#10;    format!(&#10;        &quot;Based on the following context:\n{}\n\nAnswer: The context discusses topics related to your question: {}&quot;,&#10;        context_text,&#10;        question&#10;    )&#10;}&#10;&#10;/// Simple chunker: split on double newlines, assign IDs.&#10;fn simple_chunk(text: &amp;str) -&gt; Vec&lt;Chunk&gt; {&#10;    text.split(&quot;\n\n&quot;)&#10;        .enumerate()&#10;        .filter(|(_, s)| !s.trim().is_empty())&#10;        .map(|(i, s)| Chunk {&#10;            id: format!(&quot;chunk_{}&quot;, i),&#10;            text: s.trim().to_string(),&#10;            header_path: String::new(),&#10;        })&#10;        .collect()&#10;}&#10;&#10;fn main() {&#10;    let document = r#&quot;&#10;EdgeQuake is a Graph RAG engine built in Rust. It combines knowledge graphs&#10;with vector search to provide accurate answers to complex questions.&#10;&#10;The system was created by Alice Chen at TechCorp Research. Alice designed&#10;the hybrid retrieval architecture that uses both local and global search modes.&#10;&#10;Bob Martinez contributed the ingestion pipeline, which processes documents&#10;through four phases: chunking, extraction, embedding, and storage.&#10;&#10;TechCorp Research published a paper on the system&#x27;s performance, showing&#10;significant improvements over traditional RAG approaches on multi-hop questions.&#10;&#10;The storage layer supports multiple backends including Amazon Neptune for&#10;graph storage and Amazon S3 Vectors for embedding search.&#10;&quot;#;&#10;&#10;    println!(&quot;=== Initializing EdgeQuake ===&quot;);&#10;    let mut eq = EdgeQuake::new();&#10;&#10;    println!(&quot;\n=== Ingesting Document ===&quot;);&#10;    eq.ingest(document);&#10;    println!(&quot;Ingestion complete.&quot;);&#10;    println!(&quot;  Vector entries: {}&quot;, eq.vectors.entries.len());&#10;    println!(&quot;  Graph nodes: {}&quot;, eq.graph.nodes.len());&#10;    println!(&quot;  Graph edges: {}&quot;, eq.graph.edges.len());&#10;&#10;    println!(&quot;\n=== Querying ===&quot;);&#10;&#10;    let q1 = &quot;What is EdgeQuake?&quot;;&#10;    println!(&quot;\nQ: {}&quot;, q1);&#10;    println!(&quot;A: {}&quot;, eq.query(q1));&#10;&#10;    let q2 = &quot;Who created the system?&quot;;&#10;    println!(&quot;\nQ: {}&quot;, q2);&#10;    println!(&quot;A: {}&quot;, eq.query(q2));&#10;&#10;    let q3 = &quot;What storage backends are used?&quot;;&#10;    println!(&quot;\nQ: {}&quot;, q3);&#10;    println!(&quot;A: {}&quot;, eq.query(q3));&#10;}" spellcheck="false"></textarea>
+</section>
+<section class="exercise-hints" id="full-edgequake-hints">
+  <h3 id="-hints"><a class="header" href="#-hints">💡 Hints</a></h3>
+  <details class="hint" data-level="1">
+    <summary>Hint 1: Ingestion pipeline wiring</summary>
+    <div class="hint-content">
+<p>The ingest method should chain: chunk -&gt; extract -&gt; embed -&gt; store.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn ingest(&amp;mut self, document: &amp;str) {
+    let chunks = simple_chunk(document);
+<pre><code>for chunk in &amp;amp;chunks {
+    // Store chunk text in KV
+    self.kv.set(chunk.id.clone(), chunk.text.clone());
+
+    // Extract entities and relationships
+    let extraction = mock_extract(&amp;amp;chunk.text);
+
+    // Store entities as graph nodes
+    for entity in &amp;amp;extraction.entities {
+        self.graph.upsert_node(GraphNode {
+            id: entity.name.to_lowercase().replace(' ', "_"),
+            label: entity.entity_type.clone(),
+            properties: HashMap::from([("name".into(), entity.name.clone())]),
+        });
+    }
+    // ... continue with edges and vector storage
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}
+</code></pre>
+</div></p>
+  </details>
+  <details class="hint" data-level="2">
+    <summary>Hint 2: Query pipeline wiring</summary>
+    <div class="hint-content">
+<p>The query method should: embed the question, search vectors, look up text,
+and generate.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn query(&amp;self, question: &amp;str) -&gt; String {
+    let query_embedding = mock_embed(question);
+    let results = self.vectors.search(&amp;query_embedding, 3);
+<pre><code>let mut context: Vec&amp;lt;String&amp;gt; = Vec::new();
+for (chunk_id, _score) in &amp;amp;results {
+    if let Some(text) = self.kv.get(chunk_id) {
+        context.push(text.clone());
+    }
+}
+
+mock_generate(question, &amp;amp;context)
+<span class="boring">}</span></code></pre></pre>
+<p>}
+</code></pre></p>
+<p>For local mode enhancement, check if any known graph node names appear in
+the question, get their neighbors, and include connected chunk context.</p>
+    </div>
+  </details>
+</section>
+<section class="exercise-solution" id="full-edgequake-solution">
+  <details class="solution">
+    <summary><span class="solution-warning">⚠️ Try the exercise first!</span><span class="solution-toggle">Show Solution</span></summary>
+    <div class="solution-content">
+      <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::collections::HashMap;
+use std::cmp::Ordering;
+<p>#[derive(Debug, Clone)]
+struct VectorEntry {
+id: String,
+text: String,
+embedding: Vec&lt;f64&gt;,
+metadata: HashMap&lt;String, String&gt;,
+}</p>
+<p>struct VectorStore {
+entries: Vec&lt;VectorEntry&gt;,
+}</p>
+<p>impl VectorStore {
+fn new() -&gt; Self { VectorStore { entries: Vec::new() } }</p>
+<pre><code>fn insert(&amp;amp;mut self, entry: VectorEntry) {
+    self.entries.push(entry);
+}
+
+fn search(&amp;amp;self, query_embedding: &amp;amp;[f64], top_k: usize) -&amp;gt; Vec&amp;lt;(String, f64)&amp;gt; {
+    let mut results: Vec&amp;lt;(String, f64)&amp;gt; = self.entries.iter()
+        .map(|e| (e.id.clone(), cosine_similarity(query_embedding, &amp;amp;e.embedding)))
+        .collect();
+    results.sort_by(|a, b| b.1.partial_cmp(&amp;amp;a.1).unwrap_or(Ordering::Equal));
+    results.truncate(top_k);
+    results
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</p>
+<p>fn cosine_similarity(a: &amp;[f64], b: &amp;[f64]) -&gt; f64 {
+let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+let mag_a: f64 = a.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+let mag_b: f64 = b.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+if mag_a == 0.0 || mag_b == 0.0 { 0.0 } else { dot / (mag_a * mag_b) }
+}</p>
+<p>#[derive(Debug, Clone)]
+struct GraphNode {
+id: String,
+label: String,
+properties: HashMap&lt;String, String&gt;,
+}</p>
+<p>#[derive(Debug, Clone)]
+struct GraphEdge {
+source: String,
+target: String,
+label: String,
+}</p>
+<p>struct GraphStore {
+nodes: HashMap&lt;String, GraphNode&gt;,
+edges: Vec&lt;GraphEdge&gt;,
+adjacency: HashMap&lt;String, Vec&lt;usize&gt;&gt;,
+}</p>
+<p>impl GraphStore {
+fn new() -&gt; Self {
+GraphStore {
+nodes: HashMap::new(),
+edges: Vec::new(),
+adjacency: HashMap::new(),
+}
+}</p>
+<pre><code>fn upsert_node(&amp;amp;mut self, node: GraphNode) {
+    self.nodes.insert(node.id.clone(), node);
+}
+
+fn upsert_edge(&amp;amp;mut self, edge: GraphEdge) {
+    let idx = self.edges.len();
+    self.adjacency.entry(edge.source.clone()).or_default().push(idx);
+    self.edges.push(edge);
+}
+
+fn get_neighbors(&amp;amp;self, node_id: &amp;amp;str) -&amp;gt; Vec&amp;lt;&amp;amp;GraphEdge&amp;gt; {
+    self.adjacency.get(node_id)
+        .map(|indices| indices.iter().filter_map(|&amp;amp;i| self.edges.get(i)).collect())
+        .unwrap_or_default()
+}
+</code></pre>
+<p>}</p>
+<p>struct KVStore {
+data: HashMap&lt;String, String&gt;,
+}</p>
+<p>impl KVStore {
+fn new() -&gt; Self { KVStore { data: HashMap::new() } }
+fn set(&amp;mut self, key: String, value: String) { self.data.insert(key, value); }
+fn get(&amp;self, key: &amp;str) -&gt; Option&lt;&amp;String&gt; { self.data.get(key) }
+}</p>
+<p>#[derive(Debug, Clone)]
+struct Chunk {
+id: String,
+text: String,
+header_path: String,
+}</p>
+<p>#[derive(Debug, Clone)]
+struct ExtractedEntity {
+name: String,
+entity_type: String,
+}</p>
+<p>#[derive(Debug, Clone)]
+struct ExtractedRelationship {
+source: String,
+target: String,
+label: String,
+}</p>
+<p>#[derive(Debug)]
+struct ExtractionResult {
+entities: Vec&lt;ExtractedEntity&gt;,
+relationships: Vec&lt;ExtractedRelationship&gt;,
+}</p>
+<p>struct EdgeQuake {
+vectors: VectorStore,
+graph: GraphStore,
+kv: KVStore,
+}</p>
+<p>impl EdgeQuake {
+fn new() -&gt; Self {
+EdgeQuake {
+vectors: VectorStore::new(),
+graph: GraphStore::new(),
+kv: KVStore::new(),
+}
+}</p>
+<pre><code>fn ingest(&amp;amp;mut self, document: &amp;amp;str) {
+    let chunks = simple_chunk(document);
+
+    for chunk in &amp;amp;chunks {
+        // Step 1: Store chunk text in KV store
+        self.kv.set(chunk.id.clone(), chunk.text.clone());
+
+        // Step 2: Extract entities and relationships
+        let extraction = mock_extract(&amp;amp;chunk.text);
+
+        // Step 3: Store entities as graph nodes
+        for entity in &amp;amp;extraction.entities {
+            let node_id = entity.name.to_lowercase().replace(&amp;#x27; &amp;#x27;, &amp;quot;_&amp;quot;);
+            self.graph.upsert_node(GraphNode {
+                id: node_id.clone(),
+                label: entity.entity_type.clone(),
+                properties: HashMap::from([
+                    (&amp;quot;name&amp;quot;.into(), entity.name.clone()),
+                    (&amp;quot;source_chunk&amp;quot;.into(), chunk.id.clone()),
+                ]),
+            });
+        }
+
+        // Step 4: Store relationships as graph edges
+        for rel in &amp;amp;extraction.relationships {
+            let source_id = rel.source.to_lowercase().replace(&amp;#x27; &amp;#x27;, &amp;quot;_&amp;quot;);
+            let target_id = rel.target.to_lowercase().replace(&amp;#x27; &amp;#x27;, &amp;quot;_&amp;quot;);
+            self.graph.upsert_edge(GraphEdge {
+                source: source_id,
+                target: target_id,
+                label: rel.label.clone(),
+            });
+        }
+
+        // Step 5: Embed and store the chunk vector
+        let embedding = mock_embed(&amp;amp;chunk.text);
+        self.vectors.insert(VectorEntry {
+            id: chunk.id.clone(),
+            text: chunk.text.clone(),
+            embedding,
+            metadata: HashMap::new(),
+        });
+    }
+}
+
+fn query(&amp;amp;self, question: &amp;amp;str) -&amp;gt; String {
+    // Step 1: Embed the query
+    let query_embedding = mock_embed(question);
+
+    // Step 2: Vector search for relevant chunks
+    let vector_results = self.vectors.search(&amp;amp;query_embedding, 3);
+
+    // Step 3: Collect chunk IDs from vector search
+    let mut chunk_ids: Vec&amp;lt;String&amp;gt; = vector_results.iter()
+        .map(|(id, _)| id.clone())
+        .collect();
+
+    // Step 4: Check for entity mentions (simple local mode)
+    let question_lower = question.to_lowercase();
+    for (node_id, node) in &amp;amp;self.graph.nodes {
+        let name = node.properties.get(&amp;quot;name&amp;quot;)
+            .map(|n| n.to_lowercase())
+            .unwrap_or_default();
+        if !name.is_empty() &amp;amp;&amp;amp; question_lower.contains(&amp;amp;name) {
+            // Found a mentioned entity -- get its neighbors
+            let neighbors = self.graph.get_neighbors(node_id);
+            for edge in neighbors {
+                // Look up the target node&amp;#x27;s source chunk
+                if let Some(target_node) = self.graph.nodes.get(&amp;amp;edge.target) {
+                    if let Some(source_chunk) = target_node.properties.get(&amp;quot;source_chunk&amp;quot;) {
+                        if !chunk_ids.contains(source_chunk) {
+                            chunk_ids.push(source_chunk.clone());
+                        }
+                    }
+                }
+            }
+            // Also include the entity&amp;#x27;s own source chunk
+            if let Some(source_chunk) = node.properties.get(&amp;quot;source_chunk&amp;quot;) {
+                if !chunk_ids.contains(source_chunk) {
+                    chunk_ids.push(source_chunk.clone());
+                }
+            }
+        }
+    }
+
+    // Step 5: Assemble context from chunk texts
+    let context: Vec&amp;lt;String&amp;gt; = chunk_ids.iter()
+        .filter_map(|id| self.kv.get(id).cloned())
+        .collect();
+
+    // Step 6: Generate answer
+    mock_generate(question, &amp;amp;context)
+}
+</code></pre>
+<p>}</p>
+<p>fn mock_extract(text: &amp;str) -&gt; ExtractionResult {
+let mut entities = Vec::new();
+let mut relationships = Vec::new();</p>
+<pre><code>let words: Vec&amp;lt;&amp;amp;str&amp;gt; = text.split_whitespace().collect();
+let mut i = 0;
+while i &amp;lt; words.len() {
+    let word = words[i].trim_matches(|c: char| !c.is_alphanumeric());
+    if !word.is_empty()
+        &amp;amp;&amp;amp; word.chars().next().map_or(false, |c| c.is_uppercase())
+        &amp;amp;&amp;amp; word.len() &amp;gt; 1
+    {
+        let mut name = word.to_string();
+        let mut j = i + 1;
+        while j &amp;lt; words.len() {
+            let next = words[j].trim_matches(|c: char| !c.is_alphanumeric());
+            if !next.is_empty() &amp;amp;&amp;amp; next.chars().next().map_or(false, |c| c.is_uppercase()) {
+                name.push(&amp;#x27; &amp;#x27;);
+                name.push_str(next);
+                j += 1;
+            } else {
+                break;
+            }
+        }
+
+        let entity_type = if name.contains(&amp;quot;Corp&amp;quot;) || name.contains(&amp;quot;Inc&amp;quot;) {
+            &amp;quot;Organization&amp;quot;
+        } else {
+            &amp;quot;Entity&amp;quot;
+        };
+
+        entities.push(ExtractedEntity {
+            name: name.clone(),
+            entity_type: entity_type.to_string(),
+        });
+        i = j;
+    } else {
+        i += 1;
+    }
+}
+
+for pair in entities.windows(2) {
+    relationships.push(ExtractedRelationship {
+        source: pair[0].name.clone(),
+        target: pair[1].name.clone(),
+        label: &amp;quot;RELATED_TO&amp;quot;.into(),
+    });
+}
+
+ExtractionResult {
+    entities,
+    relationships,
+}
+</code></pre>
+<p>}</p>
+<p>fn mock_embed(text: &amp;str) -&gt; Vec&lt;f64&gt; {
+let mut embedding = vec![0.0f64; 8];
+for (i, byte) in text.bytes().enumerate() {
+embedding[i % 8] += (byte as f64) / 256.0;
+}
+let mag: f64 = embedding.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+if mag &gt; 0.0 {
+for x in &amp;mut embedding {
+*x /= mag;
+}
+}
+embedding
+}</p>
+<p>fn mock_generate(question: &amp;str, context: &amp;[String]) -&gt; String {
+if context.is_empty() {
+return format!("I don't have enough context to answer: {}", question);
+}
+let context_text = context.join("\n---\n");
+format!(
+"Based on the following context:\n{}\n\nAnswer: The context discusses topics related to your question: {}",
+context_text,
+question
+)
+}</p>
+<p>fn simple_chunk(text: &amp;str) -&gt; Vec&lt;Chunk&gt; {
+text.split("\n\n")
+.enumerate()
+.filter(|(<em>, s)| !s.trim().is_empty())
+.map(|(i, s)| Chunk {
+id: format!("chunk</em>{}", i),
+text: s.trim().to_string(),
+header_path: String::new(),
+})
+.collect()
+}</p>
+<p>fn main() {
+let document = r#"
+EdgeQuake is a Graph RAG engine built in Rust. It combines knowledge graphs
+with vector search to provide accurate answers to complex questions.</p>
+<p>The system was created by Alice Chen at TechCorp Research. Alice designed
+the hybrid retrieval architecture that uses both local and global search modes.</p>
+<p>Bob Martinez contributed the ingestion pipeline, which processes documents
+through four phases: chunking, extraction, embedding, and storage.</p>
+<p>TechCorp Research published a paper on the system's performance, showing
+significant improvements over traditional RAG approaches on multi-hop questions.</p>
+<p>The storage layer supports multiple backends including Amazon Neptune for
+graph storage and Amazon S3 Vectors for embedding search.
+"#;</p>
+<pre><code>println!(&amp;quot;=== Initializing EdgeQuake ===&amp;quot;);
+let mut eq = EdgeQuake::new();
+
+println!(&amp;quot;\n=== Ingesting Document ===&amp;quot;);
+eq.ingest(document);
+println!(&amp;quot;Ingestion complete.&amp;quot;);
+println!(&amp;quot;  Vector entries: {}&amp;quot;, eq.vectors.entries.len());
+println!(&amp;quot;  Graph nodes: {}&amp;quot;, eq.graph.nodes.len());
+println!(&amp;quot;  Graph edges: {}&amp;quot;, eq.graph.edges.len());
+
+println!(&amp;quot;\n=== Querying ===&amp;quot;);
+
+let q1 = &amp;quot;What is EdgeQuake?&amp;quot;;
+println!(&amp;quot;\nQ: {}&amp;quot;, q1);
+println!(&amp;quot;A: {}&amp;quot;, eq.query(q1));
+
+let q2 = &amp;quot;Who created the system?&amp;quot;;
+println!(&amp;quot;\nQ: {}&amp;quot;, q2);
+println!(&amp;quot;A: {}&amp;quot;, eq.query(q2));
+
+let q3 = &amp;quot;What storage backends are used?&amp;quot;;
+println!(&amp;quot;\nQ: {}&amp;quot;, q3);
+println!(&amp;quot;A: {}&amp;quot;, eq.query(q3));
+</code></pre>
+<p>}</code></pre>
+<div class="solution-explanation"><h4 id="explanation"><a class="header" href="#explanation">Explanation</a></h4><p>The EdgeQuake integration wires four stages:</p></p>
+<p><strong>Initialization</strong>: Three storage backends are created: <code>VectorStore</code> for
+embedding search, <code>GraphStore</code> for entity/relationship traversal, and
+<code>KVStore</code> for chunk text retrieval.</p>
+<p><strong>Ingestion Pipeline</strong>: For each chunk: (1) store the raw text in KV,
+(2) extract entities and relationships via the mock extractor, (3) store
+entities as graph nodes with a <code>source_chunk</code> property linking back to the
+originating chunk, (4) store relationships as directed graph edges, and
+(5) embed the chunk text and store the vector.</p>
+<p><strong>Query Pipeline</strong>: (1) Embed the question, (2) search vectors for the top-3
+most similar chunks, (3) optionally enhance with graph context by checking if
+any known entity names appear in the question and following their edges to find
+additional relevant chunks, (4) look up all chunk texts from KV, and (5) pass
+the assembled context to the mock generator.</p>
+<p>The key insight is the <code>source_chunk</code> property on graph nodes -- this is the
+bridge between the graph and vector stores, allowing graph traversal results
+to be linked back to retrievable text chunks.</p>
+</div>
+    </div>
+  </details>
+</section>
+<section class="exercise-tests" id="full-edgequake-tests" data-mode="local">
+  <h3 id="-tests"><a class="header" href="#-tests">🧪 Tests</a></h3>
+  <div class="test-actions">
+    <div class="local-test-info"><p>Run these tests locally with:</p><pre><code>cargo test</code></pre></div>
+  </div>
+  <div class="test-results" id="results-full-edgequake" hidden></div>
+  <details class="tests-code"><summary>View Test Code</summary>
+    <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+<pre><code>fn sample_document() -&amp;gt; &amp;amp;&amp;#x27;static str {
+    &amp;quot;Alice works at TechCorp in Seattle.\n\nBob collaborates with Alice on the GraphRAG project.\n\nTechCorp develops AI software for enterprise clients.&amp;quot;
+}
+
+#[test]
+fn test_initialization() {
+    let eq = EdgeQuake::new();
+    assert_eq!(eq.vectors.entries.len(), 0);
+    assert_eq!(eq.graph.nodes.len(), 0);
+    assert_eq!(eq.graph.edges.len(), 0);
+}
+
+#[test]
+fn test_ingest_creates_vectors() {
+    let mut eq = EdgeQuake::new();
+    eq.ingest(sample_document());
+    assert!(eq.vectors.entries.len() &amp;gt; 0, &amp;quot;Should create vector entries&amp;quot;);
+}
+
+#[test]
+fn test_ingest_creates_graph_nodes() {
+    let mut eq = EdgeQuake::new();
+    eq.ingest(sample_document());
+    assert!(eq.graph.nodes.len() &amp;gt; 0, &amp;quot;Should create graph nodes&amp;quot;);
+}
+
+#[test]
+fn test_ingest_stores_chunk_text() {
+    let mut eq = EdgeQuake::new();
+    eq.ingest(sample_document());
+    // At least chunk_0 should exist
+    assert!(eq.kv.get(&amp;quot;chunk_0&amp;quot;).is_some(), &amp;quot;Should store chunk text in KV&amp;quot;);
+}
+
+#[test]
+fn test_query_returns_answer() {
+    let mut eq = EdgeQuake::new();
+    eq.ingest(sample_document());
+    let answer = eq.query(&amp;quot;What does Alice do?&amp;quot;);
+    assert!(!answer.is_empty(), &amp;quot;Should return a non-empty answer&amp;quot;);
+    assert!(!answer.contains(&amp;quot;don&amp;#x27;t have enough context&amp;quot;),
+        &amp;quot;Should find relevant context&amp;quot;);
+}
+
+#[test]
+fn test_query_empty_store() {
+    let eq = EdgeQuake::new();
+    let answer = eq.query(&amp;quot;What is GraphRAG?&amp;quot;);
+    assert!(answer.contains(&amp;quot;don&amp;#x27;t have enough context&amp;quot;),
+        &amp;quot;Empty store should indicate insufficient context&amp;quot;);
+}
+
+#[test]
+fn test_end_to_end_pipeline() {
+    let mut eq = EdgeQuake::new();
+    let doc = &amp;quot;Rust is a systems programming language.\n\nRust provides memory safety without garbage collection.&amp;quot;;
+    eq.ingest(doc);
+
+    assert!(eq.vectors.entries.len() &amp;gt;= 2, &amp;quot;Should have at least 2 chunks&amp;quot;);
+
+    let answer = eq.query(&amp;quot;What is Rust?&amp;quot;);
+    assert!(answer.contains(&amp;quot;context&amp;quot;), &amp;quot;Answer should reference context&amp;quot;);
+}
+
+#[test]
+fn test_mock_embed_deterministic() {
+    let e1 = mock_embed(&amp;quot;hello world&amp;quot;);
+    let e2 = mock_embed(&amp;quot;hello world&amp;quot;);
+    assert_eq!(e1, e2, &amp;quot;Same input should produce same embedding&amp;quot;);
+}
+
+#[test]
+fn test_mock_embed_different_inputs() {
+    let e1 = mock_embed(&amp;quot;hello&amp;quot;);
+    let e2 = mock_embed(&amp;quot;goodbye&amp;quot;);
+    assert_ne!(e1, e2, &amp;quot;Different inputs should produce different embeddings&amp;quot;);
+}
+
+#[test]
+fn test_simple_chunk_splits_on_double_newline() {
+    let text = &amp;quot;First paragraph.\n\nSecond paragraph.\n\nThird paragraph.&amp;quot;;
+    let chunks = simple_chunk(text);
+    assert_eq!(chunks.len(), 3);
+    assert_eq!(chunks[0].text, &amp;quot;First paragraph.&amp;quot;);
+    assert_eq!(chunks[1].text, &amp;quot;Second paragraph.&amp;quot;);
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</code></pre></p>
+  </details>
+</section>
+<section class="exercise-reflection" id="full-edgequake-reflection">
+  <h3 id="-reflection"><a class="header" href="#-reflection">🤔 Reflection</a></h3>
+  <ul>
+    <li>What is the weakest link in this pipeline? Which component would you improve first for production use?</li>
+    <li>How would you add observability (logging, metrics, tracing) to each pipeline stage?</li>
+    <li>If you replaced the mock functions with real LLM/embedding API calls, what error handling would you need to add?</li>
+    <li>How does this simplified system compare to EdgeQuake&#x27;s actual 13-crate architecture? What is missing?</li>
+  </ul>
+</section>
+<footer class="exercise-footer">
+  <button class="btn btn-complete" data-exercise-id="full-edgequake">✓ Mark Complete</button>
+</footer>
+</article>
+</div>
+<h1 id="full-edgequake-integration-1"><a class="header" href="#full-edgequake-integration-1">Full EdgeQuake Integration</a></h1>
+<p>This is the capstone exercise. You will wire together all the components from
+previous chapters -- vector storage, graph storage, chunking, extraction, query
+mode selection, and retrieval -- into a simplified but complete Graph RAG system.
+The goal is to ingest a document and successfully query it end-to-end.</p>
+<p>::: objectives
+thinking:</p>
+<ul>
+<li>Understand how all Graph RAG components compose into a pipeline</li>
+<li>Reason about the flow of data from raw text to generated answer
+doing:</li>
+<li>Initialize in-memory storage layers (vector + graph + key-value)</li>
+<li>Wire the ingestion pipeline (chunk -&gt; extract -&gt; embed -&gt; store)</li>
+<li>Wire the query engine (mode select -&gt; retrieve -&gt; assemble context -&gt; answer)</li>
+<li>Run an end-to-end test: ingest then query
+:::</li>
+</ul>
+<p>::: discussion</p>
+<ul>
+<li>What is the minimum viable Graph RAG system? Which components are essential vs nice-to-have?</li>
+<li>How does EdgeQuake's 13-crate workspace map to the layers in this simplified version?</li>
+<li>What would break first if you scaled this to millions of documents?
+:::</li>
+</ul>
+<p>::: starter file="src/main.rs"</p>
+<pre><pre class="playground"><code class="language-rust">use std::collections::HashMap;
+use std::cmp::Ordering;
+
+// ============================================================
+// Storage Layer (simplified from Ch01 + Ch04)
+// ============================================================
+
+#[derive(Debug, Clone)]
+struct VectorEntry {
+    id: String,
+    text: String,
+    embedding: Vec&lt;f64&gt;,
+    metadata: HashMap&lt;String, String&gt;,
+}
+
+struct VectorStore {
+    entries: Vec&lt;VectorEntry&gt;,
+}
+
+impl VectorStore {
+    fn new() -&gt; Self { VectorStore { entries: Vec::new() } }
+
+    fn insert(&amp;mut self, entry: VectorEntry) {
+        self.entries.push(entry);
+    }
+
+    fn search(&amp;self, query_embedding: &amp;[f64], top_k: usize) -&gt; Vec&lt;(String, f64)&gt; {
+        let mut results: Vec&lt;(String, f64)&gt; = self.entries.iter()
+            .map(|e| (e.id.clone(), cosine_similarity(query_embedding, &amp;e.embedding)))
+            .collect();
+        results.sort_by(|a, b| b.1.partial_cmp(&amp;a.1).unwrap_or(Ordering::Equal));
+        results.truncate(top_k);
+        results
+    }
+}
+
+fn cosine_similarity(a: &amp;[f64], b: &amp;[f64]) -&gt; f64 {
+    let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let mag_a: f64 = a.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+    let mag_b: f64 = b.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+    if mag_a == 0.0 || mag_b == 0.0 { 0.0 } else { dot / (mag_a * mag_b) }
+}
+
+#[derive(Debug, Clone)]
+struct GraphNode {
+    id: String,
+    label: String,
+    properties: HashMap&lt;String, String&gt;,
+}
+
+#[derive(Debug, Clone)]
+struct GraphEdge {
+    source: String,
+    target: String,
+    label: String,
+}
+
+struct GraphStore {
+    nodes: HashMap&lt;String, GraphNode&gt;,
+    edges: Vec&lt;GraphEdge&gt;,
+    adjacency: HashMap&lt;String, Vec&lt;usize&gt;&gt;, // node_id -&gt; edge indices
+}
+
+impl GraphStore {
+    fn new() -&gt; Self {
+        GraphStore {
+            nodes: HashMap::new(),
+            edges: Vec::new(),
+            adjacency: HashMap::new(),
+        }
+    }
+
+    fn upsert_node(&amp;mut self, node: GraphNode) {
+        self.nodes.insert(node.id.clone(), node);
+    }
+
+    fn upsert_edge(&amp;mut self, edge: GraphEdge) {
+        let idx = self.edges.len();
+        self.adjacency.entry(edge.source.clone()).or_default().push(idx);
+        self.edges.push(edge);
+    }
+
+    fn get_neighbors(&amp;self, node_id: &amp;str) -&gt; Vec&lt;&amp;GraphEdge&gt; {
+        self.adjacency.get(node_id)
+            .map(|indices| indices.iter().filter_map(|&amp;i| self.edges.get(i)).collect())
+            .unwrap_or_default()
+    }
+}
+
+/// Simple key-value store for chunk text and metadata.
+struct KVStore {
+    data: HashMap&lt;String, String&gt;,
+}
+
+impl KVStore {
+    fn new() -&gt; Self { KVStore { data: HashMap::new() } }
+    fn set(&amp;mut self, key: String, value: String) { self.data.insert(key, value); }
+    fn get(&amp;self, key: &amp;str) -&gt; Option&lt;&amp;String&gt; { self.data.get(key) }
+}
+
+// ============================================================
+// Ingestion Pipeline
+// ============================================================
+
+#[derive(Debug, Clone)]
+struct Chunk {
+    id: String,
+    text: String,
+    header_path: String,
+}
+
+#[derive(Debug, Clone)]
+struct ExtractedEntity {
+    name: String,
+    entity_type: String,
+}
+
+#[derive(Debug, Clone)]
+struct ExtractedRelationship {
+    source: String,
+    target: String,
+    label: String,
+}
+
+#[derive(Debug)]
+struct ExtractionResult {
+    entities: Vec&lt;ExtractedEntity&gt;,
+    relationships: Vec&lt;ExtractedRelationship&gt;,
+}
+
+/// The main EdgeQuake system that ties everything together.
+struct EdgeQuake {
+    vectors: VectorStore,
+    graph: GraphStore,
+    kv: KVStore,
+}
+
+impl EdgeQuake {
+    fn new() -&gt; Self {
+        // TODO: Initialize all three storage layers
+        todo!("Implement EdgeQuake::new")
+    }
+
+    /// Ingest a document: chunk it, extract entities, embed chunks, store everything.
+    fn ingest(&amp;mut self, document: &amp;str) {
+        // TODO: Implement the ingestion pipeline
+        //
+        // Step 1: Chunk the document.
+        // Use a simple chunking strategy (split by double newlines or
+        // a fixed size -- you can simplify from Ch02).
+        //
+        // Step 2: For each chunk, extract entities and relationships.
+        // Use mock_extract() below instead of a real LLM.
+        //
+        // Step 3: For each chunk, generate an embedding.
+        // Use mock_embed() below instead of a real embedding model.
+        //
+        // Step 4: Store everything:
+        //   - Chunk text in KVStore (key: chunk_id)
+        //   - Chunk embedding in VectorStore
+        //   - Entities as nodes in GraphStore
+        //   - Relationships as edges in GraphStore
+        todo!("Implement ingest")
+    }
+
+    /// Query the system: select mode, retrieve context, generate answer.
+    fn query(&amp;self, question: &amp;str) -&gt; String {
+        // TODO: Implement the query pipeline
+        //
+        // Step 1: Select query mode using simple heuristics (from Ch06).
+        // For this exercise, you can simplify to just two modes:
+        //   - "local" if the question mentions a known entity
+        //   - "naive" otherwise
+        //
+        // Step 2: Retrieve relevant chunks.
+        //   - Generate a query embedding using mock_embed().
+        //   - Search the VectorStore for top-3 similar chunks.
+        //   - If mode is "local", also get graph neighbors for any
+        //     mentioned entity and include their connected chunks.
+        //
+        // Step 3: Assemble context from retrieved chunk texts.
+        //   - Look up chunk text from KVStore using the chunk IDs.
+        //
+        // Step 4: Generate answer using mock_generate().
+        //   - Pass the question and assembled context.
+        //
+        // Return the generated answer.
+        todo!("Implement query")
+    }
+}
+
+// ============================================================
+// Mock functions (simulating LLM and embedding model)
+// ============================================================
+
+/// Mock entity extraction. Extracts simple patterns from text.
+fn mock_extract(text: &amp;str) -&gt; ExtractionResult {
+    let mut entities = Vec::new();
+    let mut relationships = Vec::new();
+
+    // Simple heuristic: treat capitalized multi-word phrases as entities
+    let words: Vec&lt;&amp;str&gt; = text.split_whitespace().collect();
+    let mut i = 0;
+    while i &lt; words.len() {
+        let word = words[i].trim_matches(|c: char| !c.is_alphanumeric());
+        if !word.is_empty()
+            &amp;&amp; word.chars().next().map_or(false, |c| c.is_uppercase())
+            &amp;&amp; word.len() &gt; 1
+        {
+            // Check if next word is also capitalized (multi-word entity)
+            let mut name = word.to_string();
+            let mut j = i + 1;
+            while j &lt; words.len() {
+                let next = words[j].trim_matches(|c: char| !c.is_alphanumeric());
+                if !next.is_empty() &amp;&amp; next.chars().next().map_or(false, |c| c.is_uppercase()) {
+                    name.push(' ');
+                    name.push_str(next);
+                    j += 1;
+                } else {
+                    break;
+                }
+            }
+
+            let entity_type = if name.contains("Corp") || name.contains("Inc") {
+                "Organization"
+            } else {
+                "Entity"
+            };
+
+            entities.push(ExtractedEntity {
+                name: name.clone(),
+                entity_type: entity_type.to_string(),
+            });
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+
+    // Create relationships between consecutive entities
+    for pair in entities.windows(2) {
+        relationships.push(ExtractedRelationship {
+            source: pair[0].name.clone(),
+            target: pair[1].name.clone(),
+            label: "RELATED_TO".into(),
+        });
+    }
+
+    ExtractionResult {
+        entities,
+        relationships,
+    }
+}
+
+/// Mock embedding function. Creates a deterministic embedding from text.
+fn mock_embed(text: &amp;str) -&gt; Vec&lt;f64&gt; {
+    // Simple hash-based embedding (NOT a real embedding -- just for testing)
+    let mut embedding = vec![0.0f64; 8];
+    for (i, byte) in text.bytes().enumerate() {
+        embedding[i % 8] += (byte as f64) / 256.0;
+    }
+    // Normalize
+    let mag: f64 = embedding.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+    if mag &gt; 0.0 {
+        for x in &amp;mut embedding {
+            *x /= mag;
+        }
+    }
+    embedding
+}
+
+/// Mock answer generation. Concatenates context with the question.
+fn mock_generate(question: &amp;str, context: &amp;[String]) -&gt; String {
+    if context.is_empty() {
+        return format!("I don't have enough context to answer: {}", question);
+    }
+    let context_text = context.join("\n---\n");
+    format!(
+        "Based on the following context:\n{}\n\nAnswer: The context discusses topics related to your question: {}",
+        context_text,
+        question
+    )
+}
+
+/// Simple chunker: split on double newlines, assign IDs.
+fn simple_chunk(text: &amp;str) -&gt; Vec&lt;Chunk&gt; {
+    text.split("\n\n")
+        .enumerate()
+        .filter(|(_, s)| !s.trim().is_empty())
+        .map(|(i, s)| Chunk {
+            id: format!("chunk_{}", i),
+            text: s.trim().to_string(),
+            header_path: String::new(),
+        })
+        .collect()
+}
+
+fn main() {
+    let document = r#"
+EdgeQuake is a Graph RAG engine built in Rust. It combines knowledge graphs
+with vector search to provide accurate answers to complex questions.
+
+The system was created by Alice Chen at TechCorp Research. Alice designed
+the hybrid retrieval architecture that uses both local and global search modes.
+
+Bob Martinez contributed the ingestion pipeline, which processes documents
+through four phases: chunking, extraction, embedding, and storage.
+
+TechCorp Research published a paper on the system's performance, showing
+significant improvements over traditional RAG approaches on multi-hop questions.
+
+The storage layer supports multiple backends including Amazon Neptune for
+graph storage and Amazon S3 Vectors for embedding search.
+"#;
+
+    println!("=== Initializing EdgeQuake ===");
+    let mut eq = EdgeQuake::new();
+
+    println!("\n=== Ingesting Document ===");
+    eq.ingest(document);
+    println!("Ingestion complete.");
+    println!("  Vector entries: {}", eq.vectors.entries.len());
+    println!("  Graph nodes: {}", eq.graph.nodes.len());
+    println!("  Graph edges: {}", eq.graph.edges.len());
+
+    println!("\n=== Querying ===");
+
+    let q1 = "What is EdgeQuake?";
+    println!("\nQ: {}", q1);
+    println!("A: {}", eq.query(q1));
+
+    let q2 = "Who created the system?";
+    println!("\nQ: {}", q2);
+    println!("A: {}", eq.query(q2));
+
+    let q3 = "What storage backends are used?";
+    println!("\nQ: {}", q3);
+    println!("A: {}", eq.query(q3));
+}</code></pre></pre>
+<p>:::</p>
+<p>::: hint level=1 title="Ingestion pipeline wiring"
+The ingest method should chain: chunk -&gt; extract -&gt; embed -&gt; store.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn ingest(&amp;mut self, document: &amp;str) {
+    let chunks = simple_chunk(document);
+
+    for chunk in &amp;chunks {
+        // Store chunk text in KV
+        self.kv.set(chunk.id.clone(), chunk.text.clone());
+
+        // Extract entities and relationships
+        let extraction = mock_extract(&amp;chunk.text);
+
+        // Store entities as graph nodes
+        for entity in &amp;extraction.entities {
+            self.graph.upsert_node(GraphNode {
+                id: entity.name.to_lowercase().replace(' ', "_"),
+                label: entity.entity_type.clone(),
+                properties: HashMap::from([("name".into(), entity.name.clone())]),
+            });
+        }
+        // ... continue with edges and vector storage
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: hint level=2 title="Query pipeline wiring"
+The query method should: embed the question, search vectors, look up text,
+and generate.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn query(&amp;self, question: &amp;str) -&gt; String {
+    let query_embedding = mock_embed(question);
+    let results = self.vectors.search(&amp;query_embedding, 3);
+
+    let mut context: Vec&lt;String&gt; = Vec::new();
+    for (chunk_id, _score) in &amp;results {
+        if let Some(text) = self.kv.get(chunk_id) {
+            context.push(text.clone());
+        }
+    }
+
+    mock_generate(question, &amp;context)
+}
+<span class="boring">}</span></code></pre></pre>
+<p>For local mode enhancement, check if any known graph node names appear in
+the question, get their neighbors, and include connected chunk context.
+:::</p>
+<p>::: solution</p>
+<pre><pre class="playground"><code class="language-rust">use std::collections::HashMap;
+use std::cmp::Ordering;
+
+#[derive(Debug, Clone)]
+struct VectorEntry {
+    id: String,
+    text: String,
+    embedding: Vec&lt;f64&gt;,
+    metadata: HashMap&lt;String, String&gt;,
+}
+
+struct VectorStore {
+    entries: Vec&lt;VectorEntry&gt;,
+}
+
+impl VectorStore {
+    fn new() -&gt; Self { VectorStore { entries: Vec::new() } }
+
+    fn insert(&amp;mut self, entry: VectorEntry) {
+        self.entries.push(entry);
+    }
+
+    fn search(&amp;self, query_embedding: &amp;[f64], top_k: usize) -&gt; Vec&lt;(String, f64)&gt; {
+        let mut results: Vec&lt;(String, f64)&gt; = self.entries.iter()
+            .map(|e| (e.id.clone(), cosine_similarity(query_embedding, &amp;e.embedding)))
+            .collect();
+        results.sort_by(|a, b| b.1.partial_cmp(&amp;a.1).unwrap_or(Ordering::Equal));
+        results.truncate(top_k);
+        results
+    }
+}
+
+fn cosine_similarity(a: &amp;[f64], b: &amp;[f64]) -&gt; f64 {
+    let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let mag_a: f64 = a.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+    let mag_b: f64 = b.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+    if mag_a == 0.0 || mag_b == 0.0 { 0.0 } else { dot / (mag_a * mag_b) }
+}
+
+#[derive(Debug, Clone)]
+struct GraphNode {
+    id: String,
+    label: String,
+    properties: HashMap&lt;String, String&gt;,
+}
+
+#[derive(Debug, Clone)]
+struct GraphEdge {
+    source: String,
+    target: String,
+    label: String,
+}
+
+struct GraphStore {
+    nodes: HashMap&lt;String, GraphNode&gt;,
+    edges: Vec&lt;GraphEdge&gt;,
+    adjacency: HashMap&lt;String, Vec&lt;usize&gt;&gt;,
+}
+
+impl GraphStore {
+    fn new() -&gt; Self {
+        GraphStore {
+            nodes: HashMap::new(),
+            edges: Vec::new(),
+            adjacency: HashMap::new(),
+        }
+    }
+
+    fn upsert_node(&amp;mut self, node: GraphNode) {
+        self.nodes.insert(node.id.clone(), node);
+    }
+
+    fn upsert_edge(&amp;mut self, edge: GraphEdge) {
+        let idx = self.edges.len();
+        self.adjacency.entry(edge.source.clone()).or_default().push(idx);
+        self.edges.push(edge);
+    }
+
+    fn get_neighbors(&amp;self, node_id: &amp;str) -&gt; Vec&lt;&amp;GraphEdge&gt; {
+        self.adjacency.get(node_id)
+            .map(|indices| indices.iter().filter_map(|&amp;i| self.edges.get(i)).collect())
+            .unwrap_or_default()
+    }
+}
+
+struct KVStore {
+    data: HashMap&lt;String, String&gt;,
+}
+
+impl KVStore {
+    fn new() -&gt; Self { KVStore { data: HashMap::new() } }
+    fn set(&amp;mut self, key: String, value: String) { self.data.insert(key, value); }
+    fn get(&amp;self, key: &amp;str) -&gt; Option&lt;&amp;String&gt; { self.data.get(key) }
+}
+
+#[derive(Debug, Clone)]
+struct Chunk {
+    id: String,
+    text: String,
+    header_path: String,
+}
+
+#[derive(Debug, Clone)]
+struct ExtractedEntity {
+    name: String,
+    entity_type: String,
+}
+
+#[derive(Debug, Clone)]
+struct ExtractedRelationship {
+    source: String,
+    target: String,
+    label: String,
+}
+
+#[derive(Debug)]
+struct ExtractionResult {
+    entities: Vec&lt;ExtractedEntity&gt;,
+    relationships: Vec&lt;ExtractedRelationship&gt;,
+}
+
+struct EdgeQuake {
+    vectors: VectorStore,
+    graph: GraphStore,
+    kv: KVStore,
+}
+
+impl EdgeQuake {
+    fn new() -&gt; Self {
+        EdgeQuake {
+            vectors: VectorStore::new(),
+            graph: GraphStore::new(),
+            kv: KVStore::new(),
+        }
+    }
+
+    fn ingest(&amp;mut self, document: &amp;str) {
+        let chunks = simple_chunk(document);
+
+        for chunk in &amp;chunks {
+            // Step 1: Store chunk text in KV store
+            self.kv.set(chunk.id.clone(), chunk.text.clone());
+
+            // Step 2: Extract entities and relationships
+            let extraction = mock_extract(&amp;chunk.text);
+
+            // Step 3: Store entities as graph nodes
+            for entity in &amp;extraction.entities {
+                let node_id = entity.name.to_lowercase().replace(' ', "_");
+                self.graph.upsert_node(GraphNode {
+                    id: node_id.clone(),
+                    label: entity.entity_type.clone(),
+                    properties: HashMap::from([
+                        ("name".into(), entity.name.clone()),
+                        ("source_chunk".into(), chunk.id.clone()),
+                    ]),
+                });
+            }
+
+            // Step 4: Store relationships as graph edges
+            for rel in &amp;extraction.relationships {
+                let source_id = rel.source.to_lowercase().replace(' ', "_");
+                let target_id = rel.target.to_lowercase().replace(' ', "_");
+                self.graph.upsert_edge(GraphEdge {
+                    source: source_id,
+                    target: target_id,
+                    label: rel.label.clone(),
+                });
+            }
+
+            // Step 5: Embed and store the chunk vector
+            let embedding = mock_embed(&amp;chunk.text);
+            self.vectors.insert(VectorEntry {
+                id: chunk.id.clone(),
+                text: chunk.text.clone(),
+                embedding,
+                metadata: HashMap::new(),
+            });
+        }
+    }
+
+    fn query(&amp;self, question: &amp;str) -&gt; String {
+        // Step 1: Embed the query
+        let query_embedding = mock_embed(question);
+
+        // Step 2: Vector search for relevant chunks
+        let vector_results = self.vectors.search(&amp;query_embedding, 3);
+
+        // Step 3: Collect chunk IDs from vector search
+        let mut chunk_ids: Vec&lt;String&gt; = vector_results.iter()
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        // Step 4: Check for entity mentions (simple local mode)
+        let question_lower = question.to_lowercase();
+        for (node_id, node) in &amp;self.graph.nodes {
+            let name = node.properties.get("name")
+                .map(|n| n.to_lowercase())
+                .unwrap_or_default();
+            if !name.is_empty() &amp;&amp; question_lower.contains(&amp;name) {
+                // Found a mentioned entity -- get its neighbors
+                let neighbors = self.graph.get_neighbors(node_id);
+                for edge in neighbors {
+                    // Look up the target node's source chunk
+                    if let Some(target_node) = self.graph.nodes.get(&amp;edge.target) {
+                        if let Some(source_chunk) = target_node.properties.get("source_chunk") {
+                            if !chunk_ids.contains(source_chunk) {
+                                chunk_ids.push(source_chunk.clone());
+                            }
+                        }
+                    }
+                }
+                // Also include the entity's own source chunk
+                if let Some(source_chunk) = node.properties.get("source_chunk") {
+                    if !chunk_ids.contains(source_chunk) {
+                        chunk_ids.push(source_chunk.clone());
+                    }
+                }
+            }
+        }
+
+        // Step 5: Assemble context from chunk texts
+        let context: Vec&lt;String&gt; = chunk_ids.iter()
+            .filter_map(|id| self.kv.get(id).cloned())
+            .collect();
+
+        // Step 6: Generate answer
+        mock_generate(question, &amp;context)
+    }
+}
+
+fn mock_extract(text: &amp;str) -&gt; ExtractionResult {
+    let mut entities = Vec::new();
+    let mut relationships = Vec::new();
+
+    let words: Vec&lt;&amp;str&gt; = text.split_whitespace().collect();
+    let mut i = 0;
+    while i &lt; words.len() {
+        let word = words[i].trim_matches(|c: char| !c.is_alphanumeric());
+        if !word.is_empty()
+            &amp;&amp; word.chars().next().map_or(false, |c| c.is_uppercase())
+            &amp;&amp; word.len() &gt; 1
+        {
+            let mut name = word.to_string();
+            let mut j = i + 1;
+            while j &lt; words.len() {
+                let next = words[j].trim_matches(|c: char| !c.is_alphanumeric());
+                if !next.is_empty() &amp;&amp; next.chars().next().map_or(false, |c| c.is_uppercase()) {
+                    name.push(' ');
+                    name.push_str(next);
+                    j += 1;
+                } else {
+                    break;
+                }
+            }
+
+            let entity_type = if name.contains("Corp") || name.contains("Inc") {
+                "Organization"
+            } else {
+                "Entity"
+            };
+
+            entities.push(ExtractedEntity {
+                name: name.clone(),
+                entity_type: entity_type.to_string(),
+            });
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+
+    for pair in entities.windows(2) {
+        relationships.push(ExtractedRelationship {
+            source: pair[0].name.clone(),
+            target: pair[1].name.clone(),
+            label: "RELATED_TO".into(),
+        });
+    }
+
+    ExtractionResult {
+        entities,
+        relationships,
+    }
+}
+
+fn mock_embed(text: &amp;str) -&gt; Vec&lt;f64&gt; {
+    let mut embedding = vec![0.0f64; 8];
+    for (i, byte) in text.bytes().enumerate() {
+        embedding[i % 8] += (byte as f64) / 256.0;
+    }
+    let mag: f64 = embedding.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+    if mag &gt; 0.0 {
+        for x in &amp;mut embedding {
+            *x /= mag;
+        }
+    }
+    embedding
+}
+
+fn mock_generate(question: &amp;str, context: &amp;[String]) -&gt; String {
+    if context.is_empty() {
+        return format!("I don't have enough context to answer: {}", question);
+    }
+    let context_text = context.join("\n---\n");
+    format!(
+        "Based on the following context:\n{}\n\nAnswer: The context discusses topics related to your question: {}",
+        context_text,
+        question
+    )
+}
+
+fn simple_chunk(text: &amp;str) -&gt; Vec&lt;Chunk&gt; {
+    text.split("\n\n")
+        .enumerate()
+        .filter(|(_, s)| !s.trim().is_empty())
+        .map(|(i, s)| Chunk {
+            id: format!("chunk_{}", i),
+            text: s.trim().to_string(),
+            header_path: String::new(),
+        })
+        .collect()
+}
+
+fn main() {
+    let document = r#"
+EdgeQuake is a Graph RAG engine built in Rust. It combines knowledge graphs
+with vector search to provide accurate answers to complex questions.
+
+The system was created by Alice Chen at TechCorp Research. Alice designed
+the hybrid retrieval architecture that uses both local and global search modes.
+
+Bob Martinez contributed the ingestion pipeline, which processes documents
+through four phases: chunking, extraction, embedding, and storage.
+
+TechCorp Research published a paper on the system's performance, showing
+significant improvements over traditional RAG approaches on multi-hop questions.
+
+The storage layer supports multiple backends including Amazon Neptune for
+graph storage and Amazon S3 Vectors for embedding search.
+"#;
+
+    println!("=== Initializing EdgeQuake ===");
+    let mut eq = EdgeQuake::new();
+
+    println!("\n=== Ingesting Document ===");
+    eq.ingest(document);
+    println!("Ingestion complete.");
+    println!("  Vector entries: {}", eq.vectors.entries.len());
+    println!("  Graph nodes: {}", eq.graph.nodes.len());
+    println!("  Graph edges: {}", eq.graph.edges.len());
+
+    println!("\n=== Querying ===");
+
+    let q1 = "What is EdgeQuake?";
+    println!("\nQ: {}", q1);
+    println!("A: {}", eq.query(q1));
+
+    let q2 = "Who created the system?";
+    println!("\nQ: {}", q2);
+    println!("A: {}", eq.query(q2));
+
+    let q3 = "What storage backends are used?";
+    println!("\nQ: {}", q3);
+    println!("A: {}", eq.query(q3));
+}</code></pre></pre>
+<h3 id="explanation-1"><a class="header" href="#explanation-1">Explanation</a></h3>
+<p>The EdgeQuake integration wires four stages:</p>
+<p><strong>Initialization</strong>: Three storage backends are created: <code>VectorStore</code> for
+embedding search, <code>GraphStore</code> for entity/relationship traversal, and
+<code>KVStore</code> for chunk text retrieval.</p>
+<p><strong>Ingestion Pipeline</strong>: For each chunk: (1) store the raw text in KV,
+(2) extract entities and relationships via the mock extractor, (3) store
+entities as graph nodes with a <code>source_chunk</code> property linking back to the
+originating chunk, (4) store relationships as directed graph edges, and
+(5) embed the chunk text and store the vector.</p>
+<p><strong>Query Pipeline</strong>: (1) Embed the question, (2) search vectors for the top-3
+most similar chunks, (3) optionally enhance with graph context by checking if
+any known entity names appear in the question and following their edges to find
+additional relevant chunks, (4) look up all chunk texts from KV, and (5) pass
+the assembled context to the mock generator.</p>
+<p>The key insight is the <code>source_chunk</code> property on graph nodes -- this is the
+bridge between the graph and vector stores, allowing graph traversal results
+to be linked back to retrievable text chunks.
+:::</p>
+<p>::: tests mode=local</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_document() -&gt; &amp;'static str {
+        "Alice works at TechCorp in Seattle.\n\nBob collaborates with Alice on the GraphRAG project.\n\nTechCorp develops AI software for enterprise clients."
+    }
+
+    #[test]
+    fn test_initialization() {
+        let eq = EdgeQuake::new();
+        assert_eq!(eq.vectors.entries.len(), 0);
+        assert_eq!(eq.graph.nodes.len(), 0);
+        assert_eq!(eq.graph.edges.len(), 0);
+    }
+
+    #[test]
+    fn test_ingest_creates_vectors() {
+        let mut eq = EdgeQuake::new();
+        eq.ingest(sample_document());
+        assert!(eq.vectors.entries.len() &gt; 0, "Should create vector entries");
+    }
+
+    #[test]
+    fn test_ingest_creates_graph_nodes() {
+        let mut eq = EdgeQuake::new();
+        eq.ingest(sample_document());
+        assert!(eq.graph.nodes.len() &gt; 0, "Should create graph nodes");
+    }
+
+    #[test]
+    fn test_ingest_stores_chunk_text() {
+        let mut eq = EdgeQuake::new();
+        eq.ingest(sample_document());
+        // At least chunk_0 should exist
+        assert!(eq.kv.get("chunk_0").is_some(), "Should store chunk text in KV");
+    }
+
+    #[test]
+    fn test_query_returns_answer() {
+        let mut eq = EdgeQuake::new();
+        eq.ingest(sample_document());
+        let answer = eq.query("What does Alice do?");
+        assert!(!answer.is_empty(), "Should return a non-empty answer");
+        assert!(!answer.contains("don't have enough context"),
+            "Should find relevant context");
+    }
+
+    #[test]
+    fn test_query_empty_store() {
+        let eq = EdgeQuake::new();
+        let answer = eq.query("What is GraphRAG?");
+        assert!(answer.contains("don't have enough context"),
+            "Empty store should indicate insufficient context");
+    }
+
+    #[test]
+    fn test_end_to_end_pipeline() {
+        let mut eq = EdgeQuake::new();
+        let doc = "Rust is a systems programming language.\n\nRust provides memory safety without garbage collection.";
+        eq.ingest(doc);
+
+        assert!(eq.vectors.entries.len() &gt;= 2, "Should have at least 2 chunks");
+
+        let answer = eq.query("What is Rust?");
+        assert!(answer.contains("context"), "Answer should reference context");
+    }
+
+    #[test]
+    fn test_mock_embed_deterministic() {
+        let e1 = mock_embed("hello world");
+        let e2 = mock_embed("hello world");
+        assert_eq!(e1, e2, "Same input should produce same embedding");
+    }
+
+    #[test]
+    fn test_mock_embed_different_inputs() {
+        let e1 = mock_embed("hello");
+        let e2 = mock_embed("goodbye");
+        assert_ne!(e1, e2, "Different inputs should produce different embeddings");
+    }
+
+    #[test]
+    fn test_simple_chunk_splits_on_double_newline() {
+        let text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.";
+        let chunks = simple_chunk(text);
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0].text, "First paragraph.");
+        assert_eq!(chunks[1].text, "Second paragraph.");
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: reflection</p>
+<ul>
+<li>What is the weakest link in this pipeline? Which component would you improve first for production use?</li>
+<li>How would you add observability (logging, metrics, tracing) to each pipeline stage?</li>
+<li>If you replaced the mock functions with real LLM/embedding API calls, what error handling would you need to add?</li>
+<li>How does this simplified system compare to EdgeQuake's actual 13-crate architecture? What is missing?
+:::</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../part2-graph/ch07-03-request-flow.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../part3-production/ch08-storage-backends.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../part2-graph/ch07-03-request-flow.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../part3-production/ch08-storage-backends.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../../ace.js"></script>
+        <script src="../../mode-rust.js"></script>
+        <script src="../../editor.js"></script>
+        <script src="../../theme-dawn.js"></script>
+        <script src="../../theme-tomorrow_night.js"></script>
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

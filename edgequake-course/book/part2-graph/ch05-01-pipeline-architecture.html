@@ -1,0 +1,529 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Pipeline Architecture - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="51-pipeline-architecture"><a class="header" href="#51-pipeline-architecture">5.1 Pipeline Architecture</a></h2>
+<p>EdgeQuake's ingestion pipeline lives in the <code>edgequake-pipeline</code> crate
+and processes documents through five sequential stages. Each stage can
+be independently enabled or disabled via <code>PipelineConfig</code>.</p>
+<h3 id="the-five-stages"><a class="header" href="#the-five-stages">The Five Stages</a></h3>
+<pre class="mermaid">flowchart LR
+    D[&quot;Raw Document&quot;] --&gt; C[&quot;1. Chunk&quot;]
+    C --&gt; E[&quot;2. Extract&quot;]
+    E --&gt; N[&quot;3. Normalize&quot;]
+    N --&gt; EM[&quot;4. Embed&quot;]
+    EM --&gt; S[&quot;5. Store&quot;]
+
+    C -.-&gt;|&quot;TextChunk[]&quot;| E
+    E -.-&gt;|&quot;ExtractionResult[]&quot;| N
+    N -.-&gt;|&quot;Normalized Entities&lt;br/&gt;+ Relationships&quot;| EM
+    EM -.-&gt;|&quot;Entities + Embeddings&quot;| S
+
+    S --&gt; GS[&quot;GraphStorage&quot;]
+    S --&gt; VS[&quot;VectorStorage&quot;]
+    S --&gt; KV[&quot;KVStorage&quot;]
+</pre>
+<p>Let us walk through each stage.</p>
+<h4 id="stage-1-chunk"><a class="header" href="#stage-1-chunk">Stage 1: Chunk</a></h4>
+<p>The document is split into manageable segments. Chunking is covered in
+detail in Chapter 2. The key parameters are <code>chunk_size</code> (in tokens)
+and <code>chunk_overlap</code> (how much adjacent chunks share):</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use edgequake_pipeline::chunker::{Chunker, ChunkerConfig, TextChunk};
+
+let config = ChunkerConfig {
+    chunk_size: 1200,     // Target tokens per chunk
+    chunk_overlap: 200,   // Overlap between adjacent chunks
+    ..Default::default()
+};
+
+let chunker = Chunker::new(config);
+let chunks: Vec&lt;TextChunk&gt; = chunker.chunk(document_text);
+<span class="boring">}</span></code></pre></pre>
+<p>Each <code>TextChunk</code> carries an ID, the text content, and positional
+information:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct TextChunk {
+    pub id: String,
+    pub content: String,
+    pub start_offset: usize,
+    pub end_offset: usize,
+    pub token_count: usize,
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="stage-2-extract"><a class="header" href="#stage-2-extract">Stage 2: Extract</a></h4>
+<p>Each chunk is sent to an LLM for entity and relationship extraction.
+This is the most expensive and time-consuming stage. The result is an
+<code>ExtractionResult</code> per chunk:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct ExtractionResult {
+    pub entities: Vec&lt;ExtractedEntity&gt;,
+    pub relationships: Vec&lt;ExtractedRelationship&gt;,
+    pub source_chunk_id: String,
+    pub metadata: HashMap&lt;String, serde_json::Value&gt;,
+    pub input_tokens: usize,
+    pub output_tokens: usize,
+    pub extraction_time_ms: u64,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Extraction runs in batches with concurrency control to respect LLM
+rate limits. See Section 5.2 for the full extraction deep-dive.</p>
+<h4 id="stage-3-normalize"><a class="header" href="#stage-3-normalize">Stage 3: Normalize</a></h4>
+<p>Extracted entity names are normalized to a canonical form. This stage
+resolves aliases and ensures that "John Smith", "J. Smith", and
+"john smith" all map to the same graph node <code>JOHN_SMITH</code>. See
+Section 5.3 for normalization strategies.</p>
+<h4 id="stage-4-embed"><a class="header" href="#stage-4-embed">Stage 4: Embed</a></h4>
+<p>Embeddings are generated for three types of content:</p>
+<div class="table-wrapper"><table><thead><tr><th>Content</th><th>What is Embedded</th><th>Vector Use</th></tr></thead><tbody>
+<tr><td>Chunks</td><td>Raw chunk text</td><td>Naive mode retrieval</td></tr>
+<tr><td>Entities</td><td>Entity description</td><td>Local mode retrieval</td></tr>
+<tr><td>Relationships</td><td>Relationship description + keywords</td><td>Global mode retrieval</td></tr>
+</tbody></table>
+</div>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Generate embeddings in batches
+let chunk_embeddings = embedding_provider
+    .embed_batch(&amp;chunk_texts, batch_size)
+    .await?;
+
+let entity_embeddings = embedding_provider
+    .embed_batch(&amp;entity_descriptions, batch_size)
+    .await?;
+
+let relationship_embeddings = embedding_provider
+    .embed_batch(&amp;relationship_texts, batch_size)
+    .await?;
+<span class="boring">}</span></code></pre></pre>
+<p>The embedding batch size is configurable to balance throughput with
+memory usage.</p>
+<h4 id="stage-5-store"><a class="header" href="#stage-5-store">Stage 5: Store</a></h4>
+<p>The final stage persists everything across three storage backends:</p>
+<ul>
+<li><strong>KVStorage</strong>: Chunk content and document metadata (for retrieval and
+citation).</li>
+<li><strong>VectorStorage</strong>: Embeddings for chunks, entities, and relationships
+(for similarity search).</li>
+<li><strong>GraphStorage</strong>: Nodes and edges with properties (for graph
+traversal).</li>
+</ul>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Store entities as graph nodes
+for entity in &amp;entities {
+    graph_storage.upsert_node(&amp;entity.name, entity_properties(&amp;entity)).await?;
+    vector_storage.upsert(&amp;entity.name, &amp;entity.embedding, entity_metadata(&amp;entity)).await?;
+}
+
+// Store relationships as graph edges
+for rel in &amp;relationships {
+    graph_storage.upsert_edge(&amp;rel.source, &amp;rel.target, edge_properties(&amp;rel)).await?;
+    vector_storage.upsert(&amp;rel_id, &amp;rel.embedding, rel_metadata(&amp;rel)).await?;
+}
+
+// Store chunks
+for chunk in &amp;chunks {
+    kv_storage.set(&amp;chunk.id, &amp;chunk.content).await?;
+    vector_storage.upsert(&amp;chunk.id, &amp;chunk.embedding, chunk_metadata(&amp;chunk)).await?;
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="pipelineconfig"><a class="header" href="#pipelineconfig">PipelineConfig</a></h3>
+<p>The entire pipeline is controlled by a single configuration struct:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct PipelineConfig {
+    /// Chunking configuration.
+    pub chunker: ChunkerConfig,
+
+    /// Batch size for LLM extraction (chunks per batch).
+    pub extraction_batch_size: usize,
+
+    /// Batch size for embedding generation.
+    pub embedding_batch_size: usize,
+
+    /// Toggle entity extraction on/off.
+    pub enable_entity_extraction: bool,
+
+    /// Toggle relationship extraction on/off.
+    pub enable_relationship_extraction: bool,
+
+    /// Toggle chunk embedding generation.
+    pub enable_chunk_embeddings: bool,
+
+    /// Toggle entity embedding generation.
+    pub enable_entity_embeddings: bool,
+
+    /// Toggle relationship embedding generation.
+    pub enable_relationship_embeddings: bool,
+
+    /// Maximum concurrent extraction tasks.
+    pub max_concurrent_extractions: usize,
+
+    /// Track which chunk produced which entity.
+    pub enable_lineage_tracking: bool,
+
+    /// Timeout per chunk extraction in seconds.
+    pub chunk_extraction_timeout_secs: u64,
+
+    /// Maximum retry attempts per chunk.
+    pub chunk_max_retries: u32,
+
+    /// Initial retry delay in milliseconds (exponential backoff).
+    pub initial_retry_delay_ms: u64,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The default configuration enables everything and is suitable for most
+use cases:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let config = PipelineConfig::default();
+// extraction_batch_size: 10
+// embedding_batch_size: 100
+// max_concurrent_extractions: 4
+// chunk_extraction_timeout_secs: 180
+// chunk_max_retries: 3
+// All features enabled
+<span class="boring">}</span></code></pre></pre>
+<p>For development or testing, you can disable expensive stages:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut config = PipelineConfig::default();
+config.enable_entity_extraction = false;     // Skip LLM calls
+config.enable_entity_embeddings = false;     // Skip embedding
+config.enable_relationship_extraction = false;
+config.enable_relationship_embeddings = false;
+// Only chunking + chunk embeddings remain
+<span class="boring">}</span></code></pre></pre>
+<h3 id="concurrency-and-rate-limiting"><a class="header" href="#concurrency-and-rate-limiting">Concurrency and Rate Limiting</a></h3>
+<p>The extraction stage uses bounded concurrency to respect LLM API rate
+limits:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use futures::stream::{self, StreamExt};
+
+let results: Vec&lt;ExtractionResult&gt; = stream::iter(chunks)
+    .map(|chunk| async {
+        extractor.extract(&amp;chunk).await
+    })
+    .buffer_unordered(config.max_concurrent_extractions)
+    .collect()
+    .await;
+<span class="boring">}</span></code></pre></pre>
+<p><code>buffer_unordered</code> processes up to <code>max_concurrent_extractions</code> chunks
+simultaneously. This is critical because:</p>
+<ul>
+<li><strong>Too low</strong>: Pipeline is slow, underutilizes the LLM API.</li>
+<li><strong>Too high</strong>: Rate limit errors, increased cost from retries.</li>
+<li><strong>Default (4)</strong>: A reasonable balance for most LLM providers.</li>
+</ul>
+<h3 id="error-recovery"><a class="header" href="#error-recovery">Error Recovery</a></h3>
+<p>Each chunk extraction has timeout and retry logic:</p>
+<pre><code class="language-text">Attempt 1 ──&gt; LLM Call ──&gt; Success? ──&gt; Parse result
+                │                          │
+                ├── Timeout (180s) ──&gt; Retry with backoff
+                ├── Rate limit ─────&gt; Retry with backoff
+                └── Parse error ────&gt; Retry with increased max_tokens
+                                         │
+Attempt 2 ──&gt; LLM Call ──&gt; Success? ──&gt; Parse result
+                │
+                └── (same retry logic)
+                                         │
+Attempt 3 ──&gt; LLM Call ──&gt; Success? ──&gt; Parse result
+                │
+                └── All retries exhausted ──&gt; Skip chunk, log error
+</code></pre>
+<p>Failed chunks are logged but do not block the pipeline. The rationale:
+a partially-extracted knowledge graph is better than no graph at all.</p>
+<h3 id="lineage-tracking"><a class="header" href="#lineage-tracking">Lineage Tracking</a></h3>
+<p>When <code>enable_lineage_tracking</code> is true, the pipeline records provenance
+for every extraction:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct DocumentLineage {
+    pub document_id: String,
+    pub chunks: Vec&lt;ChunkLineage&gt;,
+}
+
+pub struct ChunkLineage {
+    pub chunk_id: String,
+    pub entities_extracted: Vec&lt;String&gt;,
+    pub relationships_extracted: Vec&lt;(String, String)&gt;,
+    pub extraction_metadata: ExtractionMetadata,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This enables cascade operations: when a document is deleted, all entities
+and relationships that were <em>only</em> sourced from that document can be
+cleaned up.</p>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>The pipeline has five stages: Chunk, Extract, Normalize, Embed, Store.</li>
+<li>Each stage can be independently enabled/disabled via <code>PipelineConfig</code>.</li>
+<li>Extraction is the bottleneck -- bounded concurrency and retry logic
+handle LLM rate limits and failures.</li>
+<li>Three storage backends receive the pipeline output: KV (chunks),
+Vector (embeddings), Graph (nodes and edges).</li>
+<li>Lineage tracking enables cascade delete when source documents are
+removed.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch05-02-entity-extraction.html">5.2 Entity Extraction</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part2-graph/ch05-ingestion-pipeline.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part2-graph/ch05-02-entity-extraction.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part2-graph/ch05-ingestion-pipeline.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part2-graph/ch05-02-entity-extraction.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

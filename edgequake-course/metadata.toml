@@ -1,0 +1,131 @@
+# Course Metadata
+# Generated from book.toml and actual file structure
+
+title = "Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake"
+version = "1.0.0"
+authors = ["EdgeQuake Team"]
+description = "Build production knowledge bases using graph-enhanced RAG in Rust"
+
+# Part I: RAG Foundations
+[[parts]]
+id = "part1"
+title = "Part I: RAG Foundations"
+
+[[parts.chapters]]
+id = "ch01"
+title = "The RAG Landscape"
+path = "part1-foundations/ch01-rag-landscape.md"
+estimated_minutes = 25
+quiz_id = "ch01-rag-landscape"
+exercise_ids = ["ch01-naive-vector-search"]
+
+[[parts.chapters]]
+id = "ch02"
+title = "Embeddings and Chunking"
+path = "part1-foundations/ch02-embeddings-chunking.md"
+estimated_minutes = 35
+quiz_id = "ch02-embeddings-chunking"
+exercise_ids = ["ch02-markdown-chunking"]
+
+[[parts.chapters]]
+id = "ch03"
+title = "Advanced Retrieval Techniques"
+path = "part1-foundations/ch03-advanced-retrieval.md"
+estimated_minutes = 40
+quiz_id = "ch03-advanced-retrieval"
+exercise_ids = ["ch03-hybrid-search"]
+
+# Part II: Graph-Enhanced Retrieval
+[[parts]]
+id = "part2"
+title = "Part II: Graph-Enhanced Retrieval"
+
+[[parts.chapters]]
+id = "ch04"
+title = "Knowledge Graphs for RAG"
+path = "part2-graph/ch04-knowledge-graphs.md"
+estimated_minutes = 35
+quiz_id = "ch04-knowledge-graphs"
+exercise_ids = ["ch04-in-memory-graph"]
+
+[[parts.chapters]]
+id = "ch05"
+title = "The Ingestion Pipeline"
+path = "part2-graph/ch05-ingestion-pipeline.md"
+estimated_minutes = 40
+quiz_id = "ch05-ingestion-pipeline"
+exercise_ids = ["ch05-entity-extraction"]
+
+[[parts.chapters]]
+id = "ch06"
+title = "Multi-Mode Query Engine"
+path = "part2-graph/ch06-query-engine.md"
+estimated_minutes = 40
+quiz_id = "ch06-query-engine"
+exercise_ids = ["ch06-query-mode-selector"]
+
+[[parts.chapters]]
+id = "ch07"
+title = "The EdgeQuake Orchestrator"
+path = "part2-graph/ch07-orchestrator.md"
+estimated_minutes = 45
+quiz_id = "ch07-orchestrator"
+exercise_ids = ["ch07-full-edgequake"]
+
+# Part III: Production Storage & Infrastructure
+[[parts]]
+id = "part3"
+title = "Part III: Production Storage & Infrastructure"
+
+[[parts.chapters]]
+id = "ch08"
+title = "Pluggable Storage Backends"
+path = "part3-production/ch08-storage-backends.md"
+estimated_minutes = 40
+quiz_id = "ch08-storage-backends"
+exercise_ids = ["ch08-file-kv-storage"]
+
+[[parts.chapters]]
+id = "ch09"
+title = "Local Development Environment"
+path = "part3-production/ch09-local-dev.md"
+estimated_minutes = 45
+quiz_id = "ch09-local-dev"
+exercise_ids = ["ch09-local-dev-setup"]
+
+[[parts.chapters]]
+id = "ch10"
+title = "Cloud Deployment with AWS"
+path = "part3-production/ch10-aws-deployment.md"
+estimated_minutes = 50
+quiz_id = "ch10-aws-deployment"
+exercise_ids = ["ch10-cdk-stack"]
+
+# Part IV: Enterprise Hardening
+[[parts]]
+id = "part4"
+title = "Part IV: Enterprise Hardening"
+
+[[parts.chapters]]
+id = "ch11"
+title = "Security and Multi-Tenancy"
+path = "part4-enterprise/ch11-security.md"
+estimated_minutes = 45
+quiz_id = "ch11-security"
+exercise_ids = ["ch11-jwt-validation"]
+
+[[parts.chapters]]
+id = "ch12"
+title = "Batch Ingestion at Scale"
+path = "part4-enterprise/ch12-batch-ingestion.md"
+estimated_minutes = 40
+quiz_id = "ch12-batch-ingestion"
+exercise_ids = ["ch12-batch-state-machine"]
+
+[[parts.chapters]]
+id = "ch13"
+title = "Observability and Operations"
+path = "part4-enterprise/ch13-observability.md"
+estimated_minutes = 35
+quiz_id = "ch13-observability"
+exercise_ids = ["ch13-logging-middleware"]

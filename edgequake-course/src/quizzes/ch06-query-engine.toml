@@ -1,0 +1,96 @@
+# Quiz: The Query Engine
+
+id = "ch06-query-engine"
+title = "The Query Engine"
+lesson_id = "ch06"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "How does EdgeQuake's keyword extraction distinguish between high-level and low-level keywords from a user query?"
+prompt.distractors = [
+    "High-level keywords are nouns and low-level keywords are verbs",
+    "High-level keywords appear in titles and low-level keywords appear in body text",
+    "High-level keywords are extracted by BM25 and low-level keywords by the embedding model"
+]
+answer.answer = "High-level keywords capture broad themes and topics, while low-level keywords identify specific entities, names, and concrete terms"
+context = """
+The query engine uses an LLM to extract two categories of keywords from each query.
+High-level keywords represent abstract themes (e.g., 'financial fraud', 'political
+connections') used for community-level and thematic retrieval. Low-level keywords
+identify specific entities and concrete terms (e.g., 'Jeffrey Epstein', 'Deutsche
+Bank') used for precise entity and relationship lookup. This dual extraction maps
+directly to LightRAG's dual-level retrieval strategy.
+"""
+id = "a6b7c8d9-6666-4f00-b600-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What is the difference between Local and Global query modes in EdgeQuake?"
+prompt.distractors = [
+    "Local mode queries a single storage backend while Global mode queries all backends in parallel",
+    "Local mode uses cached results while Global mode always fetches fresh data",
+    "Local mode operates on a single namespace while Global mode searches across all namespaces"
+]
+answer.answer = "Local mode retrieves specific entities and their neighborhoods, while Global mode retrieves broad thematic summaries from community-level knowledge"
+context = """
+Local mode focuses on precise, entity-centric retrieval: it finds specific entities
+matching the query's low-level keywords and traverses their graph neighborhoods to
+gather detailed facts and direct relationships. Global mode targets high-level
+keywords to retrieve community summaries and thematic overviews that span many
+entities. The Hybrid mode combines both, and the engine can auto-select the best
+mode based on query analysis.
+"""
+id = "a6b7c8d9-6666-4f00-b600-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Why does the query engine implement token budgeting when assembling context for the LLM?"
+prompt.distractors = [
+    "To minimize the financial cost of embedding generation",
+    "To ensure the response fits within the user's screen width",
+    "To prevent the retrieval phase from taking too long"
+]
+answer.answer = "To ensure the total retrieved context fits within the LLM's context window without exceeding token limits or degrading response quality"
+context = """
+LLMs have finite context windows, and stuffing too much retrieved content degrades
+response quality (the 'lost in the middle' problem). Token budgeting allocates a
+fixed token budget for retrieved context, prioritizing the most relevant chunks and
+entities. It tracks token counts as it assembles the context, stopping when the
+budget is reached. This ensures the LLM receives a focused, high-quality context
+rather than an overwhelming amount of marginally relevant information.
+"""
+id = "a6b7c8d9-6666-4f00-b600-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "How does EdgeQuake determine which query mode (Local, Global, or Hybrid) to use when set to auto-select?"
+prompt.distractors = [
+    "It runs all three modes in parallel and returns whichever finishes first",
+    "It checks the cache to see which mode was used for similar past queries",
+    "It counts the number of words in the query and uses Local for short queries and Global for long ones"
+]
+answer.answer = "An LLM analyzes the query to determine if it asks about specific entities (Local), broad themes (Global), or both (Hybrid)"
+context = """
+In auto mode, the query engine sends the user's query to an LLM with a classification
+prompt. The LLM determines the query's intent: specific entity questions ('What
+companies did X own?') route to Local mode, broad analytical questions ('What are
+the main patterns of financial activity?') route to Global mode, and mixed queries
+('How did X's connections relate to broader financial networks?') route to Hybrid
+mode. This ensures the retrieval strategy matches the query's information need.
+"""
+id = "a6b7c8d9-6666-4f00-b600-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What technique does EdgeQuake use to avoid redundant LLM calls for repeated or similar queries?"
+answer.answer = "caching"
+context = """
+EdgeQuake implements query result caching to avoid redundant processing. When a
+query is processed, the retrieved context and generated response can be cached.
+Subsequent identical or near-identical queries can return cached results without
+re-running the retrieval pipeline or making additional LLM calls. This reduces
+latency and cost for common queries, which is especially valuable in production
+deployments where certain questions are asked frequently.
+"""
+id = "a6b7c8d9-6666-4f00-b600-000000000005"

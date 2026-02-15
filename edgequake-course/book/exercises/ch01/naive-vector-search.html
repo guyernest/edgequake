@@ -1,0 +1,973 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Exercise: Naive Vector Search - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../../src/custom.css">
+        <link rel="stylesheet" href="../../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <div class="exercise-container">
+<article class="exercise" data-exercise-id="naive-vector-search" data-difficulty="beginner">
+<header class="exercise-header">
+  <h2 id="naive-vector-search" class="exercise-title"><a class="header" href="#naive-vector-search">Naive Vector Search</a></h2>
+  <code class=\"exercise-id\">naive-vector-search</code>
+  <div class="exercise-meta">
+    <span class="badge difficulty beginner">⭐ beginner</span>
+    <span class="badge time">⏱️ 20 min</span>
+  </div>
+</header>
+<nav class="exercise-nav" aria-label="Exercise sections"><ul><li><a href="#naive-vector-search-description" data-section="description">📖 Overview</a></li><li><a href="#naive-vector-search-objectives" data-section="objectives">🎯 Objectives</a></li><li><a href="#naive-vector-search-starter" data-section="starter">💻 Code</a></li><li><a href="#naive-vector-search-hints" data-section="hints">💡 Hints</a></li><li><a href="#naive-vector-search-solution" data-section="solution">✅ Solution</a></li><li><a href="#naive-vector-search-tests" data-section="tests">🧪 Tests</a></li><li><a href="#naive-vector-search-reflection" data-section="reflection">🤔 Reflect</a></li></ul></nav>
+<section class="exercise-description" id="naive-vector-search-description">
+<p>Every RAG system starts with the same fundamental operation: given a query
+vector, find the most similar vectors in a corpus. In this exercise you will
+implement cosine similarity from scratch and use it to build a brute-force
+top-k search over an in-memory collection of embeddings.</p>
+<p>This is the building block that Chapter 3 will extend with BM25 and hybrid
+ranking, so take the time to understand the math before moving on.</p>
+</section>
+<section class="exercise-objectives" id="naive-vector-search-objectives">
+  <h3 id="-learning-objectives"><a class="header" href="#-learning-objectives">🎯 Learning Objectives</a></h3>
+  <div class="objectives-grid">
+    <div class="objectives-thinking">
+      <h4 id="thinking"><a class="header" href="#thinking">Thinking</a></h4>
+      <ul>
+        <li><input type="checkbox" id="naive-vector-search-thinking-0" class="objective-checkbox"><label for="naive-vector-search-thinking-0">Understand why cosine similarity measures orientation rather than magnitude</label></li>
+        <li><input type="checkbox" id="naive-vector-search-thinking-1" class="objective-checkbox"><label for="naive-vector-search-thinking-1">Reason about the time complexity of brute-force search (O(n * d))</label></li>
+      </ul>
+    </div>
+    <div class="objectives-doing">
+      <h4 id="doing"><a class="header" href="#doing">Doing</a></h4>
+      <ul>
+        <li><input type="checkbox" id="naive-vector-search-doing-0" class="objective-checkbox"><label for="naive-vector-search-doing-0">Implement the cosine similarity formula using Rust iterators</label></li>
+        <li><input type="checkbox" id="naive-vector-search-doing-1" class="objective-checkbox"><label for="naive-vector-search-doing-1">Build a top-k search that returns the most similar documents</label></li>
+        <li><input type="checkbox" id="naive-vector-search-doing-2" class="objective-checkbox"><label for="naive-vector-search-doing-2">Handle edge cases like zero-magnitude vectors</label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+<section class="exercise-discussion">
+  <h3 id="-discussion"><a class="header" href="#-discussion">💬 Discussion</a></h3>
+  <ul>
+    <li>Why does cosine similarity ignore vector magnitude? When is that a feature, and when is it a limitation?</li>
+    <li>At what corpus size does brute-force search become impractical? What alternatives exist?</li>
+    <li>How does the choice of embedding model affect the similarity scores you compute?</li>
+  </ul>
+</section>
+<section class="exercise-starter" id="naive-vector-search-starter">
+  <div class="code-header">
+    <span class="filename">src/main.rs</span>
+    <div class="code-actions">
+      <button class="btn btn-copy" data-target="code-naive-vector-search" title="Copy code">📋 Copy</button>
+      <button class="btn btn-reset" data-target="code-naive-vector-search" title="Reset to original">↺ Reset</button>
+    </div>
+  </div>
+  <textarea class="code-editor" id="code-naive-vector-search" data-language="rust" data-original="use std::collections::BinaryHeap;&#10;use std::cmp::Ordering;&#10;&#10;/// A document with its precomputed embedding vector.&#10;#[derive(Debug, Clone)]&#10;struct Document {&#10;    id: String,&#10;    text: String,&#10;    embedding: Vec&lt;f64&gt;,&#10;}&#10;&#10;/// A search result with a similarity score.&#10;#[derive(Debug, Clone)]&#10;struct SearchResult {&#10;    id: String,&#10;    score: f64,&#10;}&#10;&#10;impl PartialEq for SearchResult {&#10;    fn eq(&amp;self, other: &amp;Self) -&gt; bool {&#10;        self.score == other.score&#10;    }&#10;}&#10;&#10;impl Eq for SearchResult {}&#10;&#10;impl PartialOrd for SearchResult {&#10;    fn partial_cmp(&amp;self, other: &amp;Self) -&gt; Option&lt;Ordering&gt; {&#10;        Some(self.cmp(other))&#10;    }&#10;}&#10;&#10;impl Ord for SearchResult {&#10;    fn cmp(&amp;self, other: &amp;Self) -&gt; Ordering {&#10;        // Reverse ordering for min-heap behavior (we want top-k highest)&#10;        other.score.partial_cmp(&amp;self.score).unwrap_or(Ordering::Equal)&#10;    }&#10;}&#10;&#10;/// A naive vector search engine that stores documents in memory&#10;/// and retrieves the most similar ones via cosine similarity.&#10;struct VectorStore {&#10;    documents: Vec&lt;Document&gt;,&#10;}&#10;&#10;impl VectorStore {&#10;    fn new() -&gt; Self {&#10;        VectorStore {&#10;            documents: Vec::new(),&#10;        }&#10;    }&#10;&#10;    fn add_document(&amp;mut self, doc: Document) {&#10;        self.documents.push(doc);&#10;    }&#10;&#10;    /// Compute the cosine similarity between two vectors.&#10;    ///&#10;    /// Formula: dot(a, b) / (||a|| * ||b||)&#10;    ///&#10;    /// Returns 0.0 if either vector has zero magnitude.&#10;    fn cosine_similarity(a: &amp;[f64], b: &amp;[f64]) -&gt; f64 {&#10;        // TODO: Implement cosine similarity&#10;        // 1. Compute the dot product of a and b&#10;        // 2. Compute the magnitude (L2 norm) of a&#10;        // 3. Compute the magnitude (L2 norm) of b&#10;        // 4. Return dot / (mag_a * mag_b), or 0.0 if either magnitude is 0&#10;        todo!(&quot;Implement cosine_similarity&quot;)&#10;    }&#10;&#10;    /// Search for the top-k most similar documents to the query vector.&#10;    ///&#10;    /// Returns results sorted by similarity score in descending order.&#10;    fn search(&amp;self, query: &amp;[f64], top_k: usize) -&gt; Vec&lt;SearchResult&gt; {&#10;        // TODO: Implement top-k search&#10;        // 1. Compute cosine similarity between query and each document&#10;        // 2. Collect all (id, score) pairs&#10;        // 3. Sort by score descending and take the top k&#10;        //&#10;        // Hint: You can use a simple Vec + sort, or try BinaryHeap for efficiency.&#10;        todo!(&quot;Implement search&quot;)&#10;    }&#10;}&#10;&#10;fn main() {&#10;    let mut store = VectorStore::new();&#10;&#10;    store.add_document(Document {&#10;        id: &quot;doc1&quot;.into(),&#10;        text: &quot;Rust is a systems programming language&quot;.into(),&#10;        embedding: vec![0.1, 0.9, 0.2, 0.0],&#10;    });&#10;    store.add_document(Document {&#10;        id: &quot;doc2&quot;.into(),&#10;        text: &quot;Python is popular for machine learning&quot;.into(),&#10;        embedding: vec![0.8, 0.1, 0.7, 0.3],&#10;    });&#10;    store.add_document(Document {&#10;        id: &quot;doc3&quot;.into(),&#10;        text: &quot;Rust has excellent memory safety&quot;.into(),&#10;        embedding: vec![0.2, 0.8, 0.3, 0.1],&#10;    });&#10;&#10;    let query = vec![0.15, 0.85, 0.25, 0.05];&#10;    let results = store.search(&amp;query, 2);&#10;&#10;    println!(&quot;Top 2 results for query:&quot;);&#10;    for result in &amp;results {&#10;        println!(&quot;  {} (score: {:.4})&quot;, result.id, result.score);&#10;    }&#10;}" spellcheck="false"></textarea>
+</section>
+<section class="exercise-hints" id="naive-vector-search-hints">
+  <h3 id="-hints"><a class="header" href="#-hints">💡 Hints</a></h3>
+  <details class="hint" data-level="1">
+    <summary>Hint 1: Cosine similarity step by step</summary>
+    <div class="hint-content">
+<p>The dot product is the sum of element-wise products. Use Rust's <code>iter().zip()</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+<span class="boring">}</span></code></pre></pre>
+<p>The magnitude (L2 norm) is the square root of the sum of squares:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mag: f64 = v.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+<span class="boring">}</span></code></pre></pre>
+    </div>
+  </details>
+  <details class="hint" data-level="2">
+    <summary>Hint 2: Putting search together</summary>
+    <div class="hint-content">
+<p>For a simple approach, compute all scores, collect into a Vec, sort, and truncate:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut results: Vec&lt;SearchResult&gt; = self.documents.iter()
+    .map(|doc| SearchResult {
+        id: doc.id.clone(),
+        score: Self::cosine_similarity(query, &amp;doc.embedding),
+    })
+    .collect();
+<p>results.sort_by(|a, b| b.score.partial_cmp(&amp;a.score).unwrap_or(Ordering::Equal));
+results.truncate(top_k);
+<span class="boring">}</span></code></pre></pre>
+</div></p>
+  </details>
+</section>
+<section class="exercise-solution" id="naive-vector-search-solution">
+  <details class="solution">
+    <summary><span class="solution-warning">⚠️ Try the exercise first!</span><span class="solution-toggle">Show Solution</span></summary>
+    <div class="solution-content">
+      <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::collections::BinaryHeap;
+use std::cmp::Ordering;
+<p>#[derive(Debug, Clone)]
+struct Document {
+id: String,
+text: String,
+embedding: Vec&lt;f64&gt;,
+}</p>
+<p>#[derive(Debug, Clone)]
+struct SearchResult {
+id: String,
+score: f64,
+}</p>
+<p>impl PartialEq for SearchResult {
+fn eq(&amp;self, other: &amp;Self) -&gt; bool {
+self.score == other.score
+}
+}</p>
+<p>impl Eq for SearchResult {}</p>
+<p>impl PartialOrd for SearchResult {
+fn partial_cmp(&amp;self, other: &amp;Self) -&gt; Option&lt;Ordering&gt; {
+Some(self.cmp(other))
+}
+}</p>
+<p>impl Ord for SearchResult {
+fn cmp(&amp;self, other: &amp;Self) -&gt; Ordering {
+other.score.partial_cmp(&amp;self.score).unwrap_or(Ordering::Equal)
+}
+}</p>
+<p>struct VectorStore {
+documents: Vec&lt;Document&gt;,
+}</p>
+<p>impl VectorStore {
+fn new() -&gt; Self {
+VectorStore {
+documents: Vec::new(),
+}
+}</p>
+<pre><code>fn add_document(&amp;amp;mut self, doc: Document) {
+    self.documents.push(doc);
+}
+
+fn cosine_similarity(a: &amp;amp;[f64], b: &amp;amp;[f64]) -&amp;gt; f64 {
+    let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let mag_a: f64 = a.iter().map(|x| x * x).sum::&amp;lt;f64&amp;gt;().sqrt();
+    let mag_b: f64 = b.iter().map(|x| x * x).sum::&amp;lt;f64&amp;gt;().sqrt();
+
+    if mag_a == 0.0 || mag_b == 0.0 {
+        return 0.0;
+    }
+
+    dot / (mag_a * mag_b)
+}
+
+fn search(&amp;amp;self, query: &amp;amp;[f64], top_k: usize) -&amp;gt; Vec&amp;lt;SearchResult&amp;gt; {
+    let mut results: Vec&amp;lt;SearchResult&amp;gt; = self
+        .documents
+        .iter()
+        .map(|doc| SearchResult {
+            id: doc.id.clone(),
+            score: Self::cosine_similarity(query, &amp;amp;doc.embedding),
+        })
+        .collect();
+
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&amp;amp;a.score)
+            .unwrap_or(Ordering::Equal)
+    });
+    results.truncate(top_k);
+    results
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</p>
+<p>fn main() {
+let mut store = VectorStore::new();</p>
+<pre><code>store.add_document(Document {
+    id: &amp;quot;doc1&amp;quot;.into(),
+    text: &amp;quot;Rust is a systems programming language&amp;quot;.into(),
+    embedding: vec![0.1, 0.9, 0.2, 0.0],
+});
+store.add_document(Document {
+    id: &amp;quot;doc2&amp;quot;.into(),
+    text: &amp;quot;Python is popular for machine learning&amp;quot;.into(),
+    embedding: vec![0.8, 0.1, 0.7, 0.3],
+});
+store.add_document(Document {
+    id: &amp;quot;doc3&amp;quot;.into(),
+    text: &amp;quot;Rust has excellent memory safety&amp;quot;.into(),
+    embedding: vec![0.2, 0.8, 0.3, 0.1],
+});
+
+let query = vec![0.15, 0.85, 0.25, 0.05];
+let results = store.search(&amp;amp;query, 2);
+
+println!(&amp;quot;Top 2 results for query:&amp;quot;);
+for result in &amp;amp;results {
+    println!(&amp;quot;  {} (score: {:.4})&amp;quot;, result.id, result.score);
+}
+</code></pre>
+<p>}</code></pre>
+<div class="solution-explanation"><h4 id="explanation"><a class="header" href="#explanation">Explanation</a></h4><p>The <code>cosine_similarity</code> function computes three values: the dot product of the
+two vectors (sum of element-wise products), and the L2 norms (magnitudes) of
+each vector. Dividing the dot product by the product of the magnitudes yields
+the cosine of the angle between the vectors, which ranges from -1 (opposite)
+to 1 (identical direction). The zero-magnitude guard prevents division by zero
+for degenerate inputs.</p></p>
+<p>The <code>search</code> function applies cosine similarity to every document, collects
+the results, sorts them in descending score order, and truncates to the
+requested <code>top_k</code>. This brute-force approach is O(n * d) where n is the number
+of documents and d is the embedding dimension -- simple and correct, but too
+slow for large corpora where approximate nearest neighbor indexes (like HNSW)
+are needed.</p>
+</div>
+    </div>
+  </details>
+</section>
+<section class="exercise-tests" id="naive-vector-search-tests" data-mode="local">
+  <h3 id="-tests"><a class="header" href="#-tests">🧪 Tests</a></h3>
+  <div class="test-actions">
+    <div class="local-test-info"><p>Run these tests locally with:</p><pre><code>cargo test</code></pre></div>
+  </div>
+  <div class="test-results" id="results-naive-vector-search" hidden></div>
+  <details class="tests-code"><summary>View Test Code</summary>
+    <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+<pre><code>#[test]
+fn test_cosine_similarity_identical_vectors() {
+    let v = vec![1.0, 2.0, 3.0];
+    let sim = VectorStore::cosine_similarity(&amp;amp;v, &amp;amp;v);
+    assert!((sim - 1.0).abs() &amp;lt; 1e-10, &amp;quot;Identical vectors should have similarity 1.0&amp;quot;);
+}
+
+#[test]
+fn test_cosine_similarity_orthogonal_vectors() {
+    let a = vec![1.0, 0.0];
+    let b = vec![0.0, 1.0];
+    let sim = VectorStore::cosine_similarity(&amp;amp;a, &amp;amp;b);
+    assert!(sim.abs() &amp;lt; 1e-10, &amp;quot;Orthogonal vectors should have similarity 0.0&amp;quot;);
+}
+
+#[test]
+fn test_cosine_similarity_opposite_vectors() {
+    let a = vec![1.0, 2.0, 3.0];
+    let b = vec![-1.0, -2.0, -3.0];
+    let sim = VectorStore::cosine_similarity(&amp;amp;a, &amp;amp;b);
+    assert!((sim - (-1.0)).abs() &amp;lt; 1e-10, &amp;quot;Opposite vectors should have similarity -1.0&amp;quot;);
+}
+
+#[test]
+fn test_cosine_similarity_zero_vector() {
+    let a = vec![1.0, 2.0, 3.0];
+    let zero = vec![0.0, 0.0, 0.0];
+    let sim = VectorStore::cosine_similarity(&amp;amp;a, &amp;amp;zero);
+    assert_eq!(sim, 0.0, &amp;quot;Zero vector should return similarity 0.0&amp;quot;);
+}
+
+#[test]
+fn test_cosine_similarity_magnitude_invariance() {
+    let a = vec![1.0, 2.0, 3.0];
+    let b = vec![2.0, 4.0, 6.0]; // Same direction, 2x magnitude
+    let sim = VectorStore::cosine_similarity(&amp;amp;a, &amp;amp;b);
+    assert!((sim - 1.0).abs() &amp;lt; 1e-10, &amp;quot;Parallel vectors should have similarity 1.0 regardless of magnitude&amp;quot;);
+}
+
+#[test]
+fn test_search_returns_correct_top_k() {
+    let mut store = VectorStore::new();
+    store.add_document(Document {
+        id: &amp;quot;a&amp;quot;.into(), text: &amp;quot;&amp;quot;.into(), embedding: vec![1.0, 0.0],
+    });
+    store.add_document(Document {
+        id: &amp;quot;b&amp;quot;.into(), text: &amp;quot;&amp;quot;.into(), embedding: vec![0.0, 1.0],
+    });
+    store.add_document(Document {
+        id: &amp;quot;c&amp;quot;.into(), text: &amp;quot;&amp;quot;.into(), embedding: vec![0.7, 0.7],
+    });
+
+    let results = store.search(&amp;amp;[1.0, 0.0], 2);
+    assert_eq!(results.len(), 2, &amp;quot;Should return exactly 2 results&amp;quot;);
+    assert_eq!(results[0].id, &amp;quot;a&amp;quot;, &amp;quot;Most similar should be &amp;#x27;a&amp;#x27; (identical direction)&amp;quot;);
+}
+
+#[test]
+fn test_search_descending_order() {
+    let mut store = VectorStore::new();
+    store.add_document(Document {
+        id: &amp;quot;low&amp;quot;.into(), text: &amp;quot;&amp;quot;.into(), embedding: vec![0.0, 1.0],
+    });
+    store.add_document(Document {
+        id: &amp;quot;high&amp;quot;.into(), text: &amp;quot;&amp;quot;.into(), embedding: vec![1.0, 0.0],
+    });
+    store.add_document(Document {
+        id: &amp;quot;mid&amp;quot;.into(), text: &amp;quot;&amp;quot;.into(), embedding: vec![0.5, 0.5],
+    });
+
+    let results = store.search(&amp;amp;[1.0, 0.0], 3);
+    assert!(results[0].score &amp;gt;= results[1].score, &amp;quot;Results should be in descending score order&amp;quot;);
+    assert!(results[1].score &amp;gt;= results[2].score, &amp;quot;Results should be in descending score order&amp;quot;);
+}
+
+#[test]
+fn test_search_empty_store() {
+    let store = VectorStore::new();
+    let results = store.search(&amp;amp;[1.0, 0.0], 5);
+    assert!(results.is_empty(), &amp;quot;Empty store should return no results&amp;quot;);
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</code></pre></p>
+  </details>
+</section>
+<section class="exercise-reflection" id="naive-vector-search-reflection">
+  <h3 id="-reflection"><a class="header" href="#-reflection">🤔 Reflection</a></h3>
+  <ul>
+    <li>If you had a million documents, how would you make this search faster without sacrificing too much accuracy?</li>
+    <li>Cosine similarity treats all dimensions equally. When might you want to weight certain dimensions more than others?</li>
+    <li>How does the quality of the embedding model affect the usefulness of cosine similarity scores?</li>
+  </ul>
+</section>
+<footer class="exercise-footer">
+  <button class="btn btn-complete" data-exercise-id="naive-vector-search">✓ Mark Complete</button>
+</footer>
+</article>
+</div>
+<h1 id="naive-vector-search-1"><a class="header" href="#naive-vector-search-1">Naive Vector Search</a></h1>
+<p>Every RAG system starts with the same fundamental operation: given a query
+vector, find the most similar vectors in a corpus. In this exercise you will
+implement cosine similarity from scratch and use it to build a brute-force
+top-k search over an in-memory collection of embeddings.</p>
+<p>This is the building block that Chapter 3 will extend with BM25 and hybrid
+ranking, so take the time to understand the math before moving on.</p>
+<p>::: objectives
+thinking:</p>
+<ul>
+<li>Understand why cosine similarity measures orientation rather than magnitude</li>
+<li>Reason about the time complexity of brute-force search (O(n * d))
+doing:</li>
+<li>Implement the cosine similarity formula using Rust iterators</li>
+<li>Build a top-k search that returns the most similar documents</li>
+<li>Handle edge cases like zero-magnitude vectors
+:::</li>
+</ul>
+<p>::: discussion</p>
+<ul>
+<li>Why does cosine similarity ignore vector magnitude? When is that a feature, and when is it a limitation?</li>
+<li>At what corpus size does brute-force search become impractical? What alternatives exist?</li>
+<li>How does the choice of embedding model affect the similarity scores you compute?
+:::</li>
+</ul>
+<p>::: starter file="src/main.rs"</p>
+<pre><pre class="playground"><code class="language-rust">use std::collections::BinaryHeap;
+use std::cmp::Ordering;
+
+/// A document with its precomputed embedding vector.
+#[derive(Debug, Clone)]
+struct Document {
+    id: String,
+    text: String,
+    embedding: Vec&lt;f64&gt;,
+}
+
+/// A search result with a similarity score.
+#[derive(Debug, Clone)]
+struct SearchResult {
+    id: String,
+    score: f64,
+}
+
+impl PartialEq for SearchResult {
+    fn eq(&amp;self, other: &amp;Self) -&gt; bool {
+        self.score == other.score
+    }
+}
+
+impl Eq for SearchResult {}
+
+impl PartialOrd for SearchResult {
+    fn partial_cmp(&amp;self, other: &amp;Self) -&gt; Option&lt;Ordering&gt; {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SearchResult {
+    fn cmp(&amp;self, other: &amp;Self) -&gt; Ordering {
+        // Reverse ordering for min-heap behavior (we want top-k highest)
+        other.score.partial_cmp(&amp;self.score).unwrap_or(Ordering::Equal)
+    }
+}
+
+/// A naive vector search engine that stores documents in memory
+/// and retrieves the most similar ones via cosine similarity.
+struct VectorStore {
+    documents: Vec&lt;Document&gt;,
+}
+
+impl VectorStore {
+    fn new() -&gt; Self {
+        VectorStore {
+            documents: Vec::new(),
+        }
+    }
+
+    fn add_document(&amp;mut self, doc: Document) {
+        self.documents.push(doc);
+    }
+
+    /// Compute the cosine similarity between two vectors.
+    ///
+    /// Formula: dot(a, b) / (||a|| * ||b||)
+    ///
+    /// Returns 0.0 if either vector has zero magnitude.
+    fn cosine_similarity(a: &amp;[f64], b: &amp;[f64]) -&gt; f64 {
+        // TODO: Implement cosine similarity
+        // 1. Compute the dot product of a and b
+        // 2. Compute the magnitude (L2 norm) of a
+        // 3. Compute the magnitude (L2 norm) of b
+        // 4. Return dot / (mag_a * mag_b), or 0.0 if either magnitude is 0
+        todo!("Implement cosine_similarity")
+    }
+
+    /// Search for the top-k most similar documents to the query vector.
+    ///
+    /// Returns results sorted by similarity score in descending order.
+    fn search(&amp;self, query: &amp;[f64], top_k: usize) -&gt; Vec&lt;SearchResult&gt; {
+        // TODO: Implement top-k search
+        // 1. Compute cosine similarity between query and each document
+        // 2. Collect all (id, score) pairs
+        // 3. Sort by score descending and take the top k
+        //
+        // Hint: You can use a simple Vec + sort, or try BinaryHeap for efficiency.
+        todo!("Implement search")
+    }
+}
+
+fn main() {
+    let mut store = VectorStore::new();
+
+    store.add_document(Document {
+        id: "doc1".into(),
+        text: "Rust is a systems programming language".into(),
+        embedding: vec![0.1, 0.9, 0.2, 0.0],
+    });
+    store.add_document(Document {
+        id: "doc2".into(),
+        text: "Python is popular for machine learning".into(),
+        embedding: vec![0.8, 0.1, 0.7, 0.3],
+    });
+    store.add_document(Document {
+        id: "doc3".into(),
+        text: "Rust has excellent memory safety".into(),
+        embedding: vec![0.2, 0.8, 0.3, 0.1],
+    });
+
+    let query = vec![0.15, 0.85, 0.25, 0.05];
+    let results = store.search(&amp;query, 2);
+
+    println!("Top 2 results for query:");
+    for result in &amp;results {
+        println!("  {} (score: {:.4})", result.id, result.score);
+    }
+}</code></pre></pre>
+<p>:::</p>
+<p>::: hint level=1 title="Cosine similarity step by step"
+The dot product is the sum of element-wise products. Use Rust's <code>iter().zip()</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+<span class="boring">}</span></code></pre></pre>
+<p>The magnitude (L2 norm) is the square root of the sum of squares:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mag: f64 = v.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: hint level=2 title="Putting search together"
+For a simple approach, compute all scores, collect into a Vec, sort, and truncate:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut results: Vec&lt;SearchResult&gt; = self.documents.iter()
+    .map(|doc| SearchResult {
+        id: doc.id.clone(),
+        score: Self::cosine_similarity(query, &amp;doc.embedding),
+    })
+    .collect();
+
+results.sort_by(|a, b| b.score.partial_cmp(&amp;a.score).unwrap_or(Ordering::Equal));
+results.truncate(top_k);
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: solution</p>
+<pre><pre class="playground"><code class="language-rust">use std::collections::BinaryHeap;
+use std::cmp::Ordering;
+
+#[derive(Debug, Clone)]
+struct Document {
+    id: String,
+    text: String,
+    embedding: Vec&lt;f64&gt;,
+}
+
+#[derive(Debug, Clone)]
+struct SearchResult {
+    id: String,
+    score: f64,
+}
+
+impl PartialEq for SearchResult {
+    fn eq(&amp;self, other: &amp;Self) -&gt; bool {
+        self.score == other.score
+    }
+}
+
+impl Eq for SearchResult {}
+
+impl PartialOrd for SearchResult {
+    fn partial_cmp(&amp;self, other: &amp;Self) -&gt; Option&lt;Ordering&gt; {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SearchResult {
+    fn cmp(&amp;self, other: &amp;Self) -&gt; Ordering {
+        other.score.partial_cmp(&amp;self.score).unwrap_or(Ordering::Equal)
+    }
+}
+
+struct VectorStore {
+    documents: Vec&lt;Document&gt;,
+}
+
+impl VectorStore {
+    fn new() -&gt; Self {
+        VectorStore {
+            documents: Vec::new(),
+        }
+    }
+
+    fn add_document(&amp;mut self, doc: Document) {
+        self.documents.push(doc);
+    }
+
+    fn cosine_similarity(a: &amp;[f64], b: &amp;[f64]) -&gt; f64 {
+        let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+        let mag_a: f64 = a.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+        let mag_b: f64 = b.iter().map(|x| x * x).sum::&lt;f64&gt;().sqrt();
+
+        if mag_a == 0.0 || mag_b == 0.0 {
+            return 0.0;
+        }
+
+        dot / (mag_a * mag_b)
+    }
+
+    fn search(&amp;self, query: &amp;[f64], top_k: usize) -&gt; Vec&lt;SearchResult&gt; {
+        let mut results: Vec&lt;SearchResult&gt; = self
+            .documents
+            .iter()
+            .map(|doc| SearchResult {
+                id: doc.id.clone(),
+                score: Self::cosine_similarity(query, &amp;doc.embedding),
+            })
+            .collect();
+
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&amp;a.score)
+                .unwrap_or(Ordering::Equal)
+        });
+        results.truncate(top_k);
+        results
+    }
+}
+
+fn main() {
+    let mut store = VectorStore::new();
+
+    store.add_document(Document {
+        id: "doc1".into(),
+        text: "Rust is a systems programming language".into(),
+        embedding: vec![0.1, 0.9, 0.2, 0.0],
+    });
+    store.add_document(Document {
+        id: "doc2".into(),
+        text: "Python is popular for machine learning".into(),
+        embedding: vec![0.8, 0.1, 0.7, 0.3],
+    });
+    store.add_document(Document {
+        id: "doc3".into(),
+        text: "Rust has excellent memory safety".into(),
+        embedding: vec![0.2, 0.8, 0.3, 0.1],
+    });
+
+    let query = vec![0.15, 0.85, 0.25, 0.05];
+    let results = store.search(&amp;query, 2);
+
+    println!("Top 2 results for query:");
+    for result in &amp;results {
+        println!("  {} (score: {:.4})", result.id, result.score);
+    }
+}</code></pre></pre>
+<h3 id="explanation-1"><a class="header" href="#explanation-1">Explanation</a></h3>
+<p>The <code>cosine_similarity</code> function computes three values: the dot product of the
+two vectors (sum of element-wise products), and the L2 norms (magnitudes) of
+each vector. Dividing the dot product by the product of the magnitudes yields
+the cosine of the angle between the vectors, which ranges from -1 (opposite)
+to 1 (identical direction). The zero-magnitude guard prevents division by zero
+for degenerate inputs.</p>
+<p>The <code>search</code> function applies cosine similarity to every document, collects
+the results, sorts them in descending score order, and truncates to the
+requested <code>top_k</code>. This brute-force approach is O(n * d) where n is the number
+of documents and d is the embedding dimension -- simple and correct, but too
+slow for large corpora where approximate nearest neighbor indexes (like HNSW)
+are needed.
+:::</p>
+<p>::: tests mode=local</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cosine_similarity_identical_vectors() {
+        let v = vec![1.0, 2.0, 3.0];
+        let sim = VectorStore::cosine_similarity(&amp;v, &amp;v);
+        assert!((sim - 1.0).abs() &lt; 1e-10, "Identical vectors should have similarity 1.0");
+    }
+
+    #[test]
+    fn test_cosine_similarity_orthogonal_vectors() {
+        let a = vec![1.0, 0.0];
+        let b = vec![0.0, 1.0];
+        let sim = VectorStore::cosine_similarity(&amp;a, &amp;b);
+        assert!(sim.abs() &lt; 1e-10, "Orthogonal vectors should have similarity 0.0");
+    }
+
+    #[test]
+    fn test_cosine_similarity_opposite_vectors() {
+        let a = vec![1.0, 2.0, 3.0];
+        let b = vec![-1.0, -2.0, -3.0];
+        let sim = VectorStore::cosine_similarity(&amp;a, &amp;b);
+        assert!((sim - (-1.0)).abs() &lt; 1e-10, "Opposite vectors should have similarity -1.0");
+    }
+
+    #[test]
+    fn test_cosine_similarity_zero_vector() {
+        let a = vec![1.0, 2.0, 3.0];
+        let zero = vec![0.0, 0.0, 0.0];
+        let sim = VectorStore::cosine_similarity(&amp;a, &amp;zero);
+        assert_eq!(sim, 0.0, "Zero vector should return similarity 0.0");
+    }
+
+    #[test]
+    fn test_cosine_similarity_magnitude_invariance() {
+        let a = vec![1.0, 2.0, 3.0];
+        let b = vec![2.0, 4.0, 6.0]; // Same direction, 2x magnitude
+        let sim = VectorStore::cosine_similarity(&amp;a, &amp;b);
+        assert!((sim - 1.0).abs() &lt; 1e-10, "Parallel vectors should have similarity 1.0 regardless of magnitude");
+    }
+
+    #[test]
+    fn test_search_returns_correct_top_k() {
+        let mut store = VectorStore::new();
+        store.add_document(Document {
+            id: "a".into(), text: "".into(), embedding: vec![1.0, 0.0],
+        });
+        store.add_document(Document {
+            id: "b".into(), text: "".into(), embedding: vec![0.0, 1.0],
+        });
+        store.add_document(Document {
+            id: "c".into(), text: "".into(), embedding: vec![0.7, 0.7],
+        });
+
+        let results = store.search(&amp;[1.0, 0.0], 2);
+        assert_eq!(results.len(), 2, "Should return exactly 2 results");
+        assert_eq!(results[0].id, "a", "Most similar should be 'a' (identical direction)");
+    }
+
+    #[test]
+    fn test_search_descending_order() {
+        let mut store = VectorStore::new();
+        store.add_document(Document {
+            id: "low".into(), text: "".into(), embedding: vec![0.0, 1.0],
+        });
+        store.add_document(Document {
+            id: "high".into(), text: "".into(), embedding: vec![1.0, 0.0],
+        });
+        store.add_document(Document {
+            id: "mid".into(), text: "".into(), embedding: vec![0.5, 0.5],
+        });
+
+        let results = store.search(&amp;[1.0, 0.0], 3);
+        assert!(results[0].score &gt;= results[1].score, "Results should be in descending score order");
+        assert!(results[1].score &gt;= results[2].score, "Results should be in descending score order");
+    }
+
+    #[test]
+    fn test_search_empty_store() {
+        let store = VectorStore::new();
+        let results = store.search(&amp;[1.0, 0.0], 5);
+        assert!(results.is_empty(), "Empty store should return no results");
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: reflection</p>
+<ul>
+<li>If you had a million documents, how would you make this search faster without sacrificing too much accuracy?</li>
+<li>Cosine similarity treats all dimensions equally. When might you want to weight certain dimensions more than others?</li>
+<li>How does the quality of the embedding model affect the usefulness of cosine similarity scores?
+:::</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../part1-foundations/ch01-03-naive-rag-rust.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../part1-foundations/ch02-embeddings-chunking.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../part1-foundations/ch01-03-naive-rag-rust.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../part1-foundations/ch02-embeddings-chunking.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../../ace.js"></script>
+        <script src="../../mode-rust.js"></script>
+        <script src="../../editor.js"></script>
+        <script src="../../theme-dawn.js"></script>
+        <script src="../../theme-tomorrow_night.js"></script>
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

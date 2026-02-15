@@ -1,0 +1,969 @@
+/**
+ * mdbook-exercises stylesheet
+ *
+ * Styles for interactive exercise blocks in mdBook.
+ * Compatible with mdBook's default and custom themes.
+ */
+
+/* ============================================
+   Container
+   ============================================ */
+.exercise-container {
+    border: 2px solid var(--quote-border, #5c6773);
+    border-radius: 8px;
+    margin: 2rem 0;
+    background: var(--bg, #fafafa);
+    overflow: hidden;
+}
+
+/* ============================================
+   Header Section
+   ============================================ */
+.exercise-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    background: var(--quote-bg, #f7f7f7);
+    border-bottom: 1px solid var(--quote-border, #5c6773);
+    flex-wrap: wrap;
+}
+
+/* ============================================
+   Section Navigation
+   ============================================ */
+.exercise-nav {
+    padding: 0.75rem 1.5rem;
+    background: var(--bg, #fafafa);
+    border-bottom: 1px solid var(--quote-border, #5c6773);
+}
+
+.exercise-nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.exercise-nav li {
+    margin: 0;
+}
+
+.exercise-nav a {
+    display: inline-block;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    text-decoration: none;
+    color: var(--fg, #333);
+    background: var(--quote-bg, #f7f7f7);
+    border: 1px solid var(--quote-border, #5c6773);
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.exercise-nav a:hover {
+    background: var(--links, #4183c4);
+    color: white;
+    border-color: var(--links, #4183c4);
+}
+
+.exercise-nav a.active {
+    background: var(--links, #4183c4);
+    color: white;
+    border-color: var(--links, #4183c4);
+}
+
+.exercise-id {
+    font-family: var(--mono-font, monospace);
+    font-size: 0.85rem;
+    color: var(--inline-code-color, #6e6b5e);
+    background: var(--inline-code-bg, rgba(0,0,0,0.05));
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+}
+
+.difficulty-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.difficulty-beginner {
+    background: #d4edda;
+    color: #155724;
+}
+
+.difficulty-intermediate {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.difficulty-advanced {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Support renderer's badge classes */
+.exercise-header .badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.exercise-header .badge.difficulty.beginner { background: #d4edda; color: #155724; }
+.exercise-header .badge.difficulty.intermediate { background: #fff3cd; color: #856404; }
+.exercise-header .badge.difficulty.advanced { background: #f8d7da; color: #721c24; }
+.exercise-header .badge.time { background: var(--quote-bg, #f7f7f7); color: var(--fg, #333); }
+.exercise-header .badge.prerequisites { background: var(--quote-bg, #f7f7f7); color: var(--fg, #333); }
+
+.exercise-time {
+    font-size: 0.85rem;
+    color: var(--fg, #333);
+    opacity: 0.7;
+}
+
+.exercise-time::before {
+    content: "⏱️ ";
+}
+
+/* ============================================
+   Scroll margin for section anchors
+   ============================================ */
+.exercise-description,
+.exercise-objectives,
+.exercise-discussion,
+.exercise-starter,
+.exercise-hints,
+.exercise-solution,
+.exercise-tests,
+.exercise-reflection {
+    scroll-margin-top: 4rem;
+}
+
+/* ============================================
+   Section Headers (h3)
+   ============================================ */
+.exercise-objectives > h3,
+.exercise-discussion > h3,
+.exercise-hints > h3,
+.exercise-solution > h3,
+.exercise-tests > h3,
+.exercise-reflection > h3 {
+    margin: 0 0 1rem;
+    padding-bottom: 0.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--fg, #333);
+    border-bottom: 2px solid var(--quote-border, #5c6773);
+}
+
+/* ============================================
+   Description Section
+   ============================================ */
+.exercise-description {
+    padding: 1.5rem;
+    line-height: 1.7;
+}
+
+.exercise-description p {
+    margin: 0 0 1rem;
+}
+
+.exercise-description p:last-child {
+    margin-bottom: 0;
+}
+
+/* ============================================
+   Objectives Section
+   ============================================ */
+.exercise-objectives {
+    padding: 1rem 1.5rem;
+    background: var(--quote-bg, #f7f7f7);
+    border-top: 1px solid var(--quote-border, #5c6773);
+}
+
+.exercise-objectives h4 {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--fg, #333);
+    opacity: 0.8;
+}
+
+.objectives-thinking,
+.objectives-doing {
+    margin-bottom: 1rem;
+}
+
+.objectives-thinking:last-child,
+.objectives-doing:last-child {
+    margin-bottom: 0;
+}
+
+.objectives-thinking h5,
+.objectives-doing h5 {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.objectives-thinking h5::before {
+    content: "💭 ";
+}
+
+.objectives-doing h5::before {
+    content: "🛠️ ";
+}
+
+.exercise-objectives ul {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+.exercise-objectives li {
+    margin: 0.25rem 0;
+    font-size: 1em;
+}
+
+/* ============================================
+   Discussion Section
+   ============================================ */
+.exercise-discussion {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--quote-border, #5c6773);
+    background: linear-gradient(135deg, var(--quote-bg, #f7f7f7), transparent);
+}
+
+.exercise-discussion h4 {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+}
+
+.exercise-discussion h4::before {
+    content: "💬 ";
+}
+
+.exercise-discussion ul {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+.exercise-discussion li {
+    margin: 0.5rem 0;
+    font-style: italic;
+}
+
+/* ============================================
+   Starter Code Section
+   ============================================ */
+.exercise-starter {
+    border-top: 1px solid var(--quote-border, #5c6773);
+}
+
+.starter-header,
+.code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.5rem;
+    background: var(--code-bg, #f5f5f5);
+    border-bottom: 1px solid var(--quote-border, #5c6773);
+}
+
+.starter-header h4,
+.code-header h4 {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.starter-filename,
+.filename {
+    font-family: var(--mono-font, monospace);
+    font-size: 0.8rem;
+    color: var(--inline-code-color, #6e6b5e);
+    background: var(--inline-code-bg, rgba(0,0,0,0.05));
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+}
+
+.code-toolbar,
+.code-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.code-toolbar button,
+.code-actions .btn,
+.btn {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--quote-border, #5c6773);
+    border-radius: 4px;
+    background: var(--bg, #fff);
+    color: var(--fg, #333);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.code-toolbar button:hover,
+.code-actions .btn:hover,
+.btn:hover {
+    background: var(--quote-bg, #f7f7f7);
+}
+
+.code-toolbar button:active,
+.code-actions .btn:active,
+.btn:active {
+    transform: scale(0.98);
+}
+
+/* Mark Complete button */
+.btn.btn-complete {
+    background: #e9f7ef;
+    border-color: #28a745;
+    color: #1e7e34;
+}
+
+
+.starter-code {
+    position: relative;
+}
+
+.starter-code pre {
+    margin: 0;
+    padding: 1rem 1.5rem;
+    overflow-x: auto;
+}
+
+.starter-code code {
+    font-family: var(--mono-font, 'Source Code Pro', Consolas, Monaco, monospace);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.code-editor {
+    width: 100%;
+    min-height: 250px;
+    padding: 1rem 1.5rem;
+    border: 1px solid var(--quote-border, #5c6773);
+    border-radius: 4px;
+    font-family: var(--mono-font, monospace);
+    font-size: 1em;
+    line-height: 1.5;
+    background: var(--code-bg, #f5f5f5);
+    color: var(--fg, #333);
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.starter-code textarea:focus {
+    outline: 2px solid var(--links, #4183c4);
+    outline-offset: -2px;
+}
+
+/* ============================================
+   Hints Section
+   ============================================ */
+.exercise-hints {
+    border-top: 1px solid var(--quote-border, #5c6773);
+    padding: 1rem 1.5rem;
+}
+
+.exercise-hints h3 {
+    margin-top: 0;
+}
+
+.hint {
+    margin-bottom: 0.75rem;
+}
+.hint:last-child {
+    margin-bottom: 0;
+}
+
+.hint summary {
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--quote-border, #5c6773);
+    border-radius: 4px;
+    background: var(--bg, #fff);
+    transition: background-color 0.2s ease;
+}
+
+.hint summary:hover {
+    background: var(--quote-bg, #f7f7f7);
+}
+
+.hint summary::marker {
+    content: '▶ ';
+}
+
+.hint[open] > summary::marker {
+    content: '▼ ';
+}
+
+.hint-content {
+    padding: 1rem;
+    margin-top: 0.5rem;
+    background: var(--quote-bg, #f7f7f7);
+    border-radius: 4px;
+    border-left: 3px solid var(--links, #4183c4);
+}
+
+.hint-content p {
+    margin: 0 0 0.75rem;
+}
+
+.hint-content p:last-child {
+    margin-bottom: 0;
+}
+
+.hint-content p {
+    margin: 0 0 0.75rem;
+}
+
+.hint-content p:last-child {
+    margin-bottom: 0;
+}
+
+/* ============================================
+   Solution Section
+   ============================================ */
+.exercise-solution {
+    border-top: 1px solid var(--quote-border, #5c6773);
+    padding: 1rem 1.5rem;
+}
+
+.exercise-solution h4 {
+    margin: 0 0 1rem;
+    font-size: 0.9rem;
+}
+
+.solution-toggle {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid #dc3545;
+    border-radius: 4px;
+    background: #fff5f5;
+    color: #dc3545;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.solution-toggle:hover {
+    background: #fee;
+}
+
+.solution-toggle::before {
+    content: "⚠️";
+    margin-right: 0.75rem;
+}
+
+.solution-content {
+    display: none;
+    margin-top: 1rem;
+}
+
+.solution-content.show {
+    display: block;
+}
+
+/* When <details> is open, always show the solution content */
+.exercise-solution details[open] .solution-content {
+    display: block;
+}
+
+.solution-code {
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.solution-code pre {
+    margin: 0;
+    padding: 1rem 1.5rem;
+}
+
+.solution-explanation {
+    padding: 1rem;
+    margin-top: 1rem;
+    background: var(--quote-bg, #f7f7f7);
+    border-radius: 4px;
+    border-left: 3px solid #28a745;
+}
+
+.solution-explanation h5 {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+}
+
+/* ============================================
+   Tests Section
+   ============================================ */
+.exercise-tests {
+    border-top: 1px solid var(--quote-border, #5c6773);
+    padding: 1rem 1.5rem;
+}
+
+.exercise-tests h4 {
+    margin: 0 0 1rem;
+    font-size: 0.9rem;
+}
+
+.run-tests-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    background: #28a745;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.run-tests-btn:hover {
+    background: #218838;
+}
+
+.run-tests-btn:active {
+    transform: scale(0.98);
+}
+
+.run-tests-btn::before {
+    content: "▶";
+    margin-right: 0.5rem;
+}
+
+.run-tests-btn.loading::before {
+    content: "";
+    width: 14px;
+    height: 14px;
+    border: 2px solid white;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 0.5rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.run-tests-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.test-results {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 4px;
+    font-family: var(--mono-font, monospace);
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    display: none;
+}
+
+.test-results.show {
+    display: block;
+}
+
+.test-results.success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.test-results.error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.test-results.pending {
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    color: #856404;
+}
+
+.tests-code {
+    margin-top: 1rem;
+    border: 1px solid var(--quote-border, #5c6773);
+    border-radius: 4px;
+    background: var(--bg, #fff);
+}
+
+.tests-code summary {
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--fg, #333);
+    background: var(--quote-bg, #f7f7f7);
+    transition: background-color 0.2s ease;
+}
+
+.tests-code summary:hover {
+    background: var(--bg, #fff);
+}
+
+.tests-code summary::marker {
+    content: '▶ ';
+}
+
+.tests-code[open] > summary::marker {
+    content: '▼ ';
+}
+
+.tests-code pre {
+    margin: 0;
+    padding: 1rem;
+    font-size: 0.85rem;
+    border-top: 1px solid var(--quote-border, #5c6773);
+    border-radius: 0 0 4px 4px;
+}
+
+/* ============================================
+   Reflection Section
+   ============================================ */
+.exercise-reflection {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--quote-border, #5c6773);
+    background: linear-gradient(135deg, transparent, var(--quote-bg, #f7f7f7));
+}
+
+.exercise-reflection h4 {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+}
+
+.exercise-reflection h4::before {
+    content: "🔮 ";
+}
+
+.exercise-reflection ul {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+.exercise-reflection li {
+    margin: 0.5rem 0;
+    font-style: italic;
+}
+
+/* ============================================
+   Footer Section
+   ============================================ */
+.exercise-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.5rem;
+    background: var(--quote-bg, #f7f7f7);
+    border-top: 1px solid var(--quote-border, #5c6773);
+    font-size: 0.85rem;
+}
+
+.progress-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.progress-indicator input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.progress-indicator label {
+    cursor: pointer;
+    color: var(--fg, #333);
+    opacity: 0.8;
+}
+
+.progress-indicator.completed label {
+    color: #28a745;
+    opacity: 1;
+}
+
+/* ============================================
+   Error Styles
+   ============================================ */
+.exercise-error {
+    padding: 1.5rem;
+    margin: 2rem 0;
+    border: 2px solid #dc3545;
+    border-radius: 8px;
+    background: #fff5f5;
+}
+
+.exercise-error p {
+    margin: 0 0 0.5rem;
+}
+
+.exercise-error p:last-child {
+    margin-bottom: 0;
+}
+
+.exercise-error strong {
+    color: #dc3545;
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+@media print {
+    .exercise-container {
+        break-inside: avoid;
+        border: 1px solid #ccc;
+    }
+
+    .code-toolbar,
+    .run-tests-btn,
+    .progress-indicator {
+        display: none;
+    }
+
+    .hint-content,
+    .solution-content {
+        display: block;
+    }
+}
+
+/* ============================================
+   Dark Theme Support
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+    .code-editor {
+        background: var(--code-bg, #363636);
+        color: var(--fg, #f5f5f5);
+    }
+
+    .difficulty-beginner {
+        background: #1e4620;
+        color: #8fd694;
+    }
+
+    .difficulty-intermediate {
+        background: #4a3f1e;
+        color: #ffd966;
+    }
+
+    .difficulty-advanced {
+        background: #4a1e1e;
+        color: #f69697;
+    }
+
+    .solution-toggle {
+        background: #2d1a1a;
+        border-color: #f56565;
+        color: #f69697;
+    }
+
+    .solution-toggle:hover {
+        background: #3d2525;
+    }
+
+    .test-results.success {
+        background: #1e4620;
+        border-color: #2d5a30;
+        color: #8fd694;
+    }
+
+    .test-results.error {
+        background: #4a1e1e;
+        border-color: #5a2d2d;
+        color: #f69697;
+    }
+
+    .test-results.pending {
+        background: #4a3f1e;
+        border-color: #5a4f2e;
+        color: #ffd966;
+    }
+
+    .exercise-error {
+        background: #2d1a1a;
+        border-color: #f56565;
+    }
+}
+
+/* ============================================
+   UseCase Exercise Styles
+   ============================================ */
+
+/* Domain Badges */
+.exercise-header .badge.domain {
+    background: var(--quote-bg, #f7f7f7);
+    color: var(--fg, #333);
+}
+
+.exercise-header .badge.domain.healthcare { background: #e8f5e9; color: #2e7d32; }
+.exercise-header .badge.domain.defense { background: #e3f2fd; color: #1565c0; }
+.exercise-header .badge.domain.financial { background: #fff3e0; color: #ef6c00; }
+.exercise-header .badge.domain.general { background: #f5f5f5; color: #616161; }
+
+@media (prefers-color-scheme: dark) {
+    .exercise-header .badge.domain.healthcare { background: #1b5e20; color: #a5d6a7; }
+    .exercise-header .badge.domain.defense { background: #0d47a1; color: #90caf9; }
+    .exercise-header .badge.domain.financial { background: #e65100; color: #ffcc80; }
+    .exercise-header .badge.domain.general { background: #424242; color: #e0e0e0; }
+}
+
+/* Scenario Section */
+.exercise-scenario {
+    padding: 1.5rem;
+    border-top: 1px solid var(--quote-border, #5c6773);
+}
+
+.scenario-header {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.scenario-header .organization {
+    color: var(--links, #4183c4);
+}
+
+.scenario-header .industry {
+    color: var(--fg, #333);
+    opacity: 0.7;
+}
+
+.scenario-content {
+    margin-bottom: 1.5rem;
+}
+
+.scenario-constraints {
+    background: #fff8e1;
+    border: 1px solid #ffecb3;
+    border-radius: 4px;
+    padding: 1rem;
+}
+
+.scenario-constraints h4 {
+    margin: 0 0 0.5rem;
+    color: #f57f17;
+    font-size: 0.9rem;
+}
+
+@media (prefers-color-scheme: dark) {
+    .scenario-constraints {
+        background: #3e2723; /* brownish */
+        border-color: #5d4037;
+    }
+    .scenario-constraints h4 {
+        color: #ffca28;
+    }
+}
+
+/* Prompt Section */
+.exercise-prompt {
+    padding: 1.5rem;
+    border-top: 1px solid var(--quote-border, #5c6773);
+}
+
+.prompt-aspects {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--quote-bg, #f7f7f7);
+    border-radius: 4px;
+}
+
+/* Response Section */
+.exercise-response {
+    padding: 1.5rem;
+    border-top: 1px solid var(--quote-border, #5c6773);
+}
+
+.response-requirements {
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--fg, #333);
+    opacity: 0.7;
+    text-align: right;
+}
+
+textarea.response-editor {
+    width: 100%;
+    min-height: 300px;
+    padding: 1rem;
+    font-family: inherit; /* Use body font, not monospace */
+    line-height: 1.6;
+    border: 1px solid var(--quote-border, #5c6773);
+    border-radius: 4px;
+    background: var(--bg, #fff);
+    color: var(--fg, #333);
+    resize: vertical;
+}
+
+.response-meta {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--fg, #333);
+    opacity: 0.7;
+}
+
+.response-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-submit {
+    padding: 0.75rem 2rem;
+    background: var(--links, #4183c4);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-submit:hover {
+    background: #2a6496; /* slightly darker blue */
+}
+
+/* Evaluation Results */
+.exercise-evaluation {
+    padding: 1.5rem;
+    border-top: 1px solid var(--quote-border, #5c6773);
+    background: var(--quote-bg, #f7f7f7);
+}
+
+/* Context Section */
+.exercise-context {
+    padding: 1.5rem;
+    border-top: 1px solid var(--quote-border, #5c6773);
+    background: #e8f5e9; /* Light green for learning */
+}
+
+@media (prefers-color-scheme: dark) {
+    .exercise-context {
+        background: #1b5e20;
+    }
+}

@@ -1,0 +1,333 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>The EdgeQuake Orchestrator - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="chapter-7-the-edgequake-orchestrator"><a class="header" href="#chapter-7-the-edgequake-orchestrator">Chapter 7: The EdgeQuake Orchestrator</a></h1>
+<blockquote>
+<p><strong>"A good orchestrator makes complex systems feel simple."</strong></p>
+</blockquote>
+<p>Over the past three chapters we have built up the individual components:
+a knowledge graph with property-graph storage (Chapter 4), a multi-stage
+ingestion pipeline (Chapter 5), and a multi-mode query engine
+(Chapter 6). Individually, each is useful. Together, they form a
+complete knowledge base system.</p>
+<p>This chapter shows how <code>edgequake-core</code> ties everything together into a
+single <code>EdgeQuake</code> orchestrator, how the <code>edgequake-api</code> crate exposes
+it as a REST API with Axum, and how a query flows end-to-end from HTTP
+request to LLM-generated response.</p>
+<h2 id="learning-objectives"><a class="header" href="#learning-objectives">Learning Objectives</a></h2>
+<p>After completing this chapter you will be able to:</p>
+<ol>
+<li><strong>Describe the orchestrator's role</strong> -- how <code>edgequake-core</code>
+coordinates storage, pipeline, and query engine into a unified API.</li>
+<li><strong>Read Axum route handlers</strong> -- understand the REST API design,
+middleware stack, and streaming response patterns.</li>
+<li><strong>Trace an end-to-end request</strong> -- follow a query from HTTP arrival
+through keyword extraction, graph traversal, context building, LLM
+generation, and response serialization.</li>
+</ol>
+<h2 id="chapter-outline"><a class="header" href="#chapter-outline">Chapter Outline</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Section</th><th>Topic</th></tr></thead><tbody>
+<tr><td><a href="ch07-01-core-architecture.html">7.1 Core Architecture</a></td><td>The <code>EdgeQuake</code> struct, initialization, dependency wiring</td></tr>
+<tr><td><a href="ch07-02-axum-api.html">7.2 The Axum API Layer</a></td><td>REST endpoints, middleware, streaming responses</td></tr>
+<tr><td><a href="ch07-03-request-flow.html">7.3 End-to-End Request Flow</a></td><td>Full request trace with sequence diagram</td></tr>
+</tbody></table>
+</div>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<ul>
+<li>Chapters 4-6 (all Part II concepts)</li>
+<li>Basic familiarity with Axum web framework (routes, extractors, state)</li>
+<li>Understanding of async Rust patterns (<code>Arc</code>, <code>tokio::spawn</code>)</li>
+</ul>
+<h2 id="key-terminology"><a class="header" href="#key-terminology">Key Terminology</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+<tr><td><strong>Orchestrator</strong></td><td>The central coordinator that wires together storage, pipeline, and query engine</td></tr>
+<tr><td><strong>AppState</strong></td><td>Axum shared state containing the orchestrator and configuration</td></tr>
+<tr><td><strong>Middleware</strong></td><td>Request/response processing layers (auth, logging, tenant context)</td></tr>
+<tr><td><strong>Streaming response</strong></td><td>Sending LLM output token-by-token as server-sent events</td></tr>
+</tbody></table>
+</div>
+<h2 id="the-big-picture"><a class="header" href="#the-big-picture">The Big Picture</a></h2>
+<pre class="mermaid">graph TB
+    Client[&quot;HTTP Client&quot;] --&gt; API[&quot;Axum API&lt;br/&gt;(edgequake-api)&quot;]
+
+    API --&gt; Auth[&quot;Auth Middleware&lt;br/&gt;(JWT / API Key)&quot;]
+    Auth --&gt; Tenant[&quot;Tenant Middleware&lt;br/&gt;(extract workspace)&quot;]
+    Tenant --&gt; Handler[&quot;Route Handler&quot;]
+
+    Handler --&gt; Core[&quot;EdgeQuake Orchestrator&lt;br/&gt;(edgequake-core)&quot;]
+
+    Core --&gt; Pipeline[&quot;Ingestion Pipeline&lt;br/&gt;(edgequake-pipeline)&quot;]
+    Core --&gt; QE[&quot;Query Engine&lt;br/&gt;(edgequake-query)&quot;]
+
+    Pipeline --&gt; GS[&quot;GraphStorage&quot;]
+    Pipeline --&gt; VS[&quot;VectorStorage&quot;]
+    Pipeline --&gt; KV[&quot;KVStorage&quot;]
+
+    QE --&gt; GS
+    QE --&gt; VS
+    QE --&gt; KV
+    QE --&gt; LLM[&quot;LLM Provider&quot;]
+</pre>
+<p>The orchestrator is the glue. It owns references to all storage backends
+and providers, and exposes high-level operations (<code>insert</code>, <code>query</code>,
+<code>delete</code>) that the API handlers call.</p>
+<hr />
+<p><em>Next: <a href="ch07-01-core-architecture.html">7.1 Core Architecture</a></em></p>
+<div class="quiz-placeholder" data-quiz-name="&quot;ch07-orchestrator&quot;" data-quiz-questions="{&quot;id&quot;:&quot;ch07-orchestrator&quot;,&quot;lesson_id&quot;:&quot;ch07&quot;,&quot;pass_threshold&quot;:0.7,&quot;title&quot;:&quot;The Orchestrator&quot;,&quot;questions&quot;:[{&quot;context&quot;:&quot;The orchestrator is the top-level component that ties everything together. It\ninitializes and configures storage backends (graph, vector, key-value), constructs\nthe ingestion pipeline and query engine with those backends, and exposes the\nfunctionality through API endpoints. It is the single entry point that transforms\nthe collection of library crates into a running, deployable service.\n&quot;,&quot;id&quot;:&quot;b7c8d9e0-7777-4a00-b700-000000000001&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;It coordinates the end-to-end flow by wiring together storage backends, the ingestion pipeline, and the query engine behind an API&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;It manages the database connections and connection pooling for all storage backends&quot;,&quot;It trains and fine-tunes the LLM models used for extraction and generation&quot;,&quot;It handles user authentication and authorization for multi-tenant access&quot;],&quot;prompt&quot;:&quot;What is the primary role of the orchestrator in EdgeQuake's architecture?&quot;}},{&quot;context&quot;:&quot;Axum is built on top of Tokio and Tower, the same async ecosystem that EdgeQuake's\nstorage traits and pipeline use. This means no runtime conflicts, natural integration\nwith async/await patterns throughout the codebase, and access to Tower middleware\nfor cross-cutting concerns like logging, timeouts, and rate limiting. Axum's\nextractor-based design also makes request parsing ergonomic and type-safe.\n&quot;,&quot;id&quot;:&quot;b7c8d9e0-7777-4a00-b700-000000000002&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;Axum, because it integrates natively with the Tokio async runtime that EdgeQuake already uses for async storage operations&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;Rocket, because it provides automatic OpenAPI documentation generation&quot;,&quot;Warp, because it uses filter composition for type-safe routing&quot;,&quot;Actix-web, because it uses an actor model for maximum concurrency&quot;],&quot;prompt&quot;:&quot;Which web framework does EdgeQuake use for its HTTP API, and why is it a natural fit for the project?&quot;}},{&quot;context&quot;:&quot;The orchestrator exposes three main endpoint categories: ingestion endpoints accept\ndocuments and trigger the prepare-extract-embed-store pipeline; query endpoints\naccept natural language questions and run the retrieval-generation flow; and\nhealth/status endpoints provide operational visibility into the system state,\nstorage backend connectivity, and pipeline progress. These cover the two core\nuser workflows: putting data in and getting answers out.\n&quot;,&quot;id&quot;:&quot;b7c8d9e0-7777-4a00-b700-000000000003&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;Document ingestion endpoints (upload and process documents), query endpoints (ask questions), and health/status endpoints&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;Authentication endpoints, billing endpoints, and admin dashboard endpoints&quot;,&quot;Model training endpoints, fine-tuning endpoints, and evaluation endpoints&quot;,&quot;Database migration endpoints, backup endpoints, and restore endpoints&quot;],&quot;prompt&quot;:&quot;What are the main API endpoint categories exposed by the EdgeQuake orchestrator?&quot;}},{&quot;context&quot;:&quot;EdgeQuake uses Server-Sent Events (SSE) for streaming query responses. As the LLM\ngenerates tokens, each token or chunk is sent to the client immediately via the SSE\nstream. This provides a responsive user experience where answers appear incrementally\nrather than after a long wait. SSE works over standard HTTP, requires no special\nclient libraries, and is natively supported by browsers and most HTTP clients.\n&quot;,&quot;id&quot;:&quot;b7c8d9e0-7777-4a00-b700-000000000004&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;It uses Server-Sent Events (SSE) to stream LLM-generated tokens to the client as they are produced&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;It uses WebSocket connections that the client must upgrade to before querying&quot;,&quot;It buffers the complete response and sends it in fixed-size TCP packets&quot;,&quot;It uses HTTP long polling where the client repeatedly checks for new response chunks&quot;],&quot;prompt&quot;:&quot;How does EdgeQuake implement streaming responses for query endpoints?&quot;}},{&quot;context&quot;:&quot;Axum is built on Tower's Service and Layer abstractions, which enable middleware\ncomposition. EdgeQuake uses Tower middleware layers for cross-cutting concerns:\nrequest/response logging, CORS headers for browser clients, request timeouts to\nprevent runaway queries, and potentially rate limiting. Middleware wraps the\napplication handlers, processing requests before they reach the handler and\nresponses before they reach the client, without polluting business logic.\n&quot;,&quot;id&quot;:&quot;b7c8d9e0-7777-4a00-b700-000000000005&quot;,&quot;type&quot;:&quot;ShortAnswer&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;middleware&quot;},&quot;prompt&quot;:{&quot;prompt&quot;:&quot;What Axum/Tower concept does EdgeQuake use for cross-cutting concerns like request logging, CORS, and timeouts?&quot;}}]}" data-quiz-fullscreen="true" data-quiz-cache-answers="true"></div>
+<script type="text/javascript" src="../quiz/quiz-embed.iife.js"></script><link rel="stylesheet" type="text/css" href="../quiz/style.css">
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../exercises/ch06/query-mode-selector.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part2-graph/ch07-01-core-architecture.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../exercises/ch06/query-mode-selector.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part2-graph/ch07-01-core-architecture.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

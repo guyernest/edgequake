@@ -1,0 +1,562 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Entity Extraction - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="52-entity-extraction"><a class="header" href="#52-entity-extraction">5.2 Entity Extraction</a></h2>
+<p>Entity extraction is where raw text becomes structured knowledge. An LLM
+reads each chunk and identifies the entities (people, organizations,
+concepts) and relationships (connections between entities) present in the
+text. This is the most expensive, most error-prone, and most important
+stage of the pipeline.</p>
+<h3 id="the-entityextractor-trait"><a class="header" href="#the-entityextractor-trait">The EntityExtractor Trait</a></h3>
+<p>All extraction implementations conform to a single trait:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[async_trait]
+pub trait EntityExtractor: Send + Sync {
+    /// Extract entities and relationships from a text chunk.
+    async fn extract(&amp;self, chunk: &amp;TextChunk) -&gt; Result&lt;ExtractionResult&gt;;
+
+    /// Extract from multiple chunks in batch.
+    async fn extract_batch(&amp;self, chunks: &amp;[TextChunk]) -&gt; Result&lt;Vec&lt;ExtractionResult&gt;&gt; {
+        let mut results = Vec::with_capacity(chunks.len());
+        for chunk in chunks {
+            results.push(self.extract(chunk).await?);
+        }
+        Ok(results)
+    }
+
+    /// Get the name of this extractor.
+    fn name(&amp;self) -&gt; &amp;str;
+
+    /// Get the model name used by this extractor.
+    fn model_name(&amp;self) -&gt; &amp;str { "unknown" }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>EdgeQuake ships three implementations:</p>
+<div class="table-wrapper"><table><thead><tr><th>Extractor</th><th>Strategy</th><th>Use Case</th></tr></thead><tbody>
+<tr><td><code>SimpleExtractor</code></td><td>Regex patterns</td><td>Testing (no LLM required)</td></tr>
+<tr><td><code>LLMExtractor</code></td><td>JSON-based LLM prompts</td><td>Development</td></tr>
+<tr><td><code>SOTAExtractor</code></td><td>Tuple-based LLM prompts (LightRAG)</td><td>Production</td></tr>
+</tbody></table>
+</div>
+<h3 id="extraction-result-structure"><a class="header" href="#extraction-result-structure">Extraction Result Structure</a></h3>
+<p>Every extraction call returns an <code>ExtractionResult</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct ExtractionResult {
+    /// Extracted entities.
+    pub entities: Vec&lt;ExtractedEntity&gt;,
+    /// Extracted relationships.
+    pub relationships: Vec&lt;ExtractedRelationship&gt;,
+    /// Which chunk this came from.
+    pub source_chunk_id: String,
+    /// Processing metadata (extractor name, model, timing).
+    pub metadata: HashMap&lt;String, serde_json::Value&gt;,
+    /// Token usage for cost tracking.
+    pub input_tokens: usize,
+    pub output_tokens: usize,
+    /// How long extraction took.
+    pub extraction_time_ms: u64,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Each entity carries rich metadata:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct ExtractedEntity {
+    /// Entity name (will be normalized later).
+    pub name: String,
+    /// Entity type (e.g., "PERSON", "ORGANIZATION", "CONCEPT").
+    pub entity_type: String,
+    /// Description of the entity in context.
+    pub description: String,
+    /// Importance score (0.0 to 1.0).
+    pub importance: f32,
+    /// Source text spans for provenance.
+    pub source_spans: Vec&lt;String&gt;,
+    /// Source chunk IDs for citation tracking.
+    pub source_chunk_ids: Vec&lt;String&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Relationships connect two entities:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct ExtractedRelationship {
+    pub source: String,
+    pub target: String,
+    pub relation_type: String,
+    pub description: String,
+    pub weight: f32,
+    pub keywords: Vec&lt;String&gt;,
+    pub source_chunk_id: Option&lt;String&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>keywords</code> field on relationships is especially important -- these
+power Global mode retrieval in the query engine (Chapter 6).</p>
+<h3 id="the-extraction-prompt"><a class="header" href="#the-extraction-prompt">The Extraction Prompt</a></h3>
+<p>The core of LLM-based extraction is the prompt. Here is a simplified
+version of what <code>LLMExtractor</code> sends:</p>
+<pre><code class="language-text">Extract entities and relationships from the following text.
+
+## Entity Types
+PERSON, ORGANIZATION, LOCATION, EVENT, CONCEPT, TECHNOLOGY, PRODUCT
+
+## Output Format
+Respond with valid JSON in this exact format:
+{
+  "entities": [
+    {"name": "Entity Name", "type": "ENTITY_TYPE", "description": "Brief description"}
+  ],
+  "relationships": [
+    {"source": "Source Entity", "target": "Target Entity",
+     "type": "RELATIONSHIP_TYPE", "description": "Brief description"}
+  ]
+}
+
+## Text to Analyze
+[chunk content here]
+
+## JSON Response
+</code></pre>
+<p>Several design choices in this prompt matter:</p>
+<p><strong>Constrained entity types</strong>: By listing valid types, we reduce
+hallucinated categories. The list is configurable per domain:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let extractor = LLMExtractor::new(llm_provider)
+    .with_entity_types(vec![
+        "PERSON".into(),
+        "ORGANIZATION".into(),
+        "FINANCIAL_INSTRUMENT".into(),
+        "LEGAL_ENTITY".into(),
+    ]);
+<span class="boring">}</span></code></pre></pre>
+<p><strong>JSON output</strong>: Structured output enables reliable parsing. The
+alternative (free-form text) requires complex regex extraction.</p>
+<p><strong>Description field</strong>: Asking for descriptions enriches the graph. Each
+entity description becomes the node's searchable content.</p>
+<h3 id="the-sota-extractor-production"><a class="header" href="#the-sota-extractor-production">The SOTA Extractor (Production)</a></h3>
+<p>The <code>SOTAExtractor</code> uses a more sophisticated prompt system ported from
+LightRAG. Instead of JSON, it uses a <strong>tuple-based format</strong> that is
+more robust to LLM output variations:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct SOTAExtractor&lt;L: LLMProvider + ?Sized&gt; {
+    llm_provider: Arc&lt;L&gt;,
+    entity_types: Vec&lt;String&gt;,
+    prompts: EntityExtractionPrompts,
+    parser: HybridExtractionParser,
+    language: String,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>HybridExtractionParser</code> tries multiple parsing strategies:</p>
+<ol>
+<li><strong>Tuple parsing</strong> -- the primary format (most robust)</li>
+<li><strong>JSON fallback</strong> -- if tuples fail, try JSON</li>
+<li><strong>Partial recovery</strong> -- extract whatever entities can be parsed</li>
+</ol>
+<p>This resilience is critical because LLMs occasionally produce malformed
+output, especially on complex or long chunks.</p>
+<h3 id="handling-llm-output-failures"><a class="header" href="#handling-llm-output-failures">Handling LLM Output Failures</a></h3>
+<p>LLM extraction can fail in several ways. EdgeQuake handles each:</p>
+<h4 id="empty-response"><a class="header" href="#empty-response">Empty Response</a></h4>
+<p>The LLM returns nothing (timeout, crash, context exhaustion):</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let trimmed_response = response.content.trim();
+if trimmed_response.is_empty() {
+    // Log detailed diagnostics
+    tracing::error!(
+        chunk_id = %chunk.id,
+        chunk_size_kb = chunk_size_bytes / 1024,
+        "LLM returned EMPTY response"
+    );
+    // Retry with backoff
+    continue;
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="truncated-json"><a class="header" href="#truncated-json">Truncated JSON</a></h4>
+<p>The response is cut off mid-JSON (exceeded <code>max_tokens</code>):</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Detect truncation via finish_reason
+let was_truncated = response.finish_reason
+    .as_ref()
+    .map(|r| r.contains("length"))
+    .unwrap_or(false);
+
+if was_truncated {
+    // Double max_tokens and retry
+    current_max_tokens = (current_max_tokens * 2).min(32768);
+    continue;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This adaptive <code>max_tokens</code> strategy is important because entity-dense
+chunks (academic papers, legal documents) can produce outputs <strong>6x larger
+than the input</strong> -- a 1500-token chunk might generate 9000 tokens of
+entity JSON.</p>
+<h4 id="malformed-json"><a class="header" href="#malformed-json">Malformed JSON</a></h4>
+<p>The LLM produces invalid JSON (missing brackets, extra commas):</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn extract_json_from_response(response: &amp;str) -&gt; String {
+    let response = response.trim();
+
+    // Try to find ```json block markers
+    if let Some(start) = response.find("```json") {
+        if let Some(end) = response[start + 7..].find("```") {
+            return response[start + 7..start + 7 + end].trim().to_string();
+        }
+    }
+
+    // Try to find JSON starting with {
+    if let Some(start) = response.find('{') {
+        if let Some(end) = response.rfind('}') {
+            return response[start..=end].to_string();
+        }
+    }
+
+    response.to_string()
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The parser strips markdown code fences, finds the outermost JSON object,
+and sanitizes control characters before attempting deserialization.</p>
+<h3 id="chunk-size-and-extraction-quality"><a class="header" href="#chunk-size-and-extraction-quality">Chunk Size and Extraction Quality</a></h3>
+<p>There is a direct tradeoff between chunk size and extraction quality:</p>
+<div class="table-wrapper"><table><thead><tr><th>Chunk Size</th><th>Extraction Quality</th><th>Cost</th><th>Failure Rate</th></tr></thead><tbody>
+<tr><td>Small (300-600 tokens)</td><td>High per chunk, may split entities</td><td>Higher (more chunks = more LLM calls)</td><td>Low</td></tr>
+<tr><td>Medium (800-1200 tokens)</td><td>Good balance</td><td>Moderate</td><td>Low</td></tr>
+<tr><td>Large (1500+ tokens)</td><td>May miss entities in long text</td><td>Lower</td><td>Higher (timeouts, truncation)</td></tr>
+</tbody></table>
+</div>
+<p>EdgeQuake's <code>SOTAExtractor</code> enforces a maximum chunk size to prevent
+quality degradation:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>const MAX_CHUNK_TOKENS: usize = 1500;
+
+if estimated_tokens &gt; MAX_CHUNK_TOKENS {
+    return Err(PipelineError::Validation(format!(
+        "Chunk too large for LLM processing. Size: ~{} tokens, max: {}",
+        estimated_tokens, MAX_CHUNK_TOKENS
+    )));
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="example-end-to-end-extraction"><a class="header" href="#example-end-to-end-extraction">Example: End-to-End Extraction</a></h3>
+<p>Here is a complete example of extracting from a single chunk:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use edgequake_pipeline::extractor::{SOTAExtractor, EntityExtractor};
+use edgequake_pipeline::chunker::TextChunk;
+use std::sync::Arc;
+
+// Create the extractor with an LLM provider
+let extractor = SOTAExtractor::new(Arc::clone(&amp;llm_provider))
+    .with_entity_types(vec![
+        "PERSON".into(),
+        "ORGANIZATION".into(),
+        "CONCEPT".into(),
+    ])
+    .with_language("English");
+
+// Create a chunk
+let chunk = TextChunk::new(
+    "chunk-001",
+    "Dr. Sarah Chen leads the quantum computing research team at MIT. \
+     Her work on error correction has been funded by DARPA since 2021.",
+    0, 0, 30,
+);
+
+// Extract
+let result = extractor.extract(&amp;chunk).await?;
+
+// Inspect results
+for entity in &amp;result.entities {
+    println!("Entity: {} ({}): {}", entity.name, entity.entity_type, entity.description);
+}
+// Entity: SARAH_CHEN (PERSON): Lead researcher in quantum computing at MIT
+// Entity: MIT (ORGANIZATION): Massachusetts Institute of Technology
+// Entity: DARPA (ORGANIZATION): Defense Advanced Research Projects Agency
+// Entity: QUANTUM_COMPUTING (CONCEPT): Field of computing using quantum mechanics
+
+for rel in &amp;result.relationships {
+    println!("{} --{}--&gt; {}", rel.source, rel.relation_type, rel.target);
+}
+// SARAH_CHEN --LEADS_RESEARCH_AT--&gt; MIT
+// DARPA --FUNDS--&gt; SARAH_CHEN
+// SARAH_CHEN --RESEARCHES--&gt; QUANTUM_COMPUTING
+
+println!("Tokens: {} in, {} out, took {}ms",
+    result.input_tokens, result.output_tokens, result.extraction_time_ms);
+<span class="boring">}</span></code></pre></pre>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>Entity extraction converts raw text into structured entities and
+relationships via LLM prompts.</li>
+<li>The <code>EntityExtractor</code> trait has three implementations: regex (testing),
+JSON-based (development), and tuple-based SOTA (production).</li>
+<li>Prompt engineering constrains entity types and output format for
+reliable parsing.</li>
+<li>Adaptive <code>max_tokens</code> with retry handles the common case of
+entity-dense chunks producing large outputs.</li>
+<li>Chunk size directly affects extraction quality -- 800-1200 tokens is
+the sweet spot.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch05-03-entity-normalization.html">5.3 Entity Normalization</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part2-graph/ch05-01-pipeline-architecture.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part2-graph/ch05-03-entity-normalization.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part2-graph/ch05-01-pipeline-architecture.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part2-graph/ch05-03-entity-normalization.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

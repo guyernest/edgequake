@@ -1,0 +1,1138 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Exercise: Custom Markdown Chunking - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../../src/custom.css">
+        <link rel="stylesheet" href="../../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <div class="exercise-container">
+<article class="exercise" data-exercise-id="markdown-chunking" data-difficulty="intermediate">
+<header class="exercise-header">
+  <h2 id="markdown-aware-chunking" class="exercise-title"><a class="header" href="#markdown-aware-chunking">Markdown-Aware Chunking</a></h2>
+  <code class=\"exercise-id\">markdown-chunking</code>
+  <div class="exercise-meta">
+    <span class="badge difficulty intermediate">⭐⭐ intermediate</span>
+    <span class="badge time">⏱️ 25 min</span>
+  </div>
+</header>
+<nav class="exercise-nav" aria-label="Exercise sections"><ul><li><a href="#markdown-chunking-description" data-section="description">📖 Overview</a></li><li><a href="#markdown-chunking-objectives" data-section="objectives">🎯 Objectives</a></li><li><a href="#markdown-chunking-starter" data-section="starter">💻 Code</a></li><li><a href="#markdown-chunking-hints" data-section="hints">💡 Hints</a></li><li><a href="#markdown-chunking-solution" data-section="solution">✅ Solution</a></li><li><a href="#markdown-chunking-tests" data-section="tests">🧪 Tests</a></li><li><a href="#markdown-chunking-reflection" data-section="reflection">🤔 Reflect</a></li></ul></nav>
+<section class="exercise-description" id="markdown-chunking-description">
+<p>Raw text cannot be fed to an embedding model in one piece -- it must be split
+into chunks that fit the model's context window and carry coherent meaning.
+Naive character-based splitting destroys semantic boundaries. In this exercise
+you will implement a chunking strategy that respects markdown structure,
+splitting on headers while enforcing a maximum chunk size.</p>
+</section>
+<section class="exercise-objectives" id="markdown-chunking-objectives">
+  <h3 id="-learning-objectives"><a class="header" href="#-learning-objectives">🎯 Learning Objectives</a></h3>
+  <div class="objectives-grid">
+    <div class="objectives-thinking">
+      <h4 id="thinking"><a class="header" href="#thinking">Thinking</a></h4>
+      <ul>
+        <li><input type="checkbox" id="markdown-chunking-thinking-0" class="objective-checkbox"><label for="markdown-chunking-thinking-0">Understand why chunk boundaries affect retrieval quality</label></li>
+        <li><input type="checkbox" id="markdown-chunking-thinking-1" class="objective-checkbox"><label for="markdown-chunking-thinking-1">Reason about the tradeoff between chunk size and semantic coherence</label></li>
+      </ul>
+    </div>
+    <div class="objectives-doing">
+      <h4 id="doing"><a class="header" href="#doing">Doing</a></h4>
+      <ul>
+        <li><input type="checkbox" id="markdown-chunking-doing-0" class="objective-checkbox"><label for="markdown-chunking-doing-0">Parse markdown ATX headers (# through</label></li>
+        <li><input type="checkbox" id="markdown-chunking-doing-1" class="objective-checkbox"><label for="markdown-chunking-doing-1">Split text at header boundaries while enforcing a max_size constraint</label></li>
+        <li><input type="checkbox" id="markdown-chunking-doing-2" class="objective-checkbox"><label for="markdown-chunking-doing-2">Preserve header context so each chunk knows which section it belongs to</label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+<section class="exercise-discussion">
+  <h3 id="-discussion"><a class="header" href="#-discussion">💬 Discussion</a></h3>
+  <ul>
+    <li>Why does splitting mid-sentence hurt retrieval quality compared to splitting at section boundaries?</li>
+    <li>What is the ideal chunk size for embedding models, and how does it vary by model?</li>
+    <li>How would you handle a markdown document with no headers at all?</li>
+  </ul>
+</section>
+<section class="exercise-starter" id="markdown-chunking-starter">
+  <div class="code-header">
+    <span class="filename">src/main.rs</span>
+    <div class="code-actions">
+      <button class="btn btn-copy" data-target="code-markdown-chunking" title="Copy code">📋 Copy</button>
+      <button class="btn btn-reset" data-target="code-markdown-chunking" title="Reset to original">↺ Reset</button>
+    </div>
+  </div>
+  <textarea class="code-editor" id="code-markdown-chunking" data-language="rust" data-original="/// A chunk of text with metadata about its position in the document.&#10;#[derive(Debug, Clone, PartialEq)]&#10;struct Chunk {&#10;    /// The text content of this chunk.&#10;    content: String,&#10;    /// The header path for this chunk (e.g., &quot;# Introduction &gt; ## Setup&quot;).&#10;    header_path: String,&#10;    /// Character offset where this chunk starts in the original document.&#10;    start_offset: usize,&#10;}&#10;&#10;/// Configuration for the markdown chunking strategy.&#10;struct ChunkConfig {&#10;    /// Maximum number of characters per chunk.&#10;    max_size: usize,&#10;}&#10;&#10;impl Default for ChunkConfig {&#10;    fn default() -&gt; Self {&#10;        ChunkConfig { max_size: 500 }&#10;    }&#10;}&#10;&#10;/// Determine the header level of a line (1-6), or 0 if not a header.&#10;///&#10;/// ATX headers start with 1-6 &#x27;#&#x27; characters followed by a space.&#10;fn header_level(line: &amp;str) -&gt; usize {&#10;    // TODO: Implement header level detection&#10;    // - Count leading &#x27;#&#x27; characters&#10;    // - Return the count if it is 1-6 AND followed by a space (or end of line)&#10;    // - Return 0 if the line is not a valid ATX header&#10;    todo!(&quot;Implement header_level&quot;)&#10;}&#10;&#10;/// Extract the header text (without the &#x27;#&#x27; prefix).&#10;fn header_text(line: &amp;str) -&gt; &amp;str {&#10;    // TODO: Strip the leading &#x27;#&#x27; characters and whitespace&#10;    todo!(&quot;Implement header_text&quot;)&#10;}&#10;&#10;/// Split a markdown document into chunks respecting header boundaries&#10;/// and a maximum chunk size.&#10;///&#10;/// Rules:&#10;/// 1. Each header starts a new chunk.&#10;/// 2. If a section (text between headers) exceeds max_size, split it at&#10;///    paragraph boundaries (blank lines).&#10;/// 3. If a single paragraph exceeds max_size, split at the last space&#10;///    before max_size.&#10;/// 4. Each chunk carries a header_path showing its position in the&#10;///    document hierarchy (e.g., &quot;# Title &gt; ## Section&quot;).&#10;fn chunk_markdown(text: &amp;str, config: &amp;ChunkConfig) -&gt; Vec&lt;Chunk&gt; {&#10;    // TODO: Implement markdown chunking&#10;    //&#10;    // Suggested approach:&#10;    // 1. Split the text into lines.&#10;    // 2. Walk through lines, tracking the current header stack.&#10;    // 3. When you hit a new header, flush the current chunk and update&#10;    //    the header stack.&#10;    // 4. After collecting all section text, enforce max_size by splitting&#10;    //    oversized sections at paragraph boundaries.&#10;    // 5. Build the header_path from the header stack.&#10;    todo!(&quot;Implement chunk_markdown&quot;)&#10;}&#10;&#10;/// Build a header path string from a stack of headers.&#10;/// Example: [&quot;# Introduction&quot;, &quot;## Setup&quot;] -&gt; &quot;# Introduction &gt; ## Setup&quot;&#10;fn build_header_path(stack: &amp;[String]) -&gt; String {&#10;    stack.join(&quot; &gt; &quot;)&#10;}&#10;&#10;/// Split text into sub-chunks at paragraph boundaries, respecting max_size.&#10;fn split_oversized(text: &amp;str, max_size: usize) -&gt; Vec&lt;String&gt; {&#10;    // TODO: Split at paragraph boundaries (&quot;\n\n&quot;) first.&#10;    // If a single paragraph is still too large, split at the last space&#10;    // before max_size.&#10;    todo!(&quot;Implement split_oversized&quot;)&#10;}&#10;&#10;fn main() {&#10;    let markdown = r#&quot;# Graph RAG Overview&#10;&#10;Graph RAG combines knowledge graphs with retrieval-augmented generation&#10;to provide more accurate and contextual answers.&#10;&#10;## How It Works&#10;&#10;Documents are processed through an ingestion pipeline that extracts&#10;entities and relationships, building a knowledge graph.&#10;&#10;### Extraction&#10;&#10;Named entity recognition and relationship extraction identify the&#10;key concepts and how they connect.&#10;&#10;### Embedding&#10;&#10;Each chunk is embedded into a vector space for similarity search.&#10;&#10;## Query Processing&#10;&#10;When a query arrives, the system selects the appropriate retrieval&#10;mode based on the query characteristics.&#10;&quot;#;&#10;&#10;    let config = ChunkConfig { max_size: 200 };&#10;    let chunks = chunk_markdown(markdown, &amp;config);&#10;&#10;    for (i, chunk) in chunks.iter().enumerate() {&#10;        println!(&quot;--- Chunk {} ---&quot;, i);&#10;        println!(&quot;Path: {}&quot;, chunk.header_path);&#10;        println!(&quot;Content: {}...&quot;, &amp;chunk.content[..chunk.content.len().min(80)]);&#10;        println!();&#10;    }&#10;}" spellcheck="false"></textarea>
+</section>
+<section class="exercise-hints" id="markdown-chunking-hints">
+  <h3 id="-hints"><a class="header" href="#-hints">💡 Hints</a></h3>
+  <details class="hint" data-level="1">
+    <summary>Hint 1: Header detection</summary>
+    <div class="hint-content">
+<p>A valid ATX header line starts with 1-6 <code>#</code> characters, followed by a space
+or end-of-line. Use <code>chars()</code> to count leading hashes:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn header_level(line: &amp;str) -&gt; usize {
+    let trimmed = line.trim_start();
+    let hashes = trimmed.chars().take_while(|&amp;c| c == '#').count();
+    if hashes &gt;= 1 &amp;&amp; hashes &lt;= 6 {
+        // Must be followed by a space or be the entire line
+        if trimmed.len() == hashes || trimmed.as_bytes()[hashes] == b' ' {
+            return hashes;
+        }
+    }
+    0
+}
+<span class="boring">}</span></code></pre></pre>
+    </div>
+  </details>
+  <details class="hint" data-level="2">
+    <summary>Hint 2: Chunking algorithm outline</summary>
+    <div class="hint-content">
+<p>Maintain a <code>header_stack: Vec&lt;String&gt;</code> and a <code>current_section: String</code>. Walk
+lines. On each header: flush current_section as a chunk (if non-empty), update
+the header_stack (pop headers at equal or deeper level, push the new one), and
+start a new current_section. At end-of-input, flush the final section.</p>
+<p>For max_size enforcement, split each section's content using <code>split_oversized</code>
+before creating chunks.</p>
+    </div>
+  </details>
+</section>
+<section class="exercise-solution" id="markdown-chunking-solution">
+  <details class="solution">
+    <summary><span class="solution-warning">⚠️ Try the exercise first!</span><span class="solution-toggle">Show Solution</span></summary>
+    <div class="solution-content">
+      <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Debug, Clone, PartialEq)]
+struct Chunk {
+    content: String,
+    header_path: String,
+    start_offset: usize,
+}
+<p>struct ChunkConfig {
+max_size: usize,
+}</p>
+<p>impl Default for ChunkConfig {
+fn default() -&gt; Self {
+ChunkConfig { max_size: 500 }
+}
+}</p>
+<p>fn header_level(line: &amp;str) -&gt; usize {
+let trimmed = line.trim_start();
+let hashes = trimmed.chars().take_while(|&amp;c| c == '#').count();
+if hashes &gt;= 1 &amp;&amp; hashes &lt;= 6 {
+if trimmed.len() == hashes || trimmed.as_bytes()[hashes] == b' ' {
+return hashes;
+}
+}
+0
+}</p>
+<p>fn header_text(line: &amp;str) -&gt; &amp;str {
+let trimmed = line.trim_start();
+let hashes = trimmed.chars().take_while(|&amp;c| c == '#').count();
+trimmed[hashes..].trim()
+}</p>
+<p>fn build_header_path(stack: &amp;[String]) -&gt; String {
+stack.join(" &gt; ")
+}</p>
+<p>fn split_oversized(text: &amp;str, max_size: usize) -&gt; Vec&lt;String&gt; {
+if text.len() &lt;= max_size {
+return vec![text.to_string()];
+}</p>
+<pre><code>let mut results = Vec::new();
+let paragraphs: Vec&amp;lt;&amp;amp;str&amp;gt; = text.split(&amp;quot;\n\n&amp;quot;).collect();
+let mut current = String::new();
+
+for para in paragraphs {
+    if current.is_empty() {
+        if para.len() &amp;gt; max_size {
+            // Split long paragraph at word boundaries
+            let mut remaining = para;
+            while remaining.len() &amp;gt; max_size {
+                let split_at = remaining[..max_size]
+                    .rfind(&amp;#x27; &amp;#x27;)
+                    .unwrap_or(max_size);
+                results.push(remaining[..split_at].trim().to_string());
+                remaining = remaining[split_at..].trim_start();
+            }
+            if !remaining.is_empty() {
+                current = remaining.to_string();
+            }
+        } else {
+            current = para.to_string();
+        }
+    } else if current.len() + 2 + para.len() &amp;gt; max_size {
+        results.push(current.clone());
+        if para.len() &amp;gt; max_size {
+            let mut remaining = para;
+            while remaining.len() &amp;gt; max_size {
+                let split_at = remaining[..max_size]
+                    .rfind(&amp;#x27; &amp;#x27;)
+                    .unwrap_or(max_size);
+                results.push(remaining[..split_at].trim().to_string());
+                remaining = remaining[split_at..].trim_start();
+            }
+            current = remaining.to_string();
+        } else {
+            current = para.to_string();
+        }
+    } else {
+        current.push_str(&amp;quot;\n\n&amp;quot;);
+        current.push_str(para);
+    }
+}
+
+if !current.trim().is_empty() {
+    results.push(current);
+}
+
+results
+<span class="boring">}</span></code></pre></pre>
+<p>}</p>
+<p>fn chunk_markdown(text: &amp;str, config: &amp;ChunkConfig) -&gt; Vec&lt;Chunk&gt; {
+let mut chunks = Vec::new();
+let mut header_stack: Vec&lt;(usize, String)&gt; = Vec::new(); // (level, "## Text")
+let mut current_content = String::new();
+let mut current_offset: usize = 0;
+let mut offset: usize = 0;</p>
+<pre><code>let lines: Vec&amp;lt;&amp;amp;str&amp;gt; = text.lines().collect();
+
+for line in &amp;amp;lines {
+    let level = header_level(line);
+
+    if level &amp;gt; 0 {
+        // Flush current content
+        let trimmed = current_content.trim().to_string();
+        if !trimmed.is_empty() {
+            let path = build_header_path(
+                &amp;amp;header_stack.iter().map(|(_, h)| h.clone()).collect::&amp;lt;Vec&amp;lt;_&amp;gt;&amp;gt;(),
+            );
+            let sub_chunks = split_oversized(&amp;amp;trimmed, config.max_size);
+            for sub in sub_chunks {
+                chunks.push(Chunk {
+                    content: sub,
+                    header_path: path.clone(),
+                    start_offset: current_offset,
+                });
+            }
+        }
+
+        // Update header stack: pop anything at same or deeper level
+        while header_stack.last().map_or(false, |(l, _)| *l &amp;gt;= level) {
+            header_stack.pop();
+        }
+        let header_label = format!(
+            &amp;quot;{} {}&amp;quot;,
+            &amp;quot;#&amp;quot;.repeat(level),
+            header_text(line)
+        );
+        header_stack.push((level, header_label));
+        current_content = String::new();
+        current_offset = offset + line.len() + 1; // +1 for newline
+    } else {
+        if !current_content.is_empty() || !line.is_empty() {
+            if !current_content.is_empty() {
+                current_content.push(&amp;#x27;\n&amp;#x27;);
+            }
+            current_content.push_str(line);
+        }
+    }
+    offset += line.len() + 1;
+}
+
+// Flush final content
+let trimmed = current_content.trim().to_string();
+if !trimmed.is_empty() {
+    let path = build_header_path(
+        &amp;amp;header_stack.iter().map(|(_, h)| h.clone()).collect::&amp;lt;Vec&amp;lt;_&amp;gt;&amp;gt;(),
+    );
+    let sub_chunks = split_oversized(&amp;amp;trimmed, config.max_size);
+    for sub in sub_chunks {
+        chunks.push(Chunk {
+            content: sub,
+            header_path: path.clone(),
+            start_offset: current_offset,
+        });
+    }
+}
+
+chunks
+</code></pre>
+<p>}</p>
+<p>fn main() {
+let markdown = r#"# Graph RAG Overview</p>
+<p>Graph RAG combines knowledge graphs with retrieval-augmented generation
+to provide more accurate and contextual answers.</p>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
+<p>Documents are processed through an ingestion pipeline that extracts
+entities and relationships, building a knowledge graph.</p>
+<h3 id="extraction"><a class="header" href="#extraction">Extraction</a></h3>
+<p>Named entity recognition and relationship extraction identify the
+key concepts and how they connect.</p>
+<h3 id="embedding"><a class="header" href="#embedding">Embedding</a></h3>
+<p>Each chunk is embedded into a vector space for similarity search.</p>
+<h2 id="query-processing"><a class="header" href="#query-processing">Query Processing</a></h2>
+<p>When a query arrives, the system selects the appropriate retrieval
+mode based on the query characteristics.
+"#;</p>
+<pre><code>let config = ChunkConfig { max_size: 200 };
+let chunks = chunk_markdown(markdown, &amp;amp;config);
+
+for (i, chunk) in chunks.iter().enumerate() {
+    println!(&amp;quot;--- Chunk {} ---&amp;quot;, i);
+    println!(&amp;quot;Path: {}&amp;quot;, chunk.header_path);
+    println!(&amp;quot;Content: {}...&amp;quot;, &amp;amp;chunk.content[..chunk.content.len().min(80)]);
+    println!();
+}
+</code></pre>
+<p>}</code></pre>
+<div class="solution-explanation"><h4 id="explanation"><a class="header" href="#explanation">Explanation</a></h4><p>The chunker walks through lines, detecting ATX headers to determine section
+boundaries. A header stack tracks the current position in the document
+hierarchy, popping headers at the same or deeper level when a new header is
+encountered. This ensures the header_path correctly reflects nesting (e.g.,
+"# Title &gt; ## Section &gt; ### Subsection").</p></p>
+<p>When a section is flushed, <code>split_oversized</code> enforces the max_size constraint
+by first trying paragraph boundaries (double newlines), then falling back to
+word boundaries (last space before max_size). This preserves readability while
+respecting size limits.</p>
+</div>
+    </div>
+  </details>
+</section>
+<section class="exercise-tests" id="markdown-chunking-tests" data-mode="local">
+  <h3 id="-tests"><a class="header" href="#-tests">🧪 Tests</a></h3>
+  <div class="test-actions">
+    <div class="local-test-info"><p>Run these tests locally with:</p><pre><code>cargo test</code></pre></div>
+  </div>
+  <div class="test-results" id="results-markdown-chunking" hidden></div>
+  <details class="tests-code"><summary>View Test Code</summary>
+    <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+<pre><code>#[test]
+fn test_header_level_h1() {
+    assert_eq!(header_level(&amp;quot;# Title&amp;quot;), 1);
+}
+
+#[test]
+fn test_header_level_h3() {
+    assert_eq!(header_level(&amp;quot;### Subsection&amp;quot;), 3);
+}
+
+#[test]
+fn test_header_level_not_a_header() {
+    assert_eq!(header_level(&amp;quot;This is not a header&amp;quot;), 0);
+}
+
+#[test]
+fn test_header_level_no_space_after_hash() {
+    assert_eq!(header_level(&amp;quot;#NoSpace&amp;quot;), 0);
+}
+
+#[test]
+fn test_header_text_extraction() {
+    assert_eq!(header_text(&amp;quot;## Hello World&amp;quot;), &amp;quot;Hello World&amp;quot;);
+}
+
+#[test]
+fn test_basic_chunking() {
+    let md = &amp;quot;# A\n\nFirst section.\n\n# B\n\nSecond section.\n&amp;quot;;
+    let config = ChunkConfig { max_size: 500 };
+    let chunks = chunk_markdown(md, &amp;amp;config);
+
+    assert_eq!(chunks.len(), 2);
+    assert_eq!(chunks[0].header_path, &amp;quot;# A&amp;quot;);
+    assert!(chunks[0].content.contains(&amp;quot;First section&amp;quot;));
+    assert_eq!(chunks[1].header_path, &amp;quot;# B&amp;quot;);
+    assert!(chunks[1].content.contains(&amp;quot;Second section&amp;quot;));
+}
+
+#[test]
+fn test_nested_headers() {
+    let md = &amp;quot;# Top\n\n## Sub\n\nContent here.\n&amp;quot;;
+    let config = ChunkConfig { max_size: 500 };
+    let chunks = chunk_markdown(md, &amp;amp;config);
+
+    // The content &amp;quot;Content here.&amp;quot; lives under ## Sub
+    let content_chunk = chunks.iter().find(|c| c.content.contains(&amp;quot;Content here&amp;quot;)).unwrap();
+    assert!(content_chunk.header_path.contains(&amp;quot;# Top&amp;quot;));
+    assert!(content_chunk.header_path.contains(&amp;quot;## Sub&amp;quot;));
+}
+
+#[test]
+fn test_max_size_enforcement() {
+    let long_section = format!(&amp;quot;# Title\n\n{}\n\n{}\n&amp;quot;, &amp;quot;A&amp;quot;.repeat(100), &amp;quot;B&amp;quot;.repeat(100));
+    let config = ChunkConfig { max_size: 120 };
+    let chunks = chunk_markdown(&amp;amp;long_section, &amp;amp;config);
+
+    for chunk in &amp;amp;chunks {
+        assert!(
+            chunk.content.len() &amp;lt;= 120,
+            &amp;quot;Chunk exceeded max_size: {} chars&amp;quot;,
+            chunk.content.len()
+        );
+    }
+}
+
+#[test]
+fn test_empty_document() {
+    let chunks = chunk_markdown(&amp;quot;&amp;quot;, &amp;amp;ChunkConfig::default());
+    assert!(chunks.is_empty(), &amp;quot;Empty document should produce no chunks&amp;quot;);
+}
+
+#[test]
+fn test_split_oversized_respects_paragraphs() {
+    let text = &amp;quot;Paragraph one.\n\nParagraph two.\n\nParagraph three.&amp;quot;;
+    let parts = split_oversized(text, 30);
+    assert!(parts.len() &amp;gt;= 2, &amp;quot;Should split into multiple parts&amp;quot;);
+    for part in &amp;amp;parts {
+        assert!(part.len() &amp;lt;= 30, &amp;quot;Part exceeded max_size: {}&amp;quot;, part.len());
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</code></pre></p>
+  </details>
+</section>
+<section class="exercise-reflection" id="markdown-chunking-reflection">
+  <h3 id="-reflection"><a class="header" href="#-reflection">🤔 Reflection</a></h3>
+  <ul>
+    <li>How would you add chunk overlap (e.g., repeating the last N characters of each chunk at the start of the next) to improve retrieval at boundaries?</li>
+    <li>What metadata beyond the header path would be useful to attach to each chunk?</li>
+    <li>How does the choice of max_size affect downstream embedding quality and retrieval precision?</li>
+  </ul>
+</section>
+<footer class="exercise-footer">
+  <button class="btn btn-complete" data-exercise-id="markdown-chunking">✓ Mark Complete</button>
+</footer>
+</article>
+</div>
+<h1 id="markdown-aware-chunking-1"><a class="header" href="#markdown-aware-chunking-1">Markdown-Aware Chunking</a></h1>
+<p>Raw text cannot be fed to an embedding model in one piece -- it must be split
+into chunks that fit the model's context window and carry coherent meaning.
+Naive character-based splitting destroys semantic boundaries. In this exercise
+you will implement a chunking strategy that respects markdown structure,
+splitting on headers while enforcing a maximum chunk size.</p>
+<p>::: objectives
+thinking:</p>
+<ul>
+<li>Understand why chunk boundaries affect retrieval quality</li>
+<li>Reason about the tradeoff between chunk size and semantic coherence
+doing:</li>
+<li>Parse markdown ATX headers (# through ######) to identify section boundaries</li>
+<li>Split text at header boundaries while enforcing a max_size constraint</li>
+<li>Preserve header context so each chunk knows which section it belongs to
+:::</li>
+</ul>
+<p>::: discussion</p>
+<ul>
+<li>Why does splitting mid-sentence hurt retrieval quality compared to splitting at section boundaries?</li>
+<li>What is the ideal chunk size for embedding models, and how does it vary by model?</li>
+<li>How would you handle a markdown document with no headers at all?
+:::</li>
+</ul>
+<p>::: starter file="src/main.rs"</p>
+<pre><pre class="playground"><code class="language-rust">/// A chunk of text with metadata about its position in the document.
+#[derive(Debug, Clone, PartialEq)]
+struct Chunk {
+    /// The text content of this chunk.
+    content: String,
+    /// The header path for this chunk (e.g., "# Introduction &gt; ## Setup").
+    header_path: String,
+    /// Character offset where this chunk starts in the original document.
+    start_offset: usize,
+}
+
+/// Configuration for the markdown chunking strategy.
+struct ChunkConfig {
+    /// Maximum number of characters per chunk.
+    max_size: usize,
+}
+
+impl Default for ChunkConfig {
+    fn default() -&gt; Self {
+        ChunkConfig { max_size: 500 }
+    }
+}
+
+/// Determine the header level of a line (1-6), or 0 if not a header.
+///
+/// ATX headers start with 1-6 '#' characters followed by a space.
+fn header_level(line: &amp;str) -&gt; usize {
+    // TODO: Implement header level detection
+    // - Count leading '#' characters
+    // - Return the count if it is 1-6 AND followed by a space (or end of line)
+    // - Return 0 if the line is not a valid ATX header
+    todo!("Implement header_level")
+}
+
+/// Extract the header text (without the '#' prefix).
+fn header_text(line: &amp;str) -&gt; &amp;str {
+    // TODO: Strip the leading '#' characters and whitespace
+    todo!("Implement header_text")
+}
+
+/// Split a markdown document into chunks respecting header boundaries
+/// and a maximum chunk size.
+///
+/// Rules:
+/// 1. Each header starts a new chunk.
+/// 2. If a section (text between headers) exceeds max_size, split it at
+///    paragraph boundaries (blank lines).
+/// 3. If a single paragraph exceeds max_size, split at the last space
+///    before max_size.
+/// 4. Each chunk carries a header_path showing its position in the
+///    document hierarchy (e.g., "# Title &gt; ## Section").
+fn chunk_markdown(text: &amp;str, config: &amp;ChunkConfig) -&gt; Vec&lt;Chunk&gt; {
+    // TODO: Implement markdown chunking
+    //
+    // Suggested approach:
+    // 1. Split the text into lines.
+    // 2. Walk through lines, tracking the current header stack.
+    // 3. When you hit a new header, flush the current chunk and update
+    //    the header stack.
+    // 4. After collecting all section text, enforce max_size by splitting
+    //    oversized sections at paragraph boundaries.
+    // 5. Build the header_path from the header stack.
+    todo!("Implement chunk_markdown")
+}
+
+/// Build a header path string from a stack of headers.
+/// Example: ["# Introduction", "## Setup"] -&gt; "# Introduction &gt; ## Setup"
+fn build_header_path(stack: &amp;[String]) -&gt; String {
+    stack.join(" &gt; ")
+}
+
+/// Split text into sub-chunks at paragraph boundaries, respecting max_size.
+fn split_oversized(text: &amp;str, max_size: usize) -&gt; Vec&lt;String&gt; {
+    // TODO: Split at paragraph boundaries ("\n\n") first.
+    // If a single paragraph is still too large, split at the last space
+    // before max_size.
+    todo!("Implement split_oversized")
+}
+
+fn main() {
+    let markdown = r#"# Graph RAG Overview
+
+Graph RAG combines knowledge graphs with retrieval-augmented generation
+to provide more accurate and contextual answers.
+
+# How It Works
+
+Documents are processed through an ingestion pipeline that extracts
+entities and relationships, building a knowledge graph.
+
+## Extraction
+
+Named entity recognition and relationship extraction identify the
+key concepts and how they connect.
+
+## Embedding
+
+Each chunk is embedded into a vector space for similarity search.
+
+# Query Processing
+
+When a query arrives, the system selects the appropriate retrieval
+mode based on the query characteristics.
+"#;
+
+    let config = ChunkConfig { max_size: 200 };
+    let chunks = chunk_markdown(markdown, &amp;config);
+
+    for (i, chunk) in chunks.iter().enumerate() {
+        println!("--- Chunk {} ---", i);
+        println!("Path: {}", chunk.header_path);
+        println!("Content: {}...", &amp;chunk.content[..chunk.content.len().min(80)]);
+        println!();
+    }
+}</code></pre></pre>
+<p>:::</p>
+<p>::: hint level=1 title="Header detection"
+A valid ATX header line starts with 1-6 <code>#</code> characters, followed by a space
+or end-of-line. Use <code>chars()</code> to count leading hashes:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn header_level(line: &amp;str) -&gt; usize {
+    let trimmed = line.trim_start();
+    let hashes = trimmed.chars().take_while(|&amp;c| c == '#').count();
+    if hashes &gt;= 1 &amp;&amp; hashes &lt;= 6 {
+        // Must be followed by a space or be the entire line
+        if trimmed.len() == hashes || trimmed.as_bytes()[hashes] == b' ' {
+            return hashes;
+        }
+    }
+    0
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: hint level=2 title="Chunking algorithm outline"
+Maintain a <code>header_stack: Vec&lt;String&gt;</code> and a <code>current_section: String</code>. Walk
+lines. On each header: flush current_section as a chunk (if non-empty), update
+the header_stack (pop headers at equal or deeper level, push the new one), and
+start a new current_section. At end-of-input, flush the final section.</p>
+<p>For max_size enforcement, split each section's content using <code>split_oversized</code>
+before creating chunks.
+:::</p>
+<p>::: solution</p>
+<pre><pre class="playground"><code class="language-rust">#[derive(Debug, Clone, PartialEq)]
+struct Chunk {
+    content: String,
+    header_path: String,
+    start_offset: usize,
+}
+
+struct ChunkConfig {
+    max_size: usize,
+}
+
+impl Default for ChunkConfig {
+    fn default() -&gt; Self {
+        ChunkConfig { max_size: 500 }
+    }
+}
+
+fn header_level(line: &amp;str) -&gt; usize {
+    let trimmed = line.trim_start();
+    let hashes = trimmed.chars().take_while(|&amp;c| c == '#').count();
+    if hashes &gt;= 1 &amp;&amp; hashes &lt;= 6 {
+        if trimmed.len() == hashes || trimmed.as_bytes()[hashes] == b' ' {
+            return hashes;
+        }
+    }
+    0
+}
+
+fn header_text(line: &amp;str) -&gt; &amp;str {
+    let trimmed = line.trim_start();
+    let hashes = trimmed.chars().take_while(|&amp;c| c == '#').count();
+    trimmed[hashes..].trim()
+}
+
+fn build_header_path(stack: &amp;[String]) -&gt; String {
+    stack.join(" &gt; ")
+}
+
+fn split_oversized(text: &amp;str, max_size: usize) -&gt; Vec&lt;String&gt; {
+    if text.len() &lt;= max_size {
+        return vec![text.to_string()];
+    }
+
+    let mut results = Vec::new();
+    let paragraphs: Vec&lt;&amp;str&gt; = text.split("\n\n").collect();
+    let mut current = String::new();
+
+    for para in paragraphs {
+        if current.is_empty() {
+            if para.len() &gt; max_size {
+                // Split long paragraph at word boundaries
+                let mut remaining = para;
+                while remaining.len() &gt; max_size {
+                    let split_at = remaining[..max_size]
+                        .rfind(' ')
+                        .unwrap_or(max_size);
+                    results.push(remaining[..split_at].trim().to_string());
+                    remaining = remaining[split_at..].trim_start();
+                }
+                if !remaining.is_empty() {
+                    current = remaining.to_string();
+                }
+            } else {
+                current = para.to_string();
+            }
+        } else if current.len() + 2 + para.len() &gt; max_size {
+            results.push(current.clone());
+            if para.len() &gt; max_size {
+                let mut remaining = para;
+                while remaining.len() &gt; max_size {
+                    let split_at = remaining[..max_size]
+                        .rfind(' ')
+                        .unwrap_or(max_size);
+                    results.push(remaining[..split_at].trim().to_string());
+                    remaining = remaining[split_at..].trim_start();
+                }
+                current = remaining.to_string();
+            } else {
+                current = para.to_string();
+            }
+        } else {
+            current.push_str("\n\n");
+            current.push_str(para);
+        }
+    }
+
+    if !current.trim().is_empty() {
+        results.push(current);
+    }
+
+    results
+}
+
+fn chunk_markdown(text: &amp;str, config: &amp;ChunkConfig) -&gt; Vec&lt;Chunk&gt; {
+    let mut chunks = Vec::new();
+    let mut header_stack: Vec&lt;(usize, String)&gt; = Vec::new(); // (level, "## Text")
+    let mut current_content = String::new();
+    let mut current_offset: usize = 0;
+    let mut offset: usize = 0;
+
+    let lines: Vec&lt;&amp;str&gt; = text.lines().collect();
+
+    for line in &amp;lines {
+        let level = header_level(line);
+
+        if level &gt; 0 {
+            // Flush current content
+            let trimmed = current_content.trim().to_string();
+            if !trimmed.is_empty() {
+                let path = build_header_path(
+                    &amp;header_stack.iter().map(|(_, h)| h.clone()).collect::&lt;Vec&lt;_&gt;&gt;(),
+                );
+                let sub_chunks = split_oversized(&amp;trimmed, config.max_size);
+                for sub in sub_chunks {
+                    chunks.push(Chunk {
+                        content: sub,
+                        header_path: path.clone(),
+                        start_offset: current_offset,
+                    });
+                }
+            }
+
+            // Update header stack: pop anything at same or deeper level
+            while header_stack.last().map_or(false, |(l, _)| *l &gt;= level) {
+                header_stack.pop();
+            }
+            let header_label = format!(
+                "{} {}",
+                "#".repeat(level),
+                header_text(line)
+            );
+            header_stack.push((level, header_label));
+            current_content = String::new();
+            current_offset = offset + line.len() + 1; // +1 for newline
+        } else {
+            if !current_content.is_empty() || !line.is_empty() {
+                if !current_content.is_empty() {
+                    current_content.push('\n');
+                }
+                current_content.push_str(line);
+            }
+        }
+        offset += line.len() + 1;
+    }
+
+    // Flush final content
+    let trimmed = current_content.trim().to_string();
+    if !trimmed.is_empty() {
+        let path = build_header_path(
+            &amp;header_stack.iter().map(|(_, h)| h.clone()).collect::&lt;Vec&lt;_&gt;&gt;(),
+        );
+        let sub_chunks = split_oversized(&amp;trimmed, config.max_size);
+        for sub in sub_chunks {
+            chunks.push(Chunk {
+                content: sub,
+                header_path: path.clone(),
+                start_offset: current_offset,
+            });
+        }
+    }
+
+    chunks
+}
+
+fn main() {
+    let markdown = r#"# Graph RAG Overview
+
+Graph RAG combines knowledge graphs with retrieval-augmented generation
+to provide more accurate and contextual answers.
+
+# How It Works
+
+Documents are processed through an ingestion pipeline that extracts
+entities and relationships, building a knowledge graph.
+
+## Extraction
+
+Named entity recognition and relationship extraction identify the
+key concepts and how they connect.
+
+## Embedding
+
+Each chunk is embedded into a vector space for similarity search.
+
+# Query Processing
+
+When a query arrives, the system selects the appropriate retrieval
+mode based on the query characteristics.
+"#;
+
+    let config = ChunkConfig { max_size: 200 };
+    let chunks = chunk_markdown(markdown, &amp;config);
+
+    for (i, chunk) in chunks.iter().enumerate() {
+        println!("--- Chunk {} ---", i);
+        println!("Path: {}", chunk.header_path);
+        println!("Content: {}...", &amp;chunk.content[..chunk.content.len().min(80)]);
+        println!();
+    }
+}</code></pre></pre>
+<h3 id="explanation-1"><a class="header" href="#explanation-1">Explanation</a></h3>
+<p>The chunker walks through lines, detecting ATX headers to determine section
+boundaries. A header stack tracks the current position in the document
+hierarchy, popping headers at the same or deeper level when a new header is
+encountered. This ensures the header_path correctly reflects nesting (e.g.,
+"# Title &gt; ## Section &gt; ### Subsection").</p>
+<p>When a section is flushed, <code>split_oversized</code> enforces the max_size constraint
+by first trying paragraph boundaries (double newlines), then falling back to
+word boundaries (last space before max_size). This preserves readability while
+respecting size limits.
+:::</p>
+<p>::: tests mode=local</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_header_level_h1() {
+        assert_eq!(header_level("# Title"), 1);
+    }
+
+    #[test]
+    fn test_header_level_h3() {
+        assert_eq!(header_level("### Subsection"), 3);
+    }
+
+    #[test]
+    fn test_header_level_not_a_header() {
+        assert_eq!(header_level("This is not a header"), 0);
+    }
+
+    #[test]
+    fn test_header_level_no_space_after_hash() {
+        assert_eq!(header_level("#NoSpace"), 0);
+    }
+
+    #[test]
+    fn test_header_text_extraction() {
+        assert_eq!(header_text("## Hello World"), "Hello World");
+    }
+
+    #[test]
+    fn test_basic_chunking() {
+        let md = "# A\n\nFirst section.\n\n# B\n\nSecond section.\n";
+        let config = ChunkConfig { max_size: 500 };
+        let chunks = chunk_markdown(md, &amp;config);
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].header_path, "# A");
+        assert!(chunks[0].content.contains("First section"));
+        assert_eq!(chunks[1].header_path, "# B");
+        assert!(chunks[1].content.contains("Second section"));
+    }
+
+    #[test]
+    fn test_nested_headers() {
+        let md = "# Top\n\n## Sub\n\nContent here.\n";
+        let config = ChunkConfig { max_size: 500 };
+        let chunks = chunk_markdown(md, &amp;config);
+
+        // The content "Content here." lives under ## Sub
+        let content_chunk = chunks.iter().find(|c| c.content.contains("Content here")).unwrap();
+        assert!(content_chunk.header_path.contains("# Top"));
+        assert!(content_chunk.header_path.contains("## Sub"));
+    }
+
+    #[test]
+    fn test_max_size_enforcement() {
+        let long_section = format!("# Title\n\n{}\n\n{}\n", "A".repeat(100), "B".repeat(100));
+        let config = ChunkConfig { max_size: 120 };
+        let chunks = chunk_markdown(&amp;long_section, &amp;config);
+
+        for chunk in &amp;chunks {
+            assert!(
+                chunk.content.len() &lt;= 120,
+                "Chunk exceeded max_size: {} chars",
+                chunk.content.len()
+            );
+        }
+    }
+
+    #[test]
+    fn test_empty_document() {
+        let chunks = chunk_markdown("", &amp;ChunkConfig::default());
+        assert!(chunks.is_empty(), "Empty document should produce no chunks");
+    }
+
+    #[test]
+    fn test_split_oversized_respects_paragraphs() {
+        let text = "Paragraph one.\n\nParagraph two.\n\nParagraph three.";
+        let parts = split_oversized(text, 30);
+        assert!(parts.len() &gt;= 2, "Should split into multiple parts");
+        for part in &amp;parts {
+            assert!(part.len() &lt;= 30, "Part exceeded max_size: {}", part.len());
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: reflection</p>
+<ul>
+<li>How would you add chunk overlap (e.g., repeating the last N characters of each chunk at the start of the next) to improve retrieval at boundaries?</li>
+<li>What metadata beyond the header path would be useful to attach to each chunk?</li>
+<li>How does the choice of max_size affect downstream embedding quality and retrieval precision?
+:::</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../part1-foundations/ch02-04-edgequake-chunker.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../part1-foundations/ch03-advanced-retrieval.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../part1-foundations/ch02-04-edgequake-chunker.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../part1-foundations/ch03-advanced-retrieval.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../../ace.js"></script>
+        <script src="../../mode-rust.js"></script>
+        <script src="../../editor.js"></script>
+        <script src="../../theme-dawn.js"></script>
+        <script src="../../theme-tomorrow_night.js"></script>
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,339 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Embeddings and Chunking - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="chapter-2-embeddings-and-chunking"><a class="header" href="#chapter-2-embeddings-and-chunking">Chapter 2: Embeddings and Chunking</a></h1>
+<blockquote>
+<p><strong>"Garbage in, garbage out -- but in RAG, the garbage is measured in
+1536 dimensions."</strong></p>
+</blockquote>
+<p>The quality of a RAG system is bounded by the quality of its embeddings
+and the intelligence of its chunking strategy. A perfect retrieval
+algorithm searching over poorly chunked, poorly embedded text will return
+irrelevant results. Conversely, well-crafted chunks with high-quality
+embeddings can make even a simple cosine-similarity search remarkably
+effective.</p>
+<p>In this chapter we go deep on both: how text becomes vectors, and how
+documents become chunks.</p>
+<h2 id="learning-objectives"><a class="header" href="#learning-objectives">Learning Objectives</a></h2>
+<p>After completing this chapter you will be able to:</p>
+<ol>
+<li><strong>Explain tokenization</strong> -- BPE and WordPiece algorithms, token
+counting, and why token budgets constrain RAG design.</li>
+<li><strong>Compare embedding models</strong> -- bi-encoders vs cross-encoders,
+dimension tradeoffs, and distance metrics.</li>
+<li><strong>Select a chunking strategy</strong> -- fixed-size, recursive character,
+semantic, and markdown-aware, with clear guidance on when to use each.</li>
+<li><strong>Use EdgeQuake's Chunker</strong> -- configure and integrate the framework's
+chunking pipeline for production ingestion.</li>
+</ol>
+<h2 id="chapter-outline"><a class="header" href="#chapter-outline">Chapter Outline</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Section</th><th>Topic</th></tr></thead><tbody>
+<tr><td><a href="ch02-01-tokenization.html">2.1 Tokenization</a></td><td>BPE, WordPiece, token counting, context windows</td></tr>
+<tr><td><a href="ch02-02-embedding-models.html">2.2 Embedding Models</a></td><td>Bi-encoders, cross-encoders, model selection</td></tr>
+<tr><td><a href="ch02-03-chunking-strategies.html">2.3 Chunking Strategies</a></td><td>Fixed-size, recursive, semantic, markdown-aware</td></tr>
+<tr><td><a href="ch02-04-edgequake-chunker.html">2.4 EdgeQuake's Chunker</a></td><td>ChunkerConfig, pipeline integration</td></tr>
+</tbody></table>
+</div>
+<h2 id="the-embedding-chunking-feedback-loop"><a class="header" href="#the-embedding-chunking-feedback-loop">The Embedding-Chunking Feedback Loop</a></h2>
+<p>Chunking and embedding are not independent decisions. They form a feedback
+loop: your chunk size must fit within the embedding model's token limit,
+your overlap strategy affects how much redundant embedding work you do,
+and your embedding model's strengths influence what chunking granularity
+works best.</p>
+<pre class="mermaid">flowchart TD
+    A[Document] --&gt; B[Chunking Strategy]
+    B --&gt; C[Chunks]
+    C --&gt; D[Tokenizer]
+    D --&gt; E{Tokens &lt;= Model Limit?}
+    E --&gt;|Yes| F[Embedding Model]
+    E --&gt;|No| B
+    F --&gt; G[Vectors]
+    G --&gt; H[(Vector Store)]
+
+    style E fill:#f9f,stroke:#333,stroke-width:2px
+</pre>
+<p>This feedback loop means you should choose your embedding model <em>first</em>,
+then design your chunking strategy around its token limit and semantic
+strengths.</p>
+<h2 id="key-terminology"><a class="header" href="#key-terminology">Key Terminology</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+<tr><td><strong>Token</strong></td><td>The atomic unit of text processing for a model (sub-word, word, or character)</td></tr>
+<tr><td><strong>BPE</strong></td><td>Byte Pair Encoding -- a tokenization algorithm that merges frequent byte pairs</td></tr>
+<tr><td><strong>Bi-encoder</strong></td><td>An embedding model that encodes query and document independently</td></tr>
+<tr><td><strong>Cross-encoder</strong></td><td>A model that encodes query and document jointly for more accurate scoring</td></tr>
+<tr><td><strong>Chunk overlap</strong></td><td>Repeated text between adjacent chunks to preserve context at boundaries</td></tr>
+<tr><td><strong>Semantic chunking</strong></td><td>Splitting text at natural topic boundaries rather than fixed positions</td></tr>
+</tbody></table>
+</div>
+<h2 id="why-this-matters"><a class="header" href="#why-this-matters">Why This Matters</a></h2>
+<p>Consider two RAG systems indexing the same 10,000-page legal corpus:</p>
+<ul>
+<li><strong>System A</strong>: Fixed 512-token chunks, no overlap, ada-002 embeddings</li>
+<li><strong>System B</strong>: Recursive character chunking at 384 tokens with 64-token
+overlap, text-embedding-3-small at 512 dimensions</li>
+</ul>
+<p>System B retrieves relevant passages 23% more often in benchmarks, not
+because of a better retrieval algorithm, but because its chunks preserve
+more semantic coherence and its embeddings capture meaning more efficiently.</p>
+<p>The retrieval algorithm is the <em>mechanism</em>. Embeddings and chunking are the
+<em>signal quality</em>.</p>
+<hr />
+<p><em>Next: <a href="ch02-01-tokenization.html">2.1 Tokenization</a></em></p>
+<div class="quiz-placeholder" data-quiz-name="&quot;ch02-embeddings-chunking&quot;" data-quiz-questions="{&quot;id&quot;:&quot;ch02-embeddings-chunking&quot;,&quot;lesson_id&quot;:&quot;ch02&quot;,&quot;pass_threshold&quot;:0.7,&quot;title&quot;:&quot;Embeddings and Chunking&quot;,&quot;questions&quot;:[{&quot;context&quot;:&quot;BPE builds a vocabulary by iteratively merging the most frequent byte pairs. When\nencoding text, common words may be single tokens ('the'), while rare words are\ndecomposed into subword pieces. For example, 'EdgeQuake' might become ['Edge', 'Qu',\n'ake']. This ensures any input can be tokenized without out-of-vocabulary errors,\nwhich is why BPE is used by most modern LLMs and embedding models.\n&quot;,&quot;id&quot;:&quot;c2b3d4e5-2222-4b00-b200-000000000001&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;They are broken into smaller subword units that exist in the vocabulary, down to individual characters if needed&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;They are replaced with an &lt;UNK&gt; unknown token&quot;,&quot;They are skipped entirely during encoding&quot;,&quot;They are mapped to the closest word in the vocabulary&quot;],&quot;prompt&quot;:&quot;In BPE (Byte Pair Encoding) tokenization, how are rare or unseen words handled?&quot;}},{&quot;context&quot;:&quot;Bi-encoders produce a single embedding per text independently, enabling precomputation\nand fast nearest-neighbor search across millions of documents. Cross-encoders take\nboth texts as a concatenated input and produce a single relevance score, allowing\ndeep token-level interaction. Cross-encoders are more accurate but O(n) per comparison,\nmaking them suitable for reranking a small candidate set, not full corpus search.\n&quot;,&quot;id&quot;:&quot;c2b3d4e5-2222-4b00-b200-000000000002&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;Bi-encoders embed each text independently for fast comparison, while cross-encoders process both texts jointly for higher accuracy&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;Bi-encoders use transformers while cross-encoders use RNNs&quot;,&quot;Bi-encoders work on words while cross-encoders work on sentences&quot;,&quot;Bi-encoders are unsupervised while cross-encoders require labeled data&quot;],&quot;prompt&quot;:&quot;What is the key architectural difference between bi-encoders and cross-encoders for semantic similarity?&quot;}},{&quot;context&quot;:&quot;Large chunks (e.g., 1000+ tokens) retain surrounding context and document structure,\nreducing the lost context problem. However, they may contain multiple topics, making\nthe embedding a blurred average that matches less precisely to specific queries. Small\nchunks are more focused but lose context. The optimal size depends on document type\nand query patterns.\n&quot;,&quot;id&quot;:&quot;c2b3d4e5-2222-4b00-b200-000000000003&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;Larger chunks preserve more context but may dilute relevance by mixing multiple topics in a single chunk&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;Larger chunks are faster to embed but slower to retrieve&quot;,&quot;Larger chunks use less storage but more memory at query time&quot;,&quot;Larger chunks improve recall but increase embedding model cost&quot;],&quot;prompt&quot;:&quot;What is the primary tradeoff when choosing a larger chunk size for document chunking?&quot;}},{&quot;context&quot;:&quot;Without overlap, a critical sentence that falls exactly at a chunk boundary would be\nsplit across two chunks, potentially losing meaning in both. Overlap (typically 10-20%\nof chunk size) creates a sliding window effect where boundary content appears in full\nin at least one adjacent chunk. This prevents information loss at split points while\nonly modestly increasing the total number of chunks.\n&quot;,&quot;id&quot;:&quot;c2b3d4e5-2222-4b00-b200-000000000004&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;Overlap ensures that sentences or ideas split at chunk boundaries still appear complete in at least one chunk&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;Overlap increases the total number of chunks for better coverage&quot;,&quot;Overlap allows parallel processing of chunks across multiple threads&quot;,&quot;Overlap reduces the total storage needed by compressing repeated sections&quot;],&quot;prompt&quot;:&quot;Why do chunking strategies use overlap between consecutive chunks?&quot;}},{&quot;context&quot;:&quot;OpenAI's text-embedding-3-large produces 3072-dimensional vectors by default. Higher\ndimensions capture more nuanced semantic distinctions but require more storage and\ncomputation. Some models offer dimension reduction (e.g., Matryoshka embeddings)\nwhere you can truncate to fewer dimensions with graceful accuracy degradation. Common\ndimensions across models range from 384 to 3072.\n&quot;,&quot;id&quot;:&quot;c2b3d4e5-2222-4b00-b200-000000000005&quot;,&quot;type&quot;:&quot;ShortAnswer&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;3072&quot;},&quot;prompt&quot;:{&quot;prompt&quot;:&quot;What is the typical dimensionality of embeddings produced by modern models like OpenAI's text-embedding-3-large?&quot;}}]}" data-quiz-fullscreen="true" data-quiz-cache-answers="true"></div>
+<script type="text/javascript" src="../quiz/quiz-embed.iife.js"></script><link rel="stylesheet" type="text/css" href="../quiz/style.css">
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../exercises/ch01/naive-vector-search.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part1-foundations/ch02-01-tokenization.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../exercises/ch01/naive-vector-search.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part1-foundations/ch02-01-tokenization.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

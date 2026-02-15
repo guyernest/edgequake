@@ -1,0 +1,91 @@
+# Quiz: Observability and Performance
+
+id = "ch13-observability"
+title = "Observability and Performance"
+lesson_id = "ch13"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Why does EdgeQuake use the 'tracing' crate instead of a simple logging library like 'log'?"
+prompt.distractors = [
+    "The 'tracing' crate is faster because it writes logs directly to disk without buffering",
+    "The 'log' crate has been deprecated by the Rust community in favor of 'tracing'",
+    "The 'tracing' crate is the only logging library compatible with the tokio async runtime"
+]
+answer.answer = "The 'tracing' crate provides structured, span-based instrumentation that tracks context across async operations, not just individual log lines"
+context = """
+The 'tracing' crate goes beyond traditional logging by introducing spans — named, timed regions of code that \
+carry structured context. When an async task yields and resumes across different threads, tracing maintains \
+the span context, so you can correlate all log events belonging to a single request even if they execute on \
+different threads. The 'log' crate only supports individual, unstructured log messages without this \
+request-scoped context propagation.
+"""
+id = "f6a7b8c9-6001-4f5d-a001-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What is the advantage of structured logging over plain text log messages in a production system?"
+prompt.distractors = [
+    "Structured logs are smaller in size, reducing storage costs for log retention",
+    "Structured logs are human-readable by default, making them easier to read in a terminal",
+    "Structured logs automatically redact sensitive information like passwords and API keys"
+]
+answer.answer = "Structured logs emit key-value fields that can be filtered, aggregated, and queried programmatically by log analysis tools"
+context = """
+Structured logging outputs log events as key-value pairs (often in JSON format) rather than free-form text. \
+This means a log analysis tool can filter by specific fields (e.g., workspace_id=123, latency_ms>500) without \
+parsing arbitrary text with regex. In production, this enables powerful queries like "show all requests for \
+workspace X that took longer than 500ms" — something that is fragile or impossible with unstructured text logs.
+"""
+id = "f6a7b8c9-6001-4f5d-a001-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Why does the ordering of middleware layers matter in EdgeQuake's HTTP server stack?"
+prompt.distractors = [
+    "Middleware layers are executed in parallel, and ordering determines thread priority",
+    "Only the first middleware layer runs; subsequent layers are fallbacks for error cases",
+    "Middleware ordering only affects compile time, not runtime behavior"
+]
+answer.answer = "Middleware executes in a defined order for each request, so authentication must run before authorization, and tracing should wrap everything to capture the full request lifecycle"
+context = """
+Middleware layers form an onion-like stack around the request handler. The outermost layer runs first on the \
+request and last on the response. Tracing middleware should be outermost so it captures timing for the entire \
+request including all other middleware. Authentication must run before authorization (you need to know who \
+the user is before checking what they can do). Incorrect ordering can lead to security bypasses (e.g., \
+checking permissions before verifying identity) or incomplete observability data.
+"""
+id = "f6a7b8c9-6001-4f5d-a001-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "How do batch operations improve performance in EdgeQuake's storage layer?"
+prompt.distractors = [
+    "By compressing multiple records into a single binary blob to reduce data size",
+    "By running each operation in a separate thread to maximize CPU utilization",
+    "By skipping validation checks that are normally applied to individual operations"
+]
+answer.answer = "By combining multiple storage operations into a single round-trip, reducing network overhead and enabling database-level bulk optimizations"
+context = """
+Each individual storage operation incurs network latency (round-trip to the database), connection overhead, \
+and per-operation processing costs. Batch operations combine many operations (e.g., inserting 100 entities) \
+into a single request, amortizing the network round-trip cost across all items. Databases can also optimize \
+bulk inserts internally (e.g., fewer index updates, reduced transaction overhead). This is especially \
+impactful when storing results from the batch ingestion pipeline, where thousands of entities and \
+relationships need to be persisted.
+"""
+id = "f6a7b8c9-6001-4f5d-a001-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What type of logging records security-relevant events such as who accessed what data and when, providing a forensic trail for compliance?"
+answer.answer = "audit logging"
+context = """
+Audit logging is a specialized form of logging focused on recording security-relevant events: who performed \
+an action, what the action was, when it occurred, and what data was affected. Unlike general application \
+logging (which aids debugging), audit logs serve compliance and forensic purposes. They answer questions \
+like "who accessed tenant X's data last Tuesday?" and are typically stored with tamper-evident protections \
+and longer retention periods than regular application logs.
+"""
+id = "f6a7b8c9-6001-4f5d-a001-000000000005"

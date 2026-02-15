@@ -1,0 +1,490 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Entity Normalization - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="53-entity-normalization"><a class="header" href="#53-entity-normalization">5.3 Entity Normalization</a></h2>
+<p>Entity extraction produces raw names: "John Smith", "J. Smith",
+"john smith", "JOHN SMITH", "Dr. John Smith". Without normalization,
+each of these would become a separate node in the knowledge graph,
+fragmenting the information about a single real-world entity across
+multiple disconnected nodes.</p>
+<p>Normalization ensures that all references to the same entity converge
+on a single canonical node ID.</p>
+<h3 id="why-normalization-matters"><a class="header" href="#why-normalization-matters">Why Normalization Matters</a></h3>
+<p>Consider a knowledge base built from corporate documents. Without
+normalization:</p>
+<pre class="mermaid">graph TD
+    A[&quot;John Smith&quot;] --&gt;|&quot;CEO_OF&quot;| B[&quot;Acme Corp&quot;]
+    C[&quot;J. Smith&quot;] --&gt;|&quot;SIGNED&quot;| D[&quot;Contract #42&quot;]
+    E[&quot;john smith&quot;] --&gt;|&quot;ATTENDED&quot;| F[&quot;Board Meeting&quot;]
+    G[&quot;Dr. John Smith&quot;] --&gt;|&quot;AUTHORED&quot;| H[&quot;Annual Report&quot;]
+</pre>
+<p>Four separate nodes, four separate contexts. A query asking "What did
+John Smith do?" would only find the relationships connected to whichever
+variant the vector search happens to match.</p>
+<p>With normalization, all four merge into a single node:</p>
+<pre class="mermaid">graph TD
+    JS[&quot;JOHN_SMITH&lt;br/&gt;&lt;small&gt;CEO, signatory, attendee, author&lt;/small&gt;&quot;] --&gt;|&quot;CEO_OF&quot;| B[&quot;ACME_CORP&quot;]
+    JS --&gt;|&quot;SIGNED&quot;| D[&quot;CONTRACT_42&quot;]
+    JS --&gt;|&quot;ATTENDED&quot;| F[&quot;BOARD_MEETING&quot;]
+    JS --&gt;|&quot;AUTHORED&quot;| H[&quot;ANNUAL_REPORT&quot;]
+</pre>
+<p>Now a single graph traversal from <code>JOHN_SMITH</code> reveals all four
+relationships.</p>
+<h3 id="edgequakes-normalization-strategy"><a class="header" href="#edgequakes-normalization-strategy">EdgeQuake's Normalization Strategy</a></h3>
+<p>EdgeQuake applies normalization in layers, from simple string
+transformations to LLM-assisted resolution:</p>
+<h4 id="layer-1-string-normalization"><a class="header" href="#layer-1-string-normalization">Layer 1: String Normalization</a></h4>
+<p>The first layer is deterministic and fast:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Normalize an entity name to canonical form.
+fn normalize_entity_name(name: &amp;str) -&gt; String {
+    name.trim()
+        // Remove common prefixes/suffixes
+        .trim_start_matches("The ")
+        .trim_start_matches("the ")
+        // Convert to uppercase
+        .to_uppercase()
+        // Replace spaces and hyphens with underscores
+        .replace(' ', "_")
+        .replace('-', "_")
+        // Collapse multiple underscores
+        .replace("__", "_")
+        // Remove trailing underscores
+        .trim_end_matches('_')
+        .to_string()
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This handles the most common cases:</p>
+<div class="table-wrapper"><table><thead><tr><th>Input</th><th>Normalized</th></tr></thead><tbody>
+<tr><td>"John Smith"</td><td><code>JOHN_SMITH</code></td></tr>
+<tr><td>"john smith"</td><td><code>JOHN_SMITH</code></td></tr>
+<tr><td>"JOHN SMITH"</td><td><code>JOHN_SMITH</code></td></tr>
+<tr><td>"The White House"</td><td><code>WHITE_HOUSE</code></td></tr>
+<tr><td>"New York City"</td><td><code>NEW_YORK_CITY</code></td></tr>
+</tbody></table>
+</div>
+<h4 id="layer-2-title-and-prefix-stripping"><a class="header" href="#layer-2-title-and-prefix-stripping">Layer 2: Title and Prefix Stripping</a></h4>
+<p>Honorifics and titles create false duplicates:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>const TITLE_PREFIXES: &amp;[&amp;str] = &amp;[
+    "Dr. ", "Dr ", "Mr. ", "Mr ", "Mrs. ", "Mrs ",
+    "Ms. ", "Ms ", "Prof. ", "Prof ", "Professor ",
+    "Sir ", "Lord ", "Dame ", "President ", "CEO ",
+];
+
+fn strip_titles(name: &amp;str) -&gt; String {
+    let mut result = name.to_string();
+    for prefix in TITLE_PREFIXES {
+        if result.starts_with(prefix) {
+            result = result[prefix.len()..].to_string();
+            break; // Only strip one prefix
+        }
+    }
+    result
+}
+<span class="boring">}</span></code></pre></pre>
+<div class="table-wrapper"><table><thead><tr><th>Input</th><th>After Title Stripping</th><th>Final</th></tr></thead><tbody>
+<tr><td>"Dr. Sarah Chen"</td><td>"Sarah Chen"</td><td><code>SARAH_CHEN</code></td></tr>
+<tr><td>"Professor James Wilson"</td><td>"James Wilson"</td><td><code>JAMES_WILSON</code></td></tr>
+<tr><td>"CEO John Smith"</td><td>"John Smith"</td><td><code>JOHN_SMITH</code></td></tr>
+</tbody></table>
+</div>
+<h4 id="layer-3-alias-resolution"><a class="header" href="#layer-3-alias-resolution">Layer 3: Alias Resolution</a></h4>
+<p>Some entity pairs require explicit mapping. EdgeQuake supports
+configurable alias tables:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::collections::HashMap;
+
+let aliases: HashMap&lt;String, String&gt; = HashMap::from([
+    ("USA".into(), "UNITED_STATES".into()),
+    ("U.S.A.".into(), "UNITED_STATES".into()),
+    ("U.S.".into(), "UNITED_STATES".into()),
+    ("AMERICA".into(), "UNITED_STATES".into()),
+    ("NYC".into(), "NEW_YORK_CITY".into()),
+    ("NY".into(), "NEW_YORK".into()),
+    ("MIT".into(), "MASSACHUSETTS_INSTITUTE_OF_TECHNOLOGY".into()),
+]);
+
+fn resolve_alias(name: &amp;str, aliases: &amp;HashMap&lt;String, String&gt;) -&gt; String {
+    let normalized = normalize_entity_name(name);
+    aliases.get(&amp;normalized).cloned().unwrap_or(normalized)
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="layer-4-fuzzy-matching"><a class="header" href="#layer-4-fuzzy-matching">Layer 4: Fuzzy Matching</a></h4>
+<p>For entities that are similar but not identical after string
+normalization, fuzzy matching catches near-duplicates:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Check if two entity names are likely the same entity.
+fn is_fuzzy_match(name_a: &amp;str, name_b: &amp;str, threshold: f64) -&gt; bool {
+    // Levenshtein distance normalized by length
+    let distance = levenshtein_distance(name_a, name_b);
+    let max_len = name_a.len().max(name_b.len()) as f64;
+    let similarity = 1.0 - (distance as f64 / max_len);
+
+    similarity &gt;= threshold
+}
+<span class="boring">}</span></code></pre></pre>
+<p>With a threshold of 0.85:</p>
+<div class="table-wrapper"><table><thead><tr><th>Name A</th><th>Name B</th><th>Similarity</th><th>Match?</th></tr></thead><tbody>
+<tr><td><code>JOHN_SMITH</code></td><td><code>JON_SMITH</code></td><td>0.91</td><td>Yes</td></tr>
+<tr><td><code>JOHN_SMITH</code></td><td><code>JOHN_SMYTH</code></td><td>0.82</td><td>No</td></tr>
+<tr><td><code>ACME_CORP</code></td><td><code>ACME_CORPORATION</code></td><td>0.76</td><td>No</td></tr>
+</tbody></table>
+</div>
+<p>Fuzzy matching must be used carefully -- false positives merge
+<em>different</em> entities into one node, which is worse than having
+duplicates.</p>
+<h3 id="the-merge-strategy"><a class="header" href="#the-merge-strategy">The Merge Strategy</a></h3>
+<p>When two entities resolve to the same node ID, their properties must
+be merged. EdgeQuake's <code>KnowledgeGraphMerger</code> handles this:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct KnowledgeGraphMerger&lt;G: GraphStorage, V: VectorStorage&gt; {
+    config: MergerConfig,
+    graph_storage: Arc&lt;G&gt;,
+    vector_storage: Arc&lt;V&gt;,
+    summarizer: Option&lt;Arc&lt;LLMSummarizer&gt;&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The merge follows three rules:</p>
+<p><strong>1. Descriptions accumulate and are summarized.</strong></p>
+<p>When the same entity appears in multiple documents, descriptions are
+combined. If the combined description exceeds <code>max_description_length</code>,
+an LLM summarizes them:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Document 1: "Sarah Chen is a researcher at MIT"
+// Document 2: "Dr. Chen's quantum computing work won the Dirac Medal"
+// Merged: "Sarah Chen is a quantum computing researcher at MIT whose
+//          work won the Dirac Medal"
+<span class="boring">}</span></code></pre></pre>
+<p><strong>2. Source IDs accumulate.</strong></p>
+<p>The <code>source_id</code> property tracks all documents that contributed to an
+entity. Sources are pipe-separated:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// After ingesting doc-001: source_id = "doc-001"
+// After ingesting doc-047: source_id = "doc-001|doc-047"
+// After ingesting doc-123: source_id = "doc-001|doc-047|doc-123"
+<span class="boring">}</span></code></pre></pre>
+<p>This enables cascade delete: when <code>doc-047</code> is deleted, the pipeline
+can check whether the entity has other sources before removing it.</p>
+<p><strong>3. Importance scores are updated.</strong></p>
+<p>The importance score reflects how often an entity appears. More
+appearances generally indicate greater importance:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn update_importance(existing: f32, new: f32) -&gt; f32 {
+    // Weighted average, biased toward higher values
+    (existing * 0.6 + new * 0.4).clamp(0.0, 1.0)
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="normalization-in-the-extraction-prompt"><a class="header" href="#normalization-in-the-extraction-prompt">Normalization in the Extraction Prompt</a></h3>
+<p>EdgeQuake also encourages normalization at the LLM level. The extraction
+prompt instructs the LLM to output entity names in uppercase:</p>
+<pre><code class="language-text">## Rules
+- Entity names MUST be in UPPERCASE_WITH_UNDERSCORES format
+- Use the most complete form of the name (e.g., "JOHN_SMITH" not "J_SMITH")
+- Resolve common abbreviations (e.g., use "UNITED_STATES" not "US")
+</code></pre>
+<p>This reduces the normalization burden on the post-processing stage, but
+LLMs do not always follow instructions perfectly, so programmatic
+normalization remains necessary.</p>
+<h3 id="edge-normalization"><a class="header" href="#edge-normalization">Edge Normalization</a></h3>
+<p>Relationships also need normalization. The relationship <code>(source, target)</code>
+pair is normalized so that both endpoints use canonical entity names:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn normalize_relationship(rel: &amp;ExtractedRelationship) -&gt; ExtractedRelationship {
+    ExtractedRelationship {
+        source: normalize_entity_name(&amp;rel.source),
+        target: normalize_entity_name(&amp;rel.target),
+        relation_type: rel.relation_type.to_uppercase().replace(' ', "_"),
+        ..rel.clone()
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>EdgeQuake also enforces <strong>BR0006</strong>: self-referential relationships
+(where source equals target after normalization) are discarded:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>if normalized_rel.source == normalized_rel.target {
+    tracing::warn!("Discarding self-referential edge: {}", normalized_rel.source);
+    continue;
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>Normalization converts varied entity name forms into a single
+canonical ID (uppercase, underscored).</li>
+<li>Four layers provide progressive resolution: string normalization,
+title stripping, alias tables, and fuzzy matching.</li>
+<li>The merge strategy accumulates descriptions and sources while
+maintaining a single graph node per real-world entity.</li>
+<li>Both entity and relationship endpoints are normalized to prevent
+graph fragmentation.</li>
+<li>Self-referential relationships are automatically discarded.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch05-04-gleaning.html">5.4 Gleaning for Quality</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part2-graph/ch05-02-entity-extraction.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part2-graph/ch05-04-gleaning.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part2-graph/ch05-02-entity-extraction.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part2-graph/ch05-04-gleaning.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

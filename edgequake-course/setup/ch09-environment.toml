@@ -1,0 +1,230 @@
+# Environment Setup Guide
+# Used by setup tooling and referenced in Chapter 9
+
+[setup]
+title = "EdgeQuake Local Development Environment"
+chapter = "ch09"
+estimated_minutes = 30
+
+# ============================================
+# Rust Toolchain
+# ============================================
+
+[[steps]]
+id = "rust-toolchain"
+title = "Install Rust Toolchain"
+required = true
+
+[steps.check]
+command = "rustc --version"
+expected_pattern = "rustc 1\\.(7[5-9]|[89][0-9])"
+failure_message = "Rust 1.75+ is required"
+
+[steps.install]
+description = "Install or update Rust stable toolchain"
+
+[steps.install.macos]
+commands = [
+    "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
+    "rustup default stable",
+    "rustup update stable",
+]
+
+[steps.install.linux]
+commands = [
+    "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
+    "source $HOME/.cargo/env",
+    "rustup default stable",
+    "rustup update stable",
+]
+
+[steps.install.windows]
+commands = [
+    "# Download and run rustup-init.exe from https://rustup.rs",
+    "rustup default stable",
+    "rustup update stable",
+]
+
+# ============================================
+# Docker
+# ============================================
+
+[[steps]]
+id = "docker"
+title = "Install Docker and Docker Compose"
+required = true
+
+[steps.check]
+command = "docker --version && docker compose version"
+expected_pattern = "Docker version (2[4-9]|[3-9][0-9])"
+failure_message = "Docker 24+ with Compose v2 is required"
+
+[steps.install]
+description = "Install Docker Desktop (includes Compose v2)"
+
+[steps.install.macos]
+commands = [
+    "# Install Docker Desktop from https://www.docker.com/products/docker-desktop/",
+    "# Or via Homebrew:",
+    "brew install --cask docker",
+]
+
+[steps.install.linux]
+commands = [
+    "# Follow official Docker Engine installation:",
+    "# https://docs.docker.com/engine/install/",
+    "sudo apt-get update",
+    "sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin",
+    "sudo usermod -aG docker $USER",
+]
+
+[steps.install.windows]
+commands = [
+    "# Install Docker Desktop from https://www.docker.com/products/docker-desktop/",
+    "# Enable WSL 2 backend in Docker Desktop settings",
+]
+
+# ============================================
+# PostgreSQL (via Docker)
+# ============================================
+
+[[steps]]
+id = "postgresql"
+title = "Start PostgreSQL with pgvector and Apache AGE"
+required = true
+depends_on = ["docker"]
+
+[steps.check]
+command = "docker compose -f docker-compose.yml ps --format json | grep -q postgres"
+expected_pattern = "running"
+failure_message = "PostgreSQL container is not running"
+
+[steps.install]
+description = "Start the development Docker Compose stack"
+
+[steps.install.all]
+commands = [
+    "cd edgequake && docker compose up -d postgres",
+    "# Wait for PostgreSQL to be ready",
+    "sleep 5",
+    "docker compose exec postgres pg_isready",
+]
+
+[steps.docker_compose]
+content = """
+# docker-compose.yml (development)
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: edgequake
+      POSTGRES_USER: edgequake
+      POSTGRES_PASSWORD: edgequake_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edgequake"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+"""
+
+# ============================================
+# Environment Variables
+# ============================================
+
+[[steps]]
+id = "env-vars"
+title = "Configure Environment Variables"
+required = true
+
+[steps.install]
+description = "Create .env file with required configuration"
+
+[steps.install.all]
+commands = [
+    "cp .env.example .env",
+    "# Edit .env with your API keys",
+]
+
+[steps.env_template]
+content = """
+# Database
+DATABASE_URL=postgresql://edgequake:edgequake_dev@localhost:5432/edgequake
+
+# LLM Provider (choose one)
+OPENAI_API_KEY=sk-your-key-here
+# OLLAMA_HOST=http://localhost:11434
+
+# Embedding Model
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSION=1536
+
+# Optional: AWS (for cloud deployment chapters)
+# AWS_REGION=us-east-1
+# VECTOR_BUCKET=edgequake-vectors
+# VECTOR_INDEX=default-index
+"""
+
+# ============================================
+# LLM Provider (Optional: Ollama)
+# ============================================
+
+[[steps]]
+id = "ollama"
+title = "Install Ollama (Optional - for local LLM)"
+required = false
+
+[steps.check]
+command = "ollama --version"
+expected_pattern = "ollama"
+failure_message = "Ollama is not installed (optional)"
+
+[steps.install]
+description = "Install Ollama for local LLM development"
+
+[steps.install.macos]
+commands = [
+    "brew install ollama",
+    "ollama serve &",
+    "ollama pull llama3.2",
+    "ollama pull nomic-embed-text",
+]
+
+[steps.install.linux]
+commands = [
+    "curl -fsSL https://ollama.com/install.sh | sh",
+    "ollama serve &",
+    "ollama pull llama3.2",
+    "ollama pull nomic-embed-text",
+]
+
+# ============================================
+# Verification
+# ============================================
+
+[[steps]]
+id = "verify"
+title = "Verify Complete Setup"
+required = true
+depends_on = ["rust-toolchain", "docker", "postgresql", "env-vars"]
+
+[steps.install]
+description = "Run verification checks"
+
+[steps.install.all]
+commands = [
+    "rustc --version",
+    "cargo --version",
+    "docker --version",
+    "docker compose version",
+    "docker compose ps",
+    "cd edgequake && SQLX_OFFLINE=true cargo check",
+    "echo 'Setup complete!'",
+]

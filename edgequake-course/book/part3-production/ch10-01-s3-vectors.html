@@ -1,0 +1,549 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>S3 Vectors for Embeddings - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="101-s3-vectors-for-embeddings"><a class="header" href="#101-s3-vectors-for-embeddings">10.1 S3 Vectors for Embeddings</a></h2>
+<p>S3 Vectors is an AWS service that provides native vector storage and similarity
+search built on top of Amazon S3. Unlike pgvector (which adds vector support to
+PostgreSQL) or standalone vector databases (Pinecone, Weaviate), S3 Vectors is
+a first-party AWS service that integrates directly with the S3 ecosystem --
+IAM permissions, encryption, and billing.</p>
+<h3 id="concepts"><a class="header" href="#concepts">Concepts</a></h3>
+<p>S3 Vectors introduces two new resources:</p>
+<pre class="mermaid">graph TD
+    VB[Vector Bucket&lt;br/&gt;Container for indexes] --&gt; IDX[Index&lt;br/&gt;Named vector collection&lt;br/&gt;with dimension and metric]
+    IDX --&gt; V1[Vector 1&lt;br/&gt;key + float32 data + metadata]
+    IDX --&gt; V2[Vector 2&lt;br/&gt;key + float32 data + metadata]
+    IDX --&gt; VN[Vector N&lt;br/&gt;...]
+</pre>
+<div class="table-wrapper"><table><thead><tr><th>Resource</th><th>Description</th><th>Analogy</th></tr></thead><tbody>
+<tr><td><strong>Vector Bucket</strong></td><td>A container that holds one or more indexes</td><td>Like an S3 bucket</td></tr>
+<tr><td><strong>Index</strong></td><td>A named collection of vectors with fixed dimension and distance metric</td><td>Like a pgvector table</td></tr>
+<tr><td><strong>Vector</strong></td><td>A single entry: key + float32 array + metadata</td><td>Like a row in pgvector</td></tr>
+</tbody></table>
+</div>
+<h3 id="configuration-in-edgequake"><a class="header" href="#configuration-in-edgequake">Configuration in EdgeQuake</a></h3>
+<p>EdgeQuake's <code>S3VectorsConfig</code> maps directly to these concepts:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Debug, Clone)]
+pub struct S3VectorsConfig {
+    /// Name of the S3 vector bucket.
+    pub vector_bucket_name: String,
+    /// Name of the vector index within the bucket.
+    pub index_name: String,
+    /// Expected embedding dimension (e.g., 1536).
+    pub dimension: usize,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>In practice, these are configured from environment variables:</p>
+<pre><code class="language-bash">export VECTOR_BUCKET="edgequake-vectors-prod"
+export VECTOR_INDEX="embeddings-1536"
+</code></pre>
+<h3 id="initialization-bucket-and-index-creation"><a class="header" href="#initialization-bucket-and-index-creation">Initialization: Bucket and Index Creation</a></h3>
+<p>When <code>S3VectorsStorage::initialize()</code> is called, it verifies (or creates) both
+the vector bucket and the index:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn initialize(&amp;self) -&gt; Result&lt;()&gt; {
+    // 1. Check if bucket exists, create if not
+    match self.client
+        .get_vector_bucket()
+        .vector_bucket_name(&amp;self.config.vector_bucket_name)
+        .send().await
+    {
+        Ok(_) =&gt; { /* bucket exists */ }
+        Err(_) =&gt; {
+            self.client
+                .create_vector_bucket()
+                .vector_bucket_name(&amp;self.config.vector_bucket_name)
+                .send().await?;
+        }
+    }
+
+    // 2. Check if index exists, create if not
+    match self.client
+        .get_index()
+        .vector_bucket_name(&amp;self.config.vector_bucket_name)
+        .index_name(&amp;self.config.index_name)
+        .send().await
+    {
+        Ok(_) =&gt; { /* index exists */ }
+        Err(_) =&gt; {
+            self.client
+                .create_index()
+                .vector_bucket_name(&amp;self.config.vector_bucket_name)
+                .index_name(&amp;self.config.index_name)
+                .data_type(DataType::Float32)
+                .dimension(self.config.dimension as i32)
+                .distance_metric(DistanceMetric::Cosine)
+                .send().await?;
+        }
+    }
+
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Key parameters for index creation:</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th><th>Rationale</th></tr></thead><tbody>
+<tr><td><code>data_type</code></td><td><code>Float32</code></td><td>Standard precision for embeddings</td></tr>
+<tr><td><code>dimension</code></td><td>1536 (configurable)</td><td>Matches <code>text-embedding-3-small</code></td></tr>
+<tr><td><code>distance_metric</code></td><td><code>Cosine</code></td><td>Standard for normalized text embeddings</td></tr>
+</tbody></table>
+</div>
+<h3 id="cosine-distance-to-similarity-score"><a class="header" href="#cosine-distance-to-similarity-score">Cosine Distance to Similarity Score</a></h3>
+<p>S3 Vectors returns <strong>cosine distance</strong> in query results: 0.0 means identical
+vectors, 2.0 means opposite vectors. EdgeQuake's <code>VectorSearchResult</code> uses
+<strong>similarity score</strong>: 1.0 means identical, -1.0 means opposite.</p>
+<p>The conversion is:</p>
+<pre><code>similarity_score = 1.0 - cosine_distance
+</code></pre>
+<pre class="mermaid">graph LR
+    subgraph &quot;S3 Vectors (Distance)&quot;
+        D0[0.0 = Identical]
+        D1[1.0 = Orthogonal]
+        D2[2.0 = Opposite]
+    end
+
+    subgraph &quot;EdgeQuake (Similarity)&quot;
+        S1[1.0 = Identical]
+        S0[0.0 = Orthogonal]
+        SM[-1.0 = Opposite]
+    end
+
+    D0 --&gt;|&quot;1.0 - 0.0 = 1.0&quot;| S1
+    D1 --&gt;|&quot;1.0 - 1.0 = 0.0&quot;| S0
+    D2 --&gt;|&quot;1.0 - 2.0 = -1.0&quot;| SM
+</pre>
+<p>In the query implementation:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let score = v.distance()
+    .map(|d| 1.0 - d as f32)
+    .unwrap_or(0.0);
+<span class="boring">}</span></code></pre></pre>
+<p>This conversion happens transparently inside the adapter. Callers always
+receive similarity scores, regardless of which vector backend is active.</p>
+<h3 id="querying-vectors"><a class="header" href="#querying-vectors">Querying Vectors</a></h3>
+<p>The <code>query()</code> method wraps the S3 Vectors <code>query_vectors</code> API:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn query(
+    &amp;self,
+    query_embedding: &amp;[f32],
+    top_k: usize,
+    filter_ids: Option&lt;&amp;[String]&gt;,
+) -&gt; Result&lt;Vec&lt;VectorSearchResult&gt;&gt; {
+    let resp = self.client
+        .query_vectors()
+        .vector_bucket_name(&amp;self.config.vector_bucket_name)
+        .index_name(&amp;self.config.index_name)
+        .query_vector(VectorData::Float32(query_embedding.to_vec()))
+        .top_k(top_k.min(100) as i32)  // API limit: max 100
+        .return_distance(true)
+        .return_metadata(true)
+        .send()
+        .await?;
+
+    let results = resp.vectors().iter().filter_map(|v| {
+        let key = v.key().to_string();
+        let score = v.distance().map(|d| 1.0 - d).unwrap_or(0.0);
+        let metadata = v.metadata()
+            .map(|d| Self::document_to_json(d))
+            .unwrap_or(serde_json::Value::Null);
+
+        Some(VectorSearchResult { id: key, score, metadata })
+    }).collect();
+
+    Ok(results)
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Note the <code>top_k.min(100)</code> -- S3 Vectors limits each query to 100 results. If
+you need more, you must implement pagination or post-filtering.</p>
+<h3 id="metadata-conversion"><a class="header" href="#metadata-conversion">Metadata Conversion</a></h3>
+<p>S3 Vectors uses <code>aws_smithy_types::Document</code> for metadata, while EdgeQuake
+uses <code>serde_json::Value</code>. The adapter includes bidirectional conversion:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// serde_json::Value -&gt; aws_smithy_types::Document
+fn json_to_document(value: &amp;serde_json::Value) -&gt; Document {
+    match value {
+        serde_json::Value::Null =&gt; Document::Null,
+        serde_json::Value::Bool(b) =&gt; Document::Bool(*b),
+        serde_json::Value::String(s) =&gt; Document::String(s.clone()),
+        serde_json::Value::Number(n) =&gt; {
+            if let Some(i) = n.as_i64() {
+                Document::Number(aws_smithy_types::Number::NegInt(i))
+            } else if let Some(f) = n.as_f64() {
+                Document::Number(aws_smithy_types::Number::Float(f))
+            } else {
+                Document::Null
+            }
+        }
+        serde_json::Value::Array(arr) =&gt; {
+            Document::Array(arr.iter().map(Self::json_to_document).collect())
+        }
+        serde_json::Value::Object(obj) =&gt; {
+            let map = obj.iter()
+                .map(|(k, v)| (k.clone(), Self::json_to_document(v)))
+                .collect();
+            Document::Object(map)
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This conversion is necessary because the AWS SDK uses its own type system
+rather than serde's. The round-trip is lossless for all JSON-compatible values.</p>
+<h3 id="cdk-constructs-for-s3-vectors"><a class="header" href="#cdk-constructs-for-s3-vectors">CDK Constructs for S3 Vectors</a></h3>
+<p>S3 Vectors resources are provisioned using CDK's L1 (CloudFormation) constructs:</p>
+<pre><code class="language-typescript">import { CfnVectorBucket, CfnIndex } from 'aws-cdk-lib/aws-s3vectors';
+
+// Create the vector bucket
+const vectorBucket = new CfnVectorBucket(this, 'VectorBucket', {
+  vectorBucketName: `${props.prefix}-vectors`,
+});
+
+// Create the index within the bucket
+const vectorIndex = new CfnIndex(this, 'VectorIndex', {
+  vectorBucketName: vectorBucket.vectorBucketName!,
+  indexName: 'embeddings',
+  dimension: 1536,
+  distanceMetric: 'cosine',
+  dataType: 'float32',
+});
+
+// Ensure index is created after bucket
+vectorIndex.addDependency(vectorBucket);
+</code></pre>
+<p>The CDK constructs map directly to the CloudFormation resources:</p>
+<div class="table-wrapper"><table><thead><tr><th>CDK Construct</th><th>CloudFormation Type</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>CfnVectorBucket</code></td><td><code>AWS::S3Vectors::VectorBucket</code></td><td>Container for indexes</td></tr>
+<tr><td><code>CfnIndex</code></td><td><code>AWS::S3Vectors::Index</code></td><td>Vector collection with dimension and metric</td></tr>
+</tbody></table>
+</div>
+<h3 id="clearing-and-rebuilding"><a class="header" href="#clearing-and-rebuilding">Clearing and Rebuilding</a></h3>
+<p>The fastest way to clear all vectors is to delete and recreate the index:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn clear(&amp;self) -&gt; Result&lt;()&gt; {
+    // Delete the index
+    self.client
+        .delete_index()
+        .vector_bucket_name(&amp;self.config.vector_bucket_name)
+        .index_name(&amp;self.config.index_name)
+        .send().await?;
+
+    // Recreate with same configuration
+    self.client
+        .create_index()
+        .vector_bucket_name(&amp;self.config.vector_bucket_name)
+        .index_name(&amp;self.config.index_name)
+        .data_type(DataType::Float32)
+        .dimension(self.config.dimension as i32)
+        .distance_metric(DistanceMetric::Cosine)
+        .send().await?;
+
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This is significantly faster than iterating through all vectors and deleting
+them individually, especially for indexes with millions of entries.</p>
+<h3 id="entity-deletion"><a class="header" href="#entity-deletion">Entity Deletion</a></h3>
+<p>Deleting an entity's vectors requires querying by metadata filter, then
+deleting the matching keys:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn delete_entity(&amp;self, entity_name: &amp;str) -&gt; Result&lt;()&gt; {
+    let filter = Document::Object(HashMap::from([
+        ("type".to_string(), Document::String("entity".to_string())),
+        ("entity_name".to_string(), Document::String(entity_name.to_string())),
+    ]));
+
+    let resp = self.client
+        .query_vectors()
+        .vector_bucket_name(&amp;self.config.vector_bucket_name)
+        .index_name(&amp;self.config.index_name)
+        .query_vector(VectorData::Float32(vec![0.0; self.config.dimension]))
+        .top_k(10_000)
+        .filter(filter)
+        .return_metadata(false)
+        .send().await?;
+
+    let keys: Vec&lt;String&gt; = resp.vectors().iter()
+        .map(|v| v.key().to_string())
+        .collect();
+
+    if !keys.is_empty() {
+        self.delete(&amp;keys).await?;
+    }
+
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Note the dummy zero vector used as the query -- we are filtering purely by
+metadata, but the API requires a query vector.</p>
+<h3 id="summary"><a class="header" href="#summary">Summary</a></h3>
+<p>S3 Vectors provides native vector storage and similarity search as an AWS
+service. EdgeQuake's <code>S3VectorsStorage</code> adapter handles bucket/index creation,
+cosine distance-to-similarity conversion, batch operation chunking, and
+metadata format conversion. CDK constructs (<code>CfnVectorBucket</code> and <code>CfnIndex</code>)
+provision the infrastructure, and the clear operation uses index
+delete-and-recreate for speed.</p>
+<hr />
+<p><em>Next: <a href="ch10-02-neptune-dynamodb.html">10.2 Neptune and DynamoDB</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part3-production/ch10-aws-deployment.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part3-production/ch10-02-neptune-dynamodb.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part3-production/ch10-aws-deployment.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part3-production/ch10-02-neptune-dynamodb.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

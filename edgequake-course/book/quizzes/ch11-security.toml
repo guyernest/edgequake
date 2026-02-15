@@ -1,0 +1,90 @@
+# Quiz: Security and Multi-Tenancy
+
+id = "ch11-security"
+title = "Security and Multi-Tenancy"
+lesson_id = "ch11"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What is the primary purpose of JWT validation in EdgeQuake's security architecture?"
+prompt.distractors = [
+    "To encrypt all data at rest in the storage backends",
+    "To rate-limit API requests based on the token's expiration time",
+    "To generate unique session IDs for tracking user activity in logs"
+]
+answer.answer = "To authenticate incoming requests by verifying the token's signature and extracting the caller's identity and permissions"
+context = """
+JWT (JSON Web Token) validation serves as EdgeQuake's authentication mechanism. When a request arrives, the \
+JWT is validated by checking its cryptographic signature (ensuring it was issued by a trusted authority), \
+verifying it has not expired, and extracting claims like user identity, roles, and workspace_id. This \
+information is then used downstream for authorization decisions. Without valid JWT validation, there would \
+be no way to verify who is making a request.
+"""
+id = "d4e5f6a7-4001-4d3b-e001-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "In EdgeQuake's RBAC (Role-Based Access Control) model, what determines which operations a user can perform?"
+prompt.distractors = [
+    "The IP address range from which the request originates",
+    "The specific storage backend being used (PostgreSQL vs AWS)",
+    "The size of the data payload included in the request"
+]
+answer.answer = "The role assigned to the user, which maps to a set of permitted actions on specific resources"
+context = """
+RBAC works by assigning users to roles (such as admin, editor, viewer), and each role defines a set of \
+permissions that grant or deny access to specific operations. For example, an admin role might permit \
+create, read, update, and delete operations, while a viewer role might only permit read operations. The \
+role is typically embedded in the JWT claims and evaluated by authorization middleware before the request \
+reaches the handler.
+"""
+id = "d4e5f6a7-4001-4d3b-e001-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "How does namespace isolation prevent one tenant from accessing another tenant's data in EdgeQuake?"
+prompt.distractors = [
+    "By running separate database instances for each tenant with different connection strings",
+    "By encrypting each tenant's data with a unique encryption key that only they possess",
+    "By deploying separate application instances per tenant in isolated VPCs"
+]
+answer.answer = "By tagging all data with a workspace_id and automatically filtering queries to only return data matching the current tenant's workspace"
+context = """
+Namespace isolation in EdgeQuake uses a workspace_id that is associated with every piece of stored data — \
+graph nodes, vector embeddings, and key-value entries. When a query is executed, the system automatically \
+applies a workspace_id filter derived from the authenticated user's JWT claims. This ensures that even \
+though all tenants may share the same physical database, each tenant can only see and modify their own \
+data. It is a logical isolation approach rather than physical isolation.
+"""
+id = "d4e5f6a7-4001-4d3b-e001-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What would happen if workspace_id filtering were accidentally omitted from a storage query in a multi-tenant deployment?"
+prompt.distractors = [
+    "The query would fail with a permission denied error from the database",
+    "The query would return empty results because workspace_id is a required field",
+    "The query would be automatically corrected by the storage backend's built-in tenant filter"
+]
+answer.answer = "The query could return data from other tenants, creating a cross-tenant data leak vulnerability"
+context = """
+Cross-tenant data leakage is one of the most serious security vulnerabilities in multi-tenant systems. If a \
+query omits the workspace_id filter, it would operate on the entire dataset across all tenants, potentially \
+exposing confidential data to unauthorized users. This is why EdgeQuake enforces workspace_id filtering at \
+the storage trait level rather than relying on individual query authors to remember it — defense in depth \
+ensures the filter is applied consistently.
+"""
+id = "d4e5f6a7-4001-4d3b-e001-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What field extracted from the JWT token is used to scope all storage queries to a specific tenant's data?"
+answer.answer = "workspace_id"
+context = """
+The workspace_id is a claim embedded in the JWT token that identifies which tenant (workspace) the \
+authenticated user belongs to. Every storage operation uses this workspace_id to scope data access — \
+writes tag data with it, and reads filter by it. This single field is the foundation of EdgeQuake's \
+multi-tenant data isolation strategy.
+"""
+id = "d4e5f6a7-4001-4d3b-e001-000000000005"

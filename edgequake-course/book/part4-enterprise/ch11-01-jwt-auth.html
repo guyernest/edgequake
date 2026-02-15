@@ -1,0 +1,546 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>JWT Authentication - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="111-jwt-authentication"><a class="header" href="#111-jwt-authentication">11.1 JWT Authentication</a></h2>
+<p>JSON Web Tokens are the standard mechanism for authenticating API requests in
+modern web services. A JWT is a self-contained, cryptographically signed token
+that carries claims about the caller -- their identity, role, tenant, and token
+expiration. The server validates the signature and claims without needing to
+query a database on every request, making JWTs well-suited for stateless,
+high-throughput APIs.</p>
+<h3 id="how-jwts-work"><a class="header" href="#how-jwts-work">How JWTs Work</a></h3>
+<p>A JWT consists of three Base64-encoded parts separated by dots:</p>
+<pre><code class="language-text">eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyXzQyIiwid29ya3NwYWNlX2lkIjoiYWNtZSJ9.signature
+|---- Header ----|       |------------- Payload -------------|       |-- Sig --|
+</code></pre>
+<pre class="mermaid">flowchart LR
+    A[Header] --&gt; D[Base64 Encode]
+    B[Payload / Claims] --&gt; D
+    D --&gt; E[&quot;Concatenate with '.'&quot;]
+    E --&gt; F[Sign with Secret/Key]
+    F --&gt; G[JWT Token]
+</pre>
+<p>The <strong>header</strong> declares the algorithm (e.g., HS256, RS256). The <strong>payload</strong>
+contains claims -- standard ones like <code>sub</code> (subject), <code>exp</code> (expiration), and
+custom ones like <code>workspace_id</code> and <code>role</code>. The <strong>signature</strong> is computed over
+the header and payload using a secret key (HMAC) or private key (RSA/ECDSA).</p>
+<h3 id="defining-the-claims-struct"><a class="header" href="#defining-the-claims-struct">Defining the Claims Struct</a></h3>
+<p>In EdgeQuake, every JWT must carry claims that identify both the user and their
+tenant workspace:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use serde::{Deserialize, Serialize};
+
+/// Claims extracted from a validated JWT.
+///
+/// These claims drive both RBAC decisions and tenant isolation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Claims {
+    /// Subject -- the unique user identifier.
+    pub sub: String,
+
+    /// The workspace (tenant) this token is scoped to.
+    pub workspace_id: String,
+
+    /// The user's role within the workspace.
+    pub role: String,
+
+    /// Token expiration as a Unix timestamp.
+    pub exp: u64,
+
+    /// Token issued-at as a Unix timestamp.
+    pub iat: u64,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>workspace_id</code> claim is critical -- it becomes the namespace for all
+storage operations during the request. The <code>role</code> claim feeds into the RBAC
+layer covered in section 11.2.</p>
+<h3 id="validating-jwts-with-the-jsonwebtoken-crate"><a class="header" href="#validating-jwts-with-the-jsonwebtoken-crate">Validating JWTs with the <code>jsonwebtoken</code> Crate</a></h3>
+<p>The <a href="https://crates.io/crates/jsonwebtoken"><code>jsonwebtoken</code></a> crate is the
+standard Rust library for JWT validation. It handles signature verification,
+expiration checking, and claim deserialization in a single call.</p>
+<p>Add it to your <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[dependencies]
+jsonwebtoken = "9"
+serde = { version = "1", features = ["derive"] }
+</code></pre>
+<p>Here is the core validation function:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+
+/// Configuration for JWT validation.
+pub struct JwtConfig {
+    /// The secret key for HMAC-based signatures (HS256).
+    /// In production, prefer RS256 with a public key.
+    pub secret: String,
+
+    /// Expected audience claim (optional but recommended).
+    pub audience: Option&lt;String&gt;,
+
+    /// Expected issuer claim (optional but recommended).
+    pub issuer: Option&lt;String&gt;,
+}
+
+/// Errors that can occur during JWT validation.
+#[derive(Debug, thiserror::Error)]
+pub enum AuthError {
+    #[error("missing authorization header")]
+    MissingHeader,
+
+    #[error("invalid authorization header format")]
+    InvalidFormat,
+
+    #[error("token validation failed: {0}")]
+    ValidationFailed(#[from] jsonwebtoken::errors::Error),
+}
+
+/// Validate a JWT and extract its claims.
+///
+/// This function verifies the signature, checks expiration,
+/// and deserializes the payload into our Claims struct.
+pub fn validate_token(token: &amp;str, config: &amp;JwtConfig) -&gt; Result&lt;Claims, AuthError&gt; {
+    let mut validation = Validation::new(Algorithm::HS256);
+
+    // Configure audience validation if specified.
+    if let Some(ref aud) = config.audience {
+        validation.set_audience(&amp;[aud]);
+    }
+
+    // Configure issuer validation if specified.
+    if let Some(ref iss) = config.issuer {
+        validation.set_issuer(&amp;[iss]);
+    }
+
+    // exp is validated by default -- no need to enable it.
+    // The library rejects expired tokens automatically.
+
+    let token_data = decode::&lt;Claims&gt;(
+        token,
+        &amp;DecodingKey::from_secret(config.secret.as_bytes()),
+        &amp;validation,
+    )?;
+
+    Ok(token_data.claims)
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Key points about this implementation:</p>
+<ul>
+<li><strong>Expiration is checked automatically</strong> -- <code>jsonwebtoken</code> rejects tokens
+where <code>exp</code> is in the past. You do not need to check this manually.</li>
+<li><strong>Algorithm must be explicit</strong> -- never use <code>Algorithm::default()</code> or accept
+the algorithm from the token header. This prevents algorithm confusion
+attacks where an attacker switches from RS256 to HS256.</li>
+<li><strong>Audience and issuer</strong> are optional but strongly recommended in production
+to prevent tokens issued for other services from being accepted.</li>
+</ul>
+<h3 id="building-the-axum-middleware"><a class="header" href="#building-the-axum-middleware">Building the Axum Middleware</a></h3>
+<p>With the validation function in place, you can build an Axum middleware that
+runs before every handler. The middleware extracts the <code>Authorization: Bearer &lt;token&gt;</code> header, validates the JWT, and injects the <code>Claims</code> into the request
+extensions so handlers can access them.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use axum::{
+    extract::Request,
+    http::{header::AUTHORIZATION, StatusCode},
+    middleware::Next,
+    response::{IntoResponse, Response},
+    Extension,
+};
+use std::sync::Arc;
+
+/// Axum middleware that validates JWT tokens on every request.
+///
+/// On success, injects `Claims` into request extensions.
+/// On failure, returns 401 Unauthorized.
+pub async fn jwt_auth_middleware(
+    Extension(config): Extension&lt;Arc&lt;JwtConfig&gt;&gt;,
+    mut request: Request,
+    next: Next,
+) -&gt; Result&lt;Response, AuthError&gt; {
+    // Extract the Authorization header.
+    let auth_header = request
+        .headers()
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .ok_or(AuthError::MissingHeader)?;
+
+    // Strip the "Bearer " prefix.
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(AuthError::InvalidFormat)?;
+
+    // Validate the token and extract claims.
+    let claims = validate_token(token, &amp;config)?;
+
+    // Inject claims into request extensions for downstream handlers.
+    request.extensions_mut().insert(claims);
+
+    // Continue to the next middleware or handler.
+    Ok(next.run(request).await)
+}
+
+// Make AuthError return proper HTTP status codes.
+impl IntoResponse for AuthError {
+    fn into_response(self) -&gt; Response {
+        let status = match &amp;self {
+            AuthError::MissingHeader =&gt; StatusCode::UNAUTHORIZED,
+            AuthError::InvalidFormat =&gt; StatusCode::UNAUTHORIZED,
+            AuthError::ValidationFailed(_) =&gt; StatusCode::UNAUTHORIZED,
+        };
+        (status, self.to_string()).into_response()
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="wiring-the-middleware-into-the-router"><a class="header" href="#wiring-the-middleware-into-the-router">Wiring the Middleware into the Router</a></h3>
+<p>The middleware must wrap every route that requires authentication. You can
+apply it globally or selectively using Axum's nested router pattern:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use axum::{middleware, Router, routing::get};
+
+pub fn create_router(jwt_config: JwtConfig) -&gt; Router {
+    let config = Arc::new(jwt_config);
+
+    // Public routes -- no authentication required.
+    let public_routes = Router::new()
+        .route("/health", get(health_check));
+
+    // Protected routes -- JWT middleware applied.
+    let protected_routes = Router::new()
+        .route("/api/query", get(handle_query))
+        .route("/api/ingest", axum::routing::post(handle_ingest))
+        .layer(middleware::from_fn(jwt_auth_middleware))
+        .layer(Extension(config));
+
+    Router::new()
+        .merge(public_routes)
+        .merge(protected_routes)
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="extracting-claims-in-handlers"><a class="header" href="#extracting-claims-in-handlers">Extracting Claims in Handlers</a></h3>
+<p>Once the middleware has validated the token and injected the <code>Claims</code>, any
+handler can retrieve them from the request extensions:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use axum::Extension;
+
+async fn handle_query(
+    Extension(claims): Extension&lt;Claims&gt;,
+) -&gt; impl IntoResponse {
+    // claims.workspace_id -&gt; used for namespace isolation
+    // claims.role         -&gt; used for RBAC checks
+    // claims.sub          -&gt; used for audit logging
+
+    tracing::info!(
+        user = %claims.sub,
+        workspace = %claims.workspace_id,
+        role = %claims.role,
+        "processing query request"
+    );
+
+    // The workspace_id from the claims drives storage namespace selection.
+    // See section 11.3 for how this becomes tenant isolation.
+    format!("Hello, {} from workspace {}", claims.sub, claims.workspace_id)
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="token-validation-flow"><a class="header" href="#token-validation-flow">Token Validation Flow</a></h3>
+<p>The complete flow from HTTP request to authenticated handler:</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant M as JWT Middleware
+    participant V as validate_token()
+    participant H as Handler
+
+    C-&gt;&gt;M: GET /api/query&lt;br/&gt;Authorization: Bearer &lt;token&gt;
+    M-&gt;&gt;V: Extract &amp; validate token
+    alt Valid token
+        V--&gt;&gt;M: Ok(Claims)
+        M-&gt;&gt;M: Insert Claims into extensions
+        M-&gt;&gt;H: Forward request
+        H--&gt;&gt;C: 200 OK + response
+    else Invalid / expired token
+        V--&gt;&gt;M: Err(AuthError)
+        M--&gt;&gt;C: 401 Unauthorized
+    end
+</pre>
+<h3 id="production-considerations"><a class="header" href="#production-considerations">Production Considerations</a></h3>
+<p>In a production deployment, you should harden this implementation further:</p>
+<div class="table-wrapper"><table><thead><tr><th>Concern</th><th>Recommendation</th></tr></thead><tbody>
+<tr><td>Algorithm</td><td>Use RS256 (RSA) instead of HS256 so you only need the public key on API servers</td></tr>
+<tr><td>Key rotation</td><td>Support multiple decoding keys and rotate regularly</td></tr>
+<tr><td>Token refresh</td><td>Issue short-lived access tokens (15 min) with longer-lived refresh tokens</td></tr>
+<tr><td>Revocation</td><td>Maintain a small in-memory blocklist for revoked tokens, refreshed from a central store</td></tr>
+<tr><td>Clock skew</td><td>Set <code>Validation::leeway</code> to a few seconds to tolerate minor clock differences</td></tr>
+</tbody></table>
+</div>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>JWTs provide stateless authentication -- the server does not need a database
+lookup to validate every request.</li>
+<li>The <code>jsonwebtoken</code> crate handles signature verification, expiration, and
+claim deserialization.</li>
+<li>Always fix the algorithm in your <code>Validation</code> -- never trust the token's
+<code>alg</code> header blindly.</li>
+<li>The <code>Claims</code> struct carries <code>workspace_id</code> and <code>role</code>, which feed directly
+into tenant isolation and RBAC in the following sections.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch11-02-rbac.html">11.2 Role-Based Access Control</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part4-enterprise/ch11-security.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part4-enterprise/ch11-02-rbac.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part4-enterprise/ch11-security.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part4-enterprise/ch11-02-rbac.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

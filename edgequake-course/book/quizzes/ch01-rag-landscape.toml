@@ -1,0 +1,89 @@
+# Quiz: The RAG Landscape
+
+id = "ch01-rag-landscape"
+title = "The RAG Landscape"
+lesson_id = "ch01"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Why is RAG preferred over fine-tuning for grounding LLMs in private or frequently updated data?"
+prompt.distractors = [
+    "RAG is cheaper to train because it uses fewer GPU hours",
+    "RAG produces more creative responses than fine-tuned models",
+    "RAG eliminates hallucinations entirely from LLM outputs"
+]
+answer.answer = "RAG retrieves live documents at query time, so knowledge stays current without retraining the model"
+context = """
+Fine-tuning bakes knowledge into model weights during training, making it stale
+immediately after training ends. RAG retrieves relevant documents at inference time,
+meaning the knowledge base can be updated independently of the model. This makes
+RAG ideal for private, frequently changing, or domain-specific data.
+"""
+id = "b1a2c3d4-1111-4a00-b100-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Which fundamental LLM limitation does RAG specifically address?"
+prompt.distractors = [
+    "LLMs cannot generate grammatically correct text",
+    "LLMs cannot follow multi-step instructions",
+    "LLMs cannot produce responses longer than their context window"
+]
+answer.answer = "LLMs have a fixed knowledge cutoff and no access to private or real-time information"
+context = """
+LLMs are trained on a static corpus with a knowledge cutoff date. They have no
+access to private organizational data, recent events, or domain-specific documents.
+RAG bridges this gap by retrieving relevant external documents and injecting them
+into the prompt context, giving the LLM access to information beyond its training data.
+"""
+id = "b1a2c3d4-1111-4a00-b100-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What are the three core stages of a naive RAG pipeline in order?"
+prompt.distractors = [
+    "Embed, Retrieve, Fine-tune",
+    "Chunk, Rank, Summarize",
+    "Parse, Classify, Generate"
+]
+answer.answer = "Indexing (chunk and embed documents), Retrieval (find similar chunks), Generation (synthesize an answer)"
+context = """
+A naive RAG pipeline has three stages: (1) Indexing, where documents are chunked
+and embedded into vectors stored in a vector database; (2) Retrieval, where the
+user query is embedded and similar chunks are found via vector similarity search;
+(3) Generation, where retrieved chunks are placed in the LLM prompt to produce
+a grounded answer.
+"""
+id = "b1a2c3d4-1111-4a00-b100-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What does cosine similarity measure in the context of RAG retrieval, and what is its range?"
+prompt.distractors = [
+    "The edit distance between two text strings, ranging from 0 to infinity",
+    "The byte-level overlap between two documents, ranging from -1 to 1",
+    "The probability that two chunks come from the same document, ranging from 0 to 1"
+]
+answer.answer = "The angular similarity between two embedding vectors, ranging from -1 (opposite) to 1 (identical direction)"
+context = """
+Cosine similarity measures the cosine of the angle between two vectors, producing
+a value from -1 to 1. In RAG, it compares the query embedding against document
+chunk embeddings. A score near 1 means the vectors point in the same direction
+(semantically similar), while 0 means orthogonal (unrelated). It ignores vector
+magnitude, focusing purely on directional alignment.
+"""
+id = "b1a2c3d4-1111-4a00-b100-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What is the primary tradeoff of naive RAG that motivates the move to more advanced retrieval approaches?"
+answer.answer = "lost context"
+context = """
+Naive RAG treats each chunk as an independent unit, losing the broader context
+of the original document. A chunk about 'the agreement' may not mention which
+agreement or between whom, because that context appeared in earlier chunks.
+This lost context problem leads to incomplete or incorrect retrievals and
+motivates advanced approaches like contextual retrieval and knowledge graphs.
+"""
+id = "b1a2c3d4-1111-4a00-b100-000000000005"

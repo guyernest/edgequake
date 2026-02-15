@@ -1,0 +1,1337 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Exercise: Entity Extraction Prompt - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../../src/custom.css">
+        <link rel="stylesheet" href="../../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <div class="exercise-container">
+<article class="exercise" data-exercise-id="entity-extraction" data-difficulty="intermediate">
+<header class="exercise-header">
+  <h2 id="entity-extraction-prompt-and-parser" class="exercise-title"><a class="header" href="#entity-extraction-prompt-and-parser">Entity Extraction Prompt and Parser</a></h2>
+  <code class=\"exercise-id\">entity-extraction</code>
+  <div class="exercise-meta">
+    <span class="badge difficulty intermediate">⭐⭐ intermediate</span>
+    <span class="badge time">⏱️ 25 min</span>
+  </div>
+</header>
+<nav class="exercise-nav" aria-label="Exercise sections"><ul><li><a href="#entity-extraction-description" data-section="description">📖 Overview</a></li><li><a href="#entity-extraction-objectives" data-section="objectives">🎯 Objectives</a></li><li><a href="#entity-extraction-starter" data-section="starter">💻 Code</a></li><li><a href="#entity-extraction-hints" data-section="hints">💡 Hints</a></li><li><a href="#entity-extraction-solution" data-section="solution">✅ Solution</a></li><li><a href="#entity-extraction-tests" data-section="tests">🧪 Tests</a></li><li><a href="#entity-extraction-reflection" data-section="reflection">🤔 Reflect</a></li></ul></nav>
+<section class="exercise-description" id="entity-extraction-description">
+<p>In the Graph RAG ingestion pipeline, raw text must be transformed into
+structured knowledge: entities (nodes) and relationships (edges). This is done
+by sending the text to an LLM with a carefully crafted prompt that instructs
+it to output structured JSON. In this exercise you will build the extraction
+prompt template and a robust parser that handles the messy reality of LLM
+output.</p>
+</section>
+<section class="exercise-objectives" id="entity-extraction-objectives">
+  <h3 id="-learning-objectives"><a class="header" href="#-learning-objectives">🎯 Learning Objectives</a></h3>
+  <div class="objectives-grid">
+    <div class="objectives-thinking">
+      <h4 id="thinking"><a class="header" href="#thinking">Thinking</a></h4>
+      <ul>
+        <li><input type="checkbox" id="entity-extraction-thinking-0" class="objective-checkbox"><label for="entity-extraction-thinking-0">Understand how prompt engineering controls LLM output structure</label></li>
+        <li><input type="checkbox" id="entity-extraction-thinking-1" class="objective-checkbox"><label for="entity-extraction-thinking-1">Reason about why LLM output parsing must be defensive</label></li>
+      </ul>
+    </div>
+    <div class="objectives-doing">
+      <h4 id="doing"><a class="header" href="#doing">Doing</a></h4>
+      <ul>
+        <li><input type="checkbox" id="entity-extraction-doing-0" class="objective-checkbox"><label for="entity-extraction-doing-0">Complete a prompt template that elicits structured entity/relationship JSON</label></li>
+        <li><input type="checkbox" id="entity-extraction-doing-1" class="objective-checkbox"><label for="entity-extraction-doing-1">Implement a JSON parser that handles common LLM output quirks</label></li>
+        <li><input type="checkbox" id="entity-extraction-doing-2" class="objective-checkbox"><label for="entity-extraction-doing-2">Deduplicate extracted entities by normalized name</label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+<section class="exercise-discussion">
+  <h3 id="-discussion"><a class="header" href="#-discussion">💬 Discussion</a></h3>
+  <ul>
+    <li>Why do few-shot examples in the prompt improve extraction quality over zero-shot?</li>
+    <li>What are the most common ways an LLM deviates from the requested output format?</li>
+    <li>How would you handle entity types that the prompt did not anticipate?</li>
+  </ul>
+</section>
+<section class="exercise-starter" id="entity-extraction-starter">
+  <div class="code-header">
+    <span class="filename">src/main.rs</span>
+    <div class="code-actions">
+      <button class="btn btn-copy" data-target="code-entity-extraction" title="Copy code">📋 Copy</button>
+      <button class="btn btn-reset" data-target="code-entity-extraction" title="Reset to original">↺ Reset</button>
+    </div>
+  </div>
+  <textarea class="code-editor" id="code-entity-extraction" data-language="rust" data-original="use std::collections::HashMap;&#10;&#10;/// An extracted entity from text.&#10;#[derive(Debug, Clone, PartialEq)]&#10;struct Entity {&#10;    name: String,&#10;    entity_type: String,&#10;    description: String,&#10;}&#10;&#10;/// An extracted relationship between two entities.&#10;#[derive(Debug, Clone, PartialEq)]&#10;struct Relationship {&#10;    source: String,&#10;    target: String,&#10;    relation_type: String,&#10;    description: String,&#10;}&#10;&#10;/// The result of entity extraction from a chunk of text.&#10;#[derive(Debug, Clone)]&#10;struct ExtractionResult {&#10;    entities: Vec&lt;Entity&gt;,&#10;    relationships: Vec&lt;Relationship&gt;,&#10;}&#10;&#10;/// Build the extraction prompt for a given text chunk.&#10;///&#10;/// The prompt should instruct the LLM to:&#10;/// 1. Extract all named entities with their type and a brief description.&#10;/// 2. Extract all relationships between entities.&#10;/// 3. Output valid JSON matching the expected schema.&#10;fn build_extraction_prompt(text: &amp;str) -&gt; String {&#10;    // TODO: Complete this prompt template.&#10;    //&#10;    // Requirements:&#10;    // - Include the system instruction explaining the task.&#10;    // - Specify the exact JSON schema expected.&#10;    // - Include one few-shot example showing correct output.&#10;    // - Include the actual text to extract from.&#10;    //&#10;    // Expected JSON schema:&#10;    // {&#10;    //   &quot;entities&quot;: [&#10;    //     {&quot;name&quot;: &quot;...&quot;, &quot;type&quot;: &quot;...&quot;, &quot;description&quot;: &quot;...&quot;}&#10;    //   ],&#10;    //   &quot;relationships&quot;: [&#10;    //     {&quot;source&quot;: &quot;...&quot;, &quot;target&quot;: &quot;...&quot;, &quot;type&quot;: &quot;...&quot;, &quot;description&quot;: &quot;...&quot;}&#10;    //   ]&#10;    // }&#10;    todo!(&quot;Implement build_extraction_prompt&quot;)&#10;}&#10;&#10;/// Parse the LLM response into an ExtractionResult.&#10;///&#10;/// Must handle common LLM quirks:&#10;/// - Response wrapped in markdown code fences (```json ... ```)&#10;/// - Leading/trailing whitespace&#10;/// - Missing optional fields (default to empty string)&#10;fn parse_extraction_response(response: &amp;str) -&gt; Result&lt;ExtractionResult, String&gt; {&#10;    // TODO: Implement the parser.&#10;    //&#10;    // Steps:&#10;    // 1. Strip markdown code fences if present.&#10;    // 2. Find the JSON object boundaries ({ ... }).&#10;    // 3. Parse the JSON manually (no serde -- use simple string parsing).&#10;    // 4. Extract entities and relationships arrays.&#10;    // 5. Deduplicate entities by normalized name (lowercase, trimmed).&#10;    //&#10;    // Hint: Since we cannot use serde in this exercise, implement a&#10;    // minimal JSON parser that handles the specific schema we expect.&#10;    todo!(&quot;Implement parse_extraction_response&quot;)&#10;}&#10;&#10;/// Strip markdown code fences from a string.&#10;/// Handles ```json\n...\n``` and ```\n...\n``` variants.&#10;fn strip_code_fences(text: &amp;str) -&gt; &amp;str {&#10;    // TODO: Implement code fence stripping&#10;    todo!(&quot;Implement strip_code_fences&quot;)&#10;}&#10;&#10;/// Simple JSON string value extractor.&#10;/// Given a key name, extracts the string value from a JSON-like line.&#10;/// Example: extract_json_string_value(&quot;\&quot;name\&quot;: \&quot;Alice\&quot;&quot;, &quot;name&quot;) -&gt; Some(&quot;Alice&quot;)&#10;fn extract_json_string_value(line: &amp;str, key: &amp;str) -&gt; Option&lt;String&gt; {&#10;    // TODO: Implement a simple key-value extractor for JSON strings&#10;    todo!(&quot;Implement extract_json_string_value&quot;)&#10;}&#10;&#10;/// Deduplicate entities by normalized name (lowercase, trimmed).&#10;/// When duplicates are found, keep the one with the longer description.&#10;fn deduplicate_entities(entities: Vec&lt;Entity&gt;) -&gt; Vec&lt;Entity&gt; {&#10;    // TODO: Implement deduplication&#10;    todo!(&quot;Implement deduplicate_entities&quot;)&#10;}&#10;&#10;fn main() {&#10;    let text = r#&quot;&#10;Alice Johnson is the CEO of TechCorp, a software company based in Seattle.&#10;She previously worked at DataInc where she met Bob Smith, who is now the&#10;CTO of TechCorp. TechCorp recently acquired CloudBase for $50 million.&#10;&quot;#;&#10;&#10;    let prompt = build_extraction_prompt(text);&#10;    println!(&quot;=== Extraction Prompt ===&quot;);&#10;    println!(&quot;{}&quot;, &amp;prompt[..prompt.len().min(500)]);&#10;&#10;    // Simulated LLM response (as if the model responded to our prompt)&#10;    let mock_response = r#&quot;```json&#10;{&#10;  &quot;entities&quot;: [&#10;    {&quot;name&quot;: &quot;Alice Johnson&quot;, &quot;type&quot;: &quot;Person&quot;, &quot;description&quot;: &quot;CEO of TechCorp&quot;},&#10;    {&quot;name&quot;: &quot;TechCorp&quot;, &quot;type&quot;: &quot;Organization&quot;, &quot;description&quot;: &quot;A software company based in Seattle&quot;},&#10;    {&quot;name&quot;: &quot;Bob Smith&quot;, &quot;type&quot;: &quot;Person&quot;, &quot;description&quot;: &quot;CTO of TechCorp&quot;},&#10;    {&quot;name&quot;: &quot;DataInc&quot;, &quot;type&quot;: &quot;Organization&quot;, &quot;description&quot;: &quot;Company where Alice previously worked&quot;},&#10;    {&quot;name&quot;: &quot;CloudBase&quot;, &quot;type&quot;: &quot;Organization&quot;, &quot;description&quot;: &quot;Company acquired by TechCorp&quot;}&#10;  ],&#10;  &quot;relationships&quot;: [&#10;    {&quot;source&quot;: &quot;Alice Johnson&quot;, &quot;target&quot;: &quot;TechCorp&quot;, &quot;type&quot;: &quot;CEO_OF&quot;, &quot;description&quot;: &quot;Alice is the CEO&quot;},&#10;    {&quot;source&quot;: &quot;Bob Smith&quot;, &quot;target&quot;: &quot;TechCorp&quot;, &quot;type&quot;: &quot;CTO_OF&quot;, &quot;description&quot;: &quot;Bob is the CTO&quot;},&#10;    {&quot;source&quot;: &quot;Alice Johnson&quot;, &quot;target&quot;: &quot;DataInc&quot;, &quot;type&quot;: &quot;WORKED_AT&quot;, &quot;description&quot;: &quot;Previously employed&quot;},&#10;    {&quot;source&quot;: &quot;TechCorp&quot;, &quot;target&quot;: &quot;CloudBase&quot;, &quot;type&quot;: &quot;ACQUIRED&quot;, &quot;description&quot;: &quot;Acquired for $50M&quot;}&#10;  ]&#10;}" spellcheck="false"></textarea>
+</section>
+<section class="exercise-hints" id="entity-extraction-hints">
+  <h3 id="-hints"><a class="header" href="#-hints">💡 Hints</a></h3>
+  <details class="hint" data-level="1">
+    <summary>Hint 1: Stripping code fences</summary>
+    <div class="hint-content">
+<p>Look for lines that start with triple backticks and skip them:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn strip_code_fences(text: &amp;str) -&gt; &amp;str {
+    let trimmed = text.trim();
+    if trimmed.starts_with("```") {
+        // Find end of first fence line
+        let start = trimmed.find('\n').map(|i| i + 1).unwrap_or(0);
+        // Find start of last fence line
+        let end = trimmed.rfind("```").unwrap_or(trimmed.len());
+        &amp;trimmed[start..end]
+    } else {
+        trimmed
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+    </div>
+  </details>
+  <details class="hint" data-level="2">
+    <summary>Hint 2: Simple JSON parsing approach</summary>
+    <div class="hint-content">
+<p>Instead of building a full JSON parser, split the content into sections by
+finding the <code>"entities"</code> and <code>"relationships"</code> arrays, then parse each
+object by extracting key-value pairs line by line:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Find array content between [ and ]
+fn extract_array_content(json: &amp;str, array_key: &amp;str) -&gt; Option&lt;String&gt; {
+    let key_pattern = format!("\"{}\"", array_key);
+    let key_pos = json.find(&amp;key_pattern)?;
+    let after_key = &amp;json[key_pos..];
+    let bracket_start = after_key.find('[')?;
+    let bracket_content = &amp;after_key[bracket_start..];
+<pre><code>// Find matching close bracket (handle nesting)
+let mut depth = 0;
+for (i, c) in bracket_content.char_indices() {
+    match c {
+        '[' =&amp;gt; depth += 1,
+        ']' =&amp;gt; {
+            depth -= 1;
+            if depth == 0 {
+                return Some(bracket_content[1..i].to_string());
+            }
+        }
+        _ =&amp;gt; {}
+    }
+}
+None
+<span class="boring">}</span></code></pre></pre>
+<p>}
+</code></pre>
+</div></p>
+  </details>
+</section>
+<section class="exercise-solution" id="entity-extraction-solution">
+  <details class="solution">
+    <summary><span class="solution-warning">⚠️ Try the exercise first!</span><span class="solution-toggle">Show Solution</span></summary>
+    <div class="solution-content">
+      <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::collections::HashMap;
+<p>#[derive(Debug, Clone, PartialEq)]
+struct Entity {
+name: String,
+entity_type: String,
+description: String,
+}</p>
+<p>#[derive(Debug, Clone, PartialEq)]
+struct Relationship {
+source: String,
+target: String,
+relation_type: String,
+description: String,
+}</p>
+<p>#[derive(Debug, Clone)]
+struct ExtractionResult {
+entities: Vec&lt;Entity&gt;,
+relationships: Vec&lt;Relationship&gt;,
+}</p>
+<p>fn build_extraction_prompt(text: &amp;str) -&gt; String {
+format!(
+r#"You are an entity and relationship extraction system. Analyze the following text and extract all named entities and their relationships.</p>
+<p>Output your response as a JSON object with this exact schema:
+{{
+"entities": [
+{{"name": "Entity Name", "type": "EntityType", "description": "Brief description"}}
+],
+"relationships": [
+{{"source": "Source Entity", "target": "Target Entity", "type": "RELATION_TYPE", "description": "Brief description"}}
+]
+}}</p>
+<p>Entity types to look for: Person, Organization, Location, Event, Date, Amount.
+Relationship types should be in UPPER_SNAKE_CASE (e.g., WORKS_AT, CEO_OF, LOCATED_IN).</p>
+<p>Example:
+Input: "John is a manager at Google in Mountain View."
+Output:
+{{
+"entities": [
+{{"name": "John", "type": "Person", "description": "A manager at Google"}},
+{{"name": "Google", "type": "Organization", "description": "Technology company"}},
+{{"name": "Mountain View", "type": "Location", "description": "City where Google is located"}}
+],
+"relationships": [
+{{"source": "John", "target": "Google", "type": "WORKS_AT", "description": "John is a manager at Google"}},
+{{"source": "Google", "target": "Mountain View", "type": "LOCATED_IN", "description": "Google is in Mountain View"}}
+]
+}}</p>
+<p>Now extract entities and relationships from the following text:</p>
+<p>{text}"#
+)
+}</p>
+<p>fn strip_code_fences(text: &amp;str) -&gt; &amp;str {
+let trimmed = text.trim();
+if trimmed.starts_with("<code>&amp;quot;) {         let start = trimmed.find(&amp;#x27;\n&amp;#x27;).map(|i| i + 1).unwrap_or(0);         let end = trimmed.rfind(&amp;quot;
+<span class="boring">}</span></code></pre>").unwrap_or(trimmed.len());
+trimmed[start..end].trim()
+} else {
+trimmed
+}
+}</p>
+<p>fn extract_json_string_value(line: &amp;str, key: &amp;str) -&gt; Option&lt;String&gt; {
+let pattern = format!("&amp;quot;{}&amp;quot;", key);
+let key_pos = line.find(&amp;pattern)?;
+let after_key = &amp;line[key_pos + pattern.len()..];</p>
+<pre><code>// Skip colon and whitespace
+let after_colon = after_key.find(&amp;#x27;:&amp;#x27;).map(|i| &amp;amp;after_key[i + 1..])?;
+let trimmed = after_colon.trim();
+
+if !trimmed.starts_with(&amp;#x27;&amp;quot;&amp;#x27;) {
+    return None;
+}
+
+let content = &amp;amp;trimmed[1..];
+// Find closing quote (handle escaped quotes)
+let mut end = 0;
+let mut prev_backslash = false;
+for (i, c) in content.char_indices() {
+    if c == &amp;#x27;&amp;quot;&amp;#x27; &amp;amp;&amp;amp; !prev_backslash {
+        end = i;
+        break;
+    }
+    prev_backslash = c == &amp;#x27;\\&amp;#x27;;
+}
+
+Some(content[..end].to_string())
+</code></pre>
+<p>}</p>
+<p>fn extract_array_content(json: &amp;str, array_key: &amp;str) -&gt; Option&lt;String&gt; {
+let key_pattern = format!("&amp;quot;{}&amp;quot;", array_key);
+let key_pos = json.find(&amp;key_pattern)?;
+let after_key = &amp;json[key_pos..];
+let bracket_start = after_key.find('[')?;
+let bracket_content = &amp;after_key[bracket_start..];</p>
+<pre><code>let mut depth = 0;
+for (i, c) in bracket_content.char_indices() {
+    match c {
+        &amp;#x27;[&amp;#x27; =&amp;gt; depth += 1,
+        &amp;#x27;]&amp;#x27; =&amp;gt; {
+            depth -= 1;
+            if depth == 0 {
+                return Some(bracket_content[1..i].to_string());
+            }
+        }
+        _ =&amp;gt; {}
+    }
+}
+None
+</code></pre>
+<p>}</p>
+<p>fn parse_objects(array_content: &amp;str) -&gt; Vec&lt;HashMap&lt;String, String&gt;&gt; {
+let mut objects = Vec::new();
+let mut depth = 0;
+let mut obj_start = None;</p>
+<pre><code>for (i, c) in array_content.char_indices() {
+    match c {
+        &amp;#x27;{&amp;#x27; =&amp;gt; {
+            if depth == 0 {
+                obj_start = Some(i);
+            }
+            depth += 1;
+        }
+        &amp;#x27;}&amp;#x27; =&amp;gt; {
+            depth -= 1;
+            if depth == 0 {
+                if let Some(start) = obj_start {
+                    let obj_str = &amp;amp;array_content[start..=i];
+                    let mut map = HashMap::new();
+                    for line in obj_str.lines() {
+                        for key in &amp;amp;[&amp;quot;name&amp;quot;, &amp;quot;type&amp;quot;, &amp;quot;description&amp;quot;, &amp;quot;source&amp;quot;, &amp;quot;target&amp;quot;] {
+                            if let Some(val) = extract_json_string_value(line, key) {
+                                map.insert(key.to_string(), val);
+                            }
+                        }
+                    }
+                    objects.push(map);
+                }
+            }
+        }
+        _ =&amp;gt; {}
+    }
+}
+objects
+</code></pre>
+<p>}</p>
+<p>fn deduplicate_entities(entities: Vec&lt;Entity&gt;) -&gt; Vec&lt;Entity&gt; {
+let mut seen: HashMap&lt;String, Entity&gt; = HashMap::new();</p>
+<pre><code>for entity in entities {
+    let key = entity.name.trim().to_lowercase();
+    if let Some(existing) = seen.get(&amp;amp;key) {
+        if entity.description.len() &amp;gt; existing.description.len() {
+            seen.insert(key, entity);
+        }
+    } else {
+        seen.insert(key, entity);
+    }
+}
+
+seen.into_values().collect()
+</code></pre>
+<p>}</p>
+<p>fn parse_extraction_response(response: &amp;str) -&gt; Result&lt;ExtractionResult, String&gt; {
+let json = strip_code_fences(response);</p>
+<pre><code>// Parse entities
+let entities_content = extract_array_content(json, &amp;quot;entities&amp;quot;)
+    .ok_or_else(|| &amp;quot;Could not find &amp;#x27;entities&amp;#x27; array in response&amp;quot;.to_string())?;
+let entity_objects = parse_objects(&amp;amp;entities_content);
+
+let mut entities: Vec&amp;lt;Entity&amp;gt; = entity_objects
+    .into_iter()
+    .filter_map(|obj| {
+        let name = obj.get(&amp;quot;name&amp;quot;)?.clone();
+        let entity_type = obj.get(&amp;quot;type&amp;quot;).cloned().unwrap_or_default();
+        let description = obj.get(&amp;quot;description&amp;quot;).cloned().unwrap_or_default();
+        Some(Entity {
+            name,
+            entity_type,
+            description,
+        })
+    })
+    .collect();
+
+entities = deduplicate_entities(entities);
+
+// Parse relationships
+let relationships_content = extract_array_content(json, &amp;quot;relationships&amp;quot;)
+    .ok_or_else(|| &amp;quot;Could not find &amp;#x27;relationships&amp;#x27; array in response&amp;quot;.to_string())?;
+let rel_objects = parse_objects(&amp;amp;relationships_content);
+
+let relationships: Vec&amp;lt;Relationship&amp;gt; = rel_objects
+    .into_iter()
+    .filter_map(|obj| {
+        let source = obj.get(&amp;quot;source&amp;quot;)?.clone();
+        let target = obj.get(&amp;quot;target&amp;quot;)?.clone();
+        let relation_type = obj.get(&amp;quot;type&amp;quot;).cloned().unwrap_or_default();
+        let description = obj.get(&amp;quot;description&amp;quot;).cloned().unwrap_or_default();
+        Some(Relationship {
+            source,
+            target,
+            relation_type,
+            description,
+        })
+    })
+    .collect();
+
+Ok(ExtractionResult {
+    entities,
+    relationships,
+})
+</code></pre>
+<p>}</p>
+<p>fn main() {
+let text = r#"
+Alice Johnson is the CEO of TechCorp, a software company based in Seattle.
+She previously worked at DataInc where she met Bob Smith, who is now the
+CTO of TechCorp. TechCorp recently acquired CloudBase for $50 million.
+"#;</p>
+<pre><code>let prompt = build_extraction_prompt(text);
+println!(&amp;quot;=== Extraction Prompt ===&amp;quot;);
+println!(&amp;quot;{}&amp;quot;, &amp;amp;prompt[..prompt.len().min(500)]);
+
+let mock_response = r#&amp;quot;```json
+</code></pre>
+<p>{
+"entities": [
+{"name": "Alice Johnson", "type": "Person", "description": "CEO of TechCorp"},
+{"name": "TechCorp", "type": "Organization", "description": "A software company based in Seattle"},
+{"name": "Bob Smith", "type": "Person", "description": "CTO of TechCorp"},
+{"name": "DataInc", "type": "Organization", "description": "Company where Alice previously worked"},
+{"name": "CloudBase", "type": "Organization", "description": "Company acquired by TechCorp"}
+],
+"relationships": [
+{"source": "Alice Johnson", "target": "TechCorp", "type": "CEO_OF", "description": "Alice is the CEO"},
+{"source": "Bob Smith", "target": "TechCorp", "type": "CTO_OF", "description": "Bob is the CTO"},
+{"source": "Alice Johnson", "target": "DataInc", "type": "WORKED_AT", "description": "Previously employed"},
+{"source": "TechCorp", "target": "CloudBase", "type": "ACQUIRED", "description": "Acquired for $50M"}
+]
+}</code></pre>
+<div class="solution-explanation"><h4 id="explanation"><a class="header" href="#explanation">Explanation</a></h4><p>match parse_extraction_response(mock_response) {
+Ok(result) =&gt; {
+println!("\n=== Extracted Entities ===");
+for e in &amp;result.entities {
+println!("  [{}] {} - {}", e.entity_type, e.name, e.description);
+}
+println!("\n=== Extracted Relationships ===");
+for r in &amp;result.relationships {
+println!("  {} --[{}]--&gt; {}", r.source, r.relation_type, r.target);
+}
+}
+Err(e) =&gt; println!("Parse error: {}", e),
+}
+}</p></p>
+</div>
+    </div>
+  </details>
+</section>
+<section class="exercise-tests" id="entity-extraction-tests" data-mode="local">
+  <h3 id="-tests"><a class="header" href="#-tests">🧪 Tests</a></h3>
+  <div class="test-actions">
+    <div class="local-test-info"><p>Run these tests locally with:</p><pre><code>cargo test</code></pre></div>
+  </div>
+  <div class="test-results" id="results-entity-extraction" hidden></div>
+  <details class="tests-code"><summary>View Test Code</summary>
+    <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+<pre><code>#[test]
+fn test_build_prompt_contains_text() {
+    let prompt = build_extraction_prompt(&amp;quot;Hello world&amp;quot;);
+    assert!(prompt.contains(&amp;quot;Hello world&amp;quot;), &amp;quot;Prompt should include the input text&amp;quot;);
+}
+
+#[test]
+fn test_build_prompt_contains_schema() {
+    let prompt = build_extraction_prompt(&amp;quot;test&amp;quot;);
+    assert!(prompt.contains(&amp;quot;entities&amp;quot;), &amp;quot;Prompt should mention entities&amp;quot;);
+    assert!(prompt.contains(&amp;quot;relationships&amp;quot;), &amp;quot;Prompt should mention relationships&amp;quot;);
+}
+
+#[test]
+fn test_strip_code_fences_with_json() {
+    let input = &amp;quot;```json\n{\&amp;quot;key\&amp;quot;: \&amp;quot;value\&amp;quot;}\n```&amp;quot;;
+    let result = strip_code_fences(input);
+    assert!(result.contains(&amp;quot;\&amp;quot;key\&amp;quot;&amp;quot;), &amp;quot;Should strip fences&amp;quot;);
+    assert!(!result.contains(&amp;quot;```&amp;quot;), &amp;quot;Should not contain fence markers&amp;quot;);
+}
+
+#[test]
+fn test_strip_code_fences_without_fences() {
+    let input = &amp;quot;{\&amp;quot;key\&amp;quot;: \&amp;quot;value\&amp;quot;}&amp;quot;;
+    let result = strip_code_fences(input);
+    assert_eq!(result, input, &amp;quot;Should return input unchanged&amp;quot;);
+}
+
+#[test]
+fn test_extract_json_string_value() {
+    let line = r#&amp;quot;    &amp;quot;name&amp;quot;: &amp;quot;Alice Johnson&amp;quot;,&amp;quot;#;
+    let result = extract_json_string_value(line, &amp;quot;name&amp;quot;);
+    assert_eq!(result, Some(&amp;quot;Alice Johnson&amp;quot;.to_string()));
+}
+
+#[test]
+fn test_parse_basic_response() {
+    let response = r#&amp;quot;{
+<span class="boring">}</span></code></pre></pre>
+<p>"entities": [
+{"name": "Alice", "type": "Person", "description": "A person"}
+],
+"relationships": [
+{"source": "Alice", "target": "Bob", "type": "KNOWS", "description": "Friends"}
+]
+}"#;
+let result = parse_extraction_response(response).unwrap();
+assert_eq!(result.entities.len(), 1);
+assert_eq!(result.entities[0].name, "Alice");
+assert_eq!(result.relationships.len(), 1);
+assert_eq!(result.relationships[0].relation_type, "KNOWS");
+}</p>
+<pre><code>#[test]
+fn test_parse_response_with_code_fences() {
+    let response = &amp;quot;```json\n{\&amp;quot;entities\&amp;quot;: [{\&amp;quot;name\&amp;quot;: \&amp;quot;X\&amp;quot;, \&amp;quot;type\&amp;quot;: \&amp;quot;T\&amp;quot;, \&amp;quot;description\&amp;quot;: \&amp;quot;D\&amp;quot;}], \&amp;quot;relationships\&amp;quot;: []}\n```&amp;quot;;
+    let result = parse_extraction_response(response).unwrap();
+    assert_eq!(result.entities.len(), 1);
+    assert_eq!(result.entities[0].name, &amp;quot;X&amp;quot;);
+}
+
+#[test]
+fn test_deduplicate_entities_by_name() {
+    let entities = vec![
+        Entity { name: &amp;quot;Alice&amp;quot;.into(), entity_type: &amp;quot;Person&amp;quot;.into(), description: &amp;quot;Short&amp;quot;.into() },
+        Entity { name: &amp;quot;alice&amp;quot;.into(), entity_type: &amp;quot;Person&amp;quot;.into(), description: &amp;quot;A longer description&amp;quot;.into() },
+    ];
+    let deduped = deduplicate_entities(entities);
+    assert_eq!(deduped.len(), 1, &amp;quot;Should deduplicate by lowercase name&amp;quot;);
+    assert!(deduped[0].description.len() &amp;gt; 5, &amp;quot;Should keep the longer description&amp;quot;);
+}
+
+#[test]
+fn test_parse_invalid_response() {
+    let result = parse_extraction_response(&amp;quot;this is not json at all&amp;quot;);
+    assert!(result.is_err(), &amp;quot;Should return error for invalid input&amp;quot;);
+}
+</code></pre>
+<p>}</code></pre></p>
+  </details>
+</section>
+<section class="exercise-reflection" id="entity-extraction-reflection">
+  <h3 id="-reflection"><a class="header" href="#-reflection">🤔 Reflection</a></h3>
+  <ul>
+    <li>How would you improve extraction quality for domain-specific text (e.g., legal documents or scientific papers)?</li>
+    <li>What are the tradeoffs between using structured output (JSON mode) vs free-form text extraction?</li>
+    <li>How would you handle entity coreference (e.g., &quot;Alice&quot;, &quot;she&quot;, &quot;the CEO&quot; all referring to the same person)?</li>
+  </ul>
+</section>
+<footer class="exercise-footer">
+  <button class="btn btn-complete" data-exercise-id="entity-extraction">✓ Mark Complete</button>
+</footer>
+</article>
+</div>
+<h1 id="entity-extraction-prompt-and-parser-1"><a class="header" href="#entity-extraction-prompt-and-parser-1">Entity Extraction Prompt and Parser</a></h1>
+<p>In the Graph RAG ingestion pipeline, raw text must be transformed into
+structured knowledge: entities (nodes) and relationships (edges). This is done
+by sending the text to an LLM with a carefully crafted prompt that instructs
+it to output structured JSON. In this exercise you will build the extraction
+prompt template and a robust parser that handles the messy reality of LLM
+output.</p>
+<p>::: objectives
+thinking:</p>
+<ul>
+<li>Understand how prompt engineering controls LLM output structure</li>
+<li>Reason about why LLM output parsing must be defensive
+doing:</li>
+<li>Complete a prompt template that elicits structured entity/relationship JSON</li>
+<li>Implement a JSON parser that handles common LLM output quirks</li>
+<li>Deduplicate extracted entities by normalized name
+:::</li>
+</ul>
+<p>::: discussion</p>
+<ul>
+<li>Why do few-shot examples in the prompt improve extraction quality over zero-shot?</li>
+<li>What are the most common ways an LLM deviates from the requested output format?</li>
+<li>How would you handle entity types that the prompt did not anticipate?
+:::</li>
+</ul>
+<p>::: starter file="src/main.rs"</p>
+<pre><pre class="playground"><code class="language-rust">use std::collections::HashMap;
+
+/// An extracted entity from text.
+#[derive(Debug, Clone, PartialEq)]
+struct Entity {
+    name: String,
+    entity_type: String,
+    description: String,
+}
+
+/// An extracted relationship between two entities.
+#[derive(Debug, Clone, PartialEq)]
+struct Relationship {
+    source: String,
+    target: String,
+    relation_type: String,
+    description: String,
+}
+
+/// The result of entity extraction from a chunk of text.
+#[derive(Debug, Clone)]
+struct ExtractionResult {
+    entities: Vec&lt;Entity&gt;,
+    relationships: Vec&lt;Relationship&gt;,
+}
+
+/// Build the extraction prompt for a given text chunk.
+///
+/// The prompt should instruct the LLM to:
+/// 1. Extract all named entities with their type and a brief description.
+/// 2. Extract all relationships between entities.
+/// 3. Output valid JSON matching the expected schema.
+fn build_extraction_prompt(text: &amp;str) -&gt; String {
+    // TODO: Complete this prompt template.
+    //
+    // Requirements:
+    // - Include the system instruction explaining the task.
+    // - Specify the exact JSON schema expected.
+    // - Include one few-shot example showing correct output.
+    // - Include the actual text to extract from.
+    //
+    // Expected JSON schema:
+    // {
+    //   "entities": [
+    //     {"name": "...", "type": "...", "description": "..."}
+    //   ],
+    //   "relationships": [
+    //     {"source": "...", "target": "...", "type": "...", "description": "..."}
+    //   ]
+    // }
+    todo!("Implement build_extraction_prompt")
+}
+
+/// Parse the LLM response into an ExtractionResult.
+///
+/// Must handle common LLM quirks:
+/// - Response wrapped in markdown code fences (```json ... ```)
+/// - Leading/trailing whitespace
+/// - Missing optional fields (default to empty string)
+fn parse_extraction_response(response: &amp;str) -&gt; Result&lt;ExtractionResult, String&gt; {
+    // TODO: Implement the parser.
+    //
+    // Steps:
+    // 1. Strip markdown code fences if present.
+    // 2. Find the JSON object boundaries ({ ... }).
+    // 3. Parse the JSON manually (no serde -- use simple string parsing).
+    // 4. Extract entities and relationships arrays.
+    // 5. Deduplicate entities by normalized name (lowercase, trimmed).
+    //
+    // Hint: Since we cannot use serde in this exercise, implement a
+    // minimal JSON parser that handles the specific schema we expect.
+    todo!("Implement parse_extraction_response")
+}
+
+/// Strip markdown code fences from a string.
+/// Handles ```json\n...\n``` and ```\n...\n``` variants.
+fn strip_code_fences(text: &amp;str) -&gt; &amp;str {
+    // TODO: Implement code fence stripping
+    todo!("Implement strip_code_fences")
+}
+
+/// Simple JSON string value extractor.
+/// Given a key name, extracts the string value from a JSON-like line.
+/// Example: extract_json_string_value("\"name\": \"Alice\"", "name") -&gt; Some("Alice")
+fn extract_json_string_value(line: &amp;str, key: &amp;str) -&gt; Option&lt;String&gt; {
+    // TODO: Implement a simple key-value extractor for JSON strings
+    todo!("Implement extract_json_string_value")
+}
+
+/// Deduplicate entities by normalized name (lowercase, trimmed).
+/// When duplicates are found, keep the one with the longer description.
+fn deduplicate_entities(entities: Vec&lt;Entity&gt;) -&gt; Vec&lt;Entity&gt; {
+    // TODO: Implement deduplication
+    todo!("Implement deduplicate_entities")
+}
+
+fn main() {
+    let text = r#"
+Alice Johnson is the CEO of TechCorp, a software company based in Seattle.
+She previously worked at DataInc where she met Bob Smith, who is now the
+CTO of TechCorp. TechCorp recently acquired CloudBase for $50 million.
+"#;
+
+    let prompt = build_extraction_prompt(text);
+    println!("=== Extraction Prompt ===");
+    println!("{}", &amp;prompt[..prompt.len().min(500)]);
+
+    // Simulated LLM response (as if the model responded to our prompt)
+    let mock_response = r#"```json
+{
+  "entities": [
+    {"name": "Alice Johnson", "type": "Person", "description": "CEO of TechCorp"},
+    {"name": "TechCorp", "type": "Organization", "description": "A software company based in Seattle"},
+    {"name": "Bob Smith", "type": "Person", "description": "CTO of TechCorp"},
+    {"name": "DataInc", "type": "Organization", "description": "Company where Alice previously worked"},
+    {"name": "CloudBase", "type": "Organization", "description": "Company acquired by TechCorp"}
+  ],
+  "relationships": [
+    {"source": "Alice Johnson", "target": "TechCorp", "type": "CEO_OF", "description": "Alice is the CEO"},
+    {"source": "Bob Smith", "target": "TechCorp", "type": "CTO_OF", "description": "Bob is the CTO"},
+    {"source": "Alice Johnson", "target": "DataInc", "type": "WORKED_AT", "description": "Previously employed"},
+    {"source": "TechCorp", "target": "CloudBase", "type": "ACQUIRED", "description": "Acquired for $50M"}
+  ]
+}
+```"#;
+
+    match parse_extraction_response(mock_response) {
+        Ok(result) =&gt; {
+            println!("\n=== Extracted Entities ===");
+            for e in &amp;result.entities {
+                println!("  [{}] {} - {}", e.entity_type, e.name, e.description);
+            }
+            println!("\n=== Extracted Relationships ===");
+            for r in &amp;result.relationships {
+                println!("  {} --[{}]--&gt; {}", r.source, r.relation_type, r.target);
+            }
+        }
+        Err(e) =&gt; println!("Parse error: {}", e),
+    }
+}</code></pre></pre>
+<p>:::</p>
+<p>::: hint level=1 title="Stripping code fences"
+Look for lines that start with triple backticks and skip them:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn strip_code_fences(text: &amp;str) -&gt; &amp;str {
+    let trimmed = text.trim();
+    if trimmed.starts_with("```") {
+        // Find end of first fence line
+        let start = trimmed.find('\n').map(|i| i + 1).unwrap_or(0);
+        // Find start of last fence line
+        let end = trimmed.rfind("```").unwrap_or(trimmed.len());
+        &amp;trimmed[start..end]
+    } else {
+        trimmed
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: hint level=2 title="Simple JSON parsing approach"
+Instead of building a full JSON parser, split the content into sections by
+finding the <code>"entities"</code> and <code>"relationships"</code> arrays, then parse each
+object by extracting key-value pairs line by line:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Find array content between [ and ]
+fn extract_array_content(json: &amp;str, array_key: &amp;str) -&gt; Option&lt;String&gt; {
+    let key_pattern = format!("\"{}\"", array_key);
+    let key_pos = json.find(&amp;key_pattern)?;
+    let after_key = &amp;json[key_pos..];
+    let bracket_start = after_key.find('[')?;
+    let bracket_content = &amp;after_key[bracket_start..];
+
+    // Find matching close bracket (handle nesting)
+    let mut depth = 0;
+    for (i, c) in bracket_content.char_indices() {
+        match c {
+            '[' =&gt; depth += 1,
+            ']' =&gt; {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(bracket_content[1..i].to_string());
+                }
+            }
+            _ =&gt; {}
+        }
+    }
+    None
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: solution</p>
+<pre><pre class="playground"><code class="language-rust">use std::collections::HashMap;
+
+#[derive(Debug, Clone, PartialEq)]
+struct Entity {
+    name: String,
+    entity_type: String,
+    description: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct Relationship {
+    source: String,
+    target: String,
+    relation_type: String,
+    description: String,
+}
+
+#[derive(Debug, Clone)]
+struct ExtractionResult {
+    entities: Vec&lt;Entity&gt;,
+    relationships: Vec&lt;Relationship&gt;,
+}
+
+fn build_extraction_prompt(text: &amp;str) -&gt; String {
+    format!(
+        r#"You are an entity and relationship extraction system. Analyze the following text and extract all named entities and their relationships.
+
+Output your response as a JSON object with this exact schema:
+{{
+  "entities": [
+    {{"name": "Entity Name", "type": "EntityType", "description": "Brief description"}}
+  ],
+  "relationships": [
+    {{"source": "Source Entity", "target": "Target Entity", "type": "RELATION_TYPE", "description": "Brief description"}}
+  ]
+}}
+
+Entity types to look for: Person, Organization, Location, Event, Date, Amount.
+Relationship types should be in UPPER_SNAKE_CASE (e.g., WORKS_AT, CEO_OF, LOCATED_IN).
+
+Example:
+Input: "John is a manager at Google in Mountain View."
+Output:
+{{
+  "entities": [
+    {{"name": "John", "type": "Person", "description": "A manager at Google"}},
+    {{"name": "Google", "type": "Organization", "description": "Technology company"}},
+    {{"name": "Mountain View", "type": "Location", "description": "City where Google is located"}}
+  ],
+  "relationships": [
+    {{"source": "John", "target": "Google", "type": "WORKS_AT", "description": "John is a manager at Google"}},
+    {{"source": "Google", "target": "Mountain View", "type": "LOCATED_IN", "description": "Google is in Mountain View"}}
+  ]
+}}
+
+Now extract entities and relationships from the following text:
+
+{text}"#
+    )
+}
+
+fn strip_code_fences(text: &amp;str) -&gt; &amp;str {
+    let trimmed = text.trim();
+    if trimmed.starts_with("```") {
+        let start = trimmed.find('\n').map(|i| i + 1).unwrap_or(0);
+        let end = trimmed.rfind("```").unwrap_or(trimmed.len());
+        trimmed[start..end].trim()
+    } else {
+        trimmed
+    }
+}
+
+fn extract_json_string_value(line: &amp;str, key: &amp;str) -&gt; Option&lt;String&gt; {
+    let pattern = format!("\"{}\"", key);
+    let key_pos = line.find(&amp;pattern)?;
+    let after_key = &amp;line[key_pos + pattern.len()..];
+
+    // Skip colon and whitespace
+    let after_colon = after_key.find(':').map(|i| &amp;after_key[i + 1..])?;
+    let trimmed = after_colon.trim();
+
+    if !trimmed.starts_with('"') {
+        return None;
+    }
+
+    let content = &amp;trimmed[1..];
+    // Find closing quote (handle escaped quotes)
+    let mut end = 0;
+    let mut prev_backslash = false;
+    for (i, c) in content.char_indices() {
+        if c == '"' &amp;&amp; !prev_backslash {
+            end = i;
+            break;
+        }
+        prev_backslash = c == '\\';
+    }
+
+    Some(content[..end].to_string())
+}
+
+fn extract_array_content(json: &amp;str, array_key: &amp;str) -&gt; Option&lt;String&gt; {
+    let key_pattern = format!("\"{}\"", array_key);
+    let key_pos = json.find(&amp;key_pattern)?;
+    let after_key = &amp;json[key_pos..];
+    let bracket_start = after_key.find('[')?;
+    let bracket_content = &amp;after_key[bracket_start..];
+
+    let mut depth = 0;
+    for (i, c) in bracket_content.char_indices() {
+        match c {
+            '[' =&gt; depth += 1,
+            ']' =&gt; {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(bracket_content[1..i].to_string());
+                }
+            }
+            _ =&gt; {}
+        }
+    }
+    None
+}
+
+fn parse_objects(array_content: &amp;str) -&gt; Vec&lt;HashMap&lt;String, String&gt;&gt; {
+    let mut objects = Vec::new();
+    let mut depth = 0;
+    let mut obj_start = None;
+
+    for (i, c) in array_content.char_indices() {
+        match c {
+            '{' =&gt; {
+                if depth == 0 {
+                    obj_start = Some(i);
+                }
+                depth += 1;
+            }
+            '}' =&gt; {
+                depth -= 1;
+                if depth == 0 {
+                    if let Some(start) = obj_start {
+                        let obj_str = &amp;array_content[start..=i];
+                        let mut map = HashMap::new();
+                        for line in obj_str.lines() {
+                            for key in &amp;["name", "type", "description", "source", "target"] {
+                                if let Some(val) = extract_json_string_value(line, key) {
+                                    map.insert(key.to_string(), val);
+                                }
+                            }
+                        }
+                        objects.push(map);
+                    }
+                }
+            }
+            _ =&gt; {}
+        }
+    }
+    objects
+}
+
+fn deduplicate_entities(entities: Vec&lt;Entity&gt;) -&gt; Vec&lt;Entity&gt; {
+    let mut seen: HashMap&lt;String, Entity&gt; = HashMap::new();
+
+    for entity in entities {
+        let key = entity.name.trim().to_lowercase();
+        if let Some(existing) = seen.get(&amp;key) {
+            if entity.description.len() &gt; existing.description.len() {
+                seen.insert(key, entity);
+            }
+        } else {
+            seen.insert(key, entity);
+        }
+    }
+
+    seen.into_values().collect()
+}
+
+fn parse_extraction_response(response: &amp;str) -&gt; Result&lt;ExtractionResult, String&gt; {
+    let json = strip_code_fences(response);
+
+    // Parse entities
+    let entities_content = extract_array_content(json, "entities")
+        .ok_or_else(|| "Could not find 'entities' array in response".to_string())?;
+    let entity_objects = parse_objects(&amp;entities_content);
+
+    let mut entities: Vec&lt;Entity&gt; = entity_objects
+        .into_iter()
+        .filter_map(|obj| {
+            let name = obj.get("name")?.clone();
+            let entity_type = obj.get("type").cloned().unwrap_or_default();
+            let description = obj.get("description").cloned().unwrap_or_default();
+            Some(Entity {
+                name,
+                entity_type,
+                description,
+            })
+        })
+        .collect();
+
+    entities = deduplicate_entities(entities);
+
+    // Parse relationships
+    let relationships_content = extract_array_content(json, "relationships")
+        .ok_or_else(|| "Could not find 'relationships' array in response".to_string())?;
+    let rel_objects = parse_objects(&amp;relationships_content);
+
+    let relationships: Vec&lt;Relationship&gt; = rel_objects
+        .into_iter()
+        .filter_map(|obj| {
+            let source = obj.get("source")?.clone();
+            let target = obj.get("target")?.clone();
+            let relation_type = obj.get("type").cloned().unwrap_or_default();
+            let description = obj.get("description").cloned().unwrap_or_default();
+            Some(Relationship {
+                source,
+                target,
+                relation_type,
+                description,
+            })
+        })
+        .collect();
+
+    Ok(ExtractionResult {
+        entities,
+        relationships,
+    })
+}
+
+fn main() {
+    let text = r#"
+Alice Johnson is the CEO of TechCorp, a software company based in Seattle.
+She previously worked at DataInc where she met Bob Smith, who is now the
+CTO of TechCorp. TechCorp recently acquired CloudBase for $50 million.
+"#;
+
+    let prompt = build_extraction_prompt(text);
+    println!("=== Extraction Prompt ===");
+    println!("{}", &amp;prompt[..prompt.len().min(500)]);
+
+    let mock_response = r#"```json
+{
+  "entities": [
+    {"name": "Alice Johnson", "type": "Person", "description": "CEO of TechCorp"},
+    {"name": "TechCorp", "type": "Organization", "description": "A software company based in Seattle"},
+    {"name": "Bob Smith", "type": "Person", "description": "CTO of TechCorp"},
+    {"name": "DataInc", "type": "Organization", "description": "Company where Alice previously worked"},
+    {"name": "CloudBase", "type": "Organization", "description": "Company acquired by TechCorp"}
+  ],
+  "relationships": [
+    {"source": "Alice Johnson", "target": "TechCorp", "type": "CEO_OF", "description": "Alice is the CEO"},
+    {"source": "Bob Smith", "target": "TechCorp", "type": "CTO_OF", "description": "Bob is the CTO"},
+    {"source": "Alice Johnson", "target": "DataInc", "type": "WORKED_AT", "description": "Previously employed"},
+    {"source": "TechCorp", "target": "CloudBase", "type": "ACQUIRED", "description": "Acquired for $50M"}
+  ]
+}
+```"#;
+
+    match parse_extraction_response(mock_response) {
+        Ok(result) =&gt; {
+            println!("\n=== Extracted Entities ===");
+            for e in &amp;result.entities {
+                println!("  [{}] {} - {}", e.entity_type, e.name, e.description);
+            }
+            println!("\n=== Extracted Relationships ===");
+            for r in &amp;result.relationships {
+                println!("  {} --[{}]--&gt; {}", r.source, r.relation_type, r.target);
+            }
+        }
+        Err(e) =&gt; println!("Parse error: {}", e),
+    }
+}</code></pre></pre>
+<h3 id="explanation-1"><a class="header" href="#explanation-1">Explanation</a></h3>
+<p>The prompt template follows key principles: it specifies the exact JSON schema
+expected, provides entity type and relationship type guidance, includes a
+concrete few-shot example, and clearly separates the instruction from the input
+text.</p>
+<p>The parser is deliberately defensive. It first strips markdown code fences
+(a very common LLM behavior), then locates the JSON arrays by matching
+brackets with depth tracking. Individual objects are parsed by extracting
+key-value pairs line by line. This approach is more robust than strict JSON
+parsing because it tolerates minor formatting variations.</p>
+<p>Entity deduplication uses a case-insensitive key (lowercase, trimmed name)
+and keeps the entity with the longer description when duplicates are found,
+preserving the richest metadata.
+:::</p>
+<p>::: tests mode=local</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_prompt_contains_text() {
+        let prompt = build_extraction_prompt("Hello world");
+        assert!(prompt.contains("Hello world"), "Prompt should include the input text");
+    }
+
+    #[test]
+    fn test_build_prompt_contains_schema() {
+        let prompt = build_extraction_prompt("test");
+        assert!(prompt.contains("entities"), "Prompt should mention entities");
+        assert!(prompt.contains("relationships"), "Prompt should mention relationships");
+    }
+
+    #[test]
+    fn test_strip_code_fences_with_json() {
+        let input = "```json\n{\"key\": \"value\"}\n```";
+        let result = strip_code_fences(input);
+        assert!(result.contains("\"key\""), "Should strip fences");
+        assert!(!result.contains("```"), "Should not contain fence markers");
+    }
+
+    #[test]
+    fn test_strip_code_fences_without_fences() {
+        let input = "{\"key\": \"value\"}";
+        let result = strip_code_fences(input);
+        assert_eq!(result, input, "Should return input unchanged");
+    }
+
+    #[test]
+    fn test_extract_json_string_value() {
+        let line = r#"    "name": "Alice Johnson","#;
+        let result = extract_json_string_value(line, "name");
+        assert_eq!(result, Some("Alice Johnson".to_string()));
+    }
+
+    #[test]
+    fn test_parse_basic_response() {
+        let response = r#"{
+  "entities": [
+    {"name": "Alice", "type": "Person", "description": "A person"}
+  ],
+  "relationships": [
+    {"source": "Alice", "target": "Bob", "type": "KNOWS", "description": "Friends"}
+  ]
+}"#;
+        let result = parse_extraction_response(response).unwrap();
+        assert_eq!(result.entities.len(), 1);
+        assert_eq!(result.entities[0].name, "Alice");
+        assert_eq!(result.relationships.len(), 1);
+        assert_eq!(result.relationships[0].relation_type, "KNOWS");
+    }
+
+    #[test]
+    fn test_parse_response_with_code_fences() {
+        let response = "```json\n{\"entities\": [{\"name\": \"X\", \"type\": \"T\", \"description\": \"D\"}], \"relationships\": []}\n```";
+        let result = parse_extraction_response(response).unwrap();
+        assert_eq!(result.entities.len(), 1);
+        assert_eq!(result.entities[0].name, "X");
+    }
+
+    #[test]
+    fn test_deduplicate_entities_by_name() {
+        let entities = vec![
+            Entity { name: "Alice".into(), entity_type: "Person".into(), description: "Short".into() },
+            Entity { name: "alice".into(), entity_type: "Person".into(), description: "A longer description".into() },
+        ];
+        let deduped = deduplicate_entities(entities);
+        assert_eq!(deduped.len(), 1, "Should deduplicate by lowercase name");
+        assert!(deduped[0].description.len() &gt; 5, "Should keep the longer description");
+    }
+
+    #[test]
+    fn test_parse_invalid_response() {
+        let result = parse_extraction_response("this is not json at all");
+        assert!(result.is_err(), "Should return error for invalid input");
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: reflection</p>
+<ul>
+<li>How would you improve extraction quality for domain-specific text (e.g., legal documents or scientific papers)?</li>
+<li>What are the tradeoffs between using structured output (JSON mode) vs free-form text extraction?</li>
+<li>How would you handle entity coreference (e.g., "Alice", "she", "the CEO" all referring to the same person)?
+:::</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../part2-graph/ch05-04-gleaning.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../part2-graph/ch06-query-engine.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../part2-graph/ch05-04-gleaning.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../part2-graph/ch06-query-engine.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../../ace.js"></script>
+        <script src="../../mode-rust.js"></script>
+        <script src="../../editor.js"></script>
+        <script src="../../theme-dawn.js"></script>
+        <script src="../../theme-tomorrow_night.js"></script>
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>
