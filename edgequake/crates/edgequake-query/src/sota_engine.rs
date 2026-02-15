@@ -91,7 +91,7 @@ use crate::vector_filter::{filter_by_type, VectorType};
 
 use edgequake_llm::traits::{EmbeddingProvider, LLMProvider};
 use edgequake_llm::Reranker;
-use edgequake_storage::traits::{GraphStorage, VectorStorage};
+use edgequake_storage::traits::{GraphStorage, KVStorage, VectorStorage};
 
 /// Configuration for the SOTA query engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +137,10 @@ pub struct SOTAQueryConfig {
 
     /// Top K results to keep after reranking.
     pub rerank_top_k: usize,
+
+    /// Enable chunk content hydration from KV storage.
+    /// When true, chunks with empty content are backfilled from KV.
+    pub enable_chunk_content: bool,
 }
 
 impl Default for SOTAQueryConfig {
@@ -176,6 +180,7 @@ impl Default for SOTAQueryConfig {
             min_rerank_score: 0.1,
             // WHY 20: Match max_chunks to keep all chunk candidates after reranking.
             rerank_top_k: 20,
+            enable_chunk_content: false,
         }
     }
 }
@@ -257,6 +262,8 @@ pub struct SOTAQueryEngine {
     tokenizer: Arc<dyn Tokenizer>,
     /// Optional reranker for improved retrieval precision.
     reranker: Option<Arc<dyn Reranker>>,
+    /// Optional KV storage for chunk content hydration.
+    kv_storage: Option<Arc<dyn KVStorage>>,
     /// Cache for keyword validation (keyword -> exists_in_graph).
     /// WHY: Avoids repeated graph lookups for the same keywords.
     keyword_validation_cache: Arc<tokio::sync::RwLock<std::collections::HashMap<String, bool>>>,
@@ -288,7 +295,8 @@ impl SOTAQueryEngine {
             llm_provider,
             keyword_extractor,
             tokenizer: Arc::new(SimpleTokenizer),
-            reranker: None, // No reranker by default
+            reranker: None,
+            kv_storage: None,
             keyword_validation_cache: Arc::new(tokio::sync::RwLock::new(
                 std::collections::HashMap::new(),
             )),
@@ -298,6 +306,12 @@ impl SOTAQueryEngine {
     /// Create with a reranker for improved retrieval precision.
     pub fn with_reranker(mut self, reranker: Arc<dyn Reranker>) -> Self {
         self.reranker = Some(reranker);
+        self
+    }
+
+    /// Set KV storage for chunk content hydration.
+    pub fn with_kv_storage(mut self, kv: Arc<dyn KVStorage>) -> Self {
+        self.kv_storage = Some(kv);
         self
     }
 
@@ -320,6 +334,7 @@ impl SOTAQueryEngine {
             keyword_extractor,
             tokenizer: Arc::new(SimpleTokenizer),
             reranker: None,
+            kv_storage: None,
             keyword_validation_cache: Arc::new(tokio::sync::RwLock::new(
                 std::collections::HashMap::new(),
             )),
@@ -457,6 +472,64 @@ impl SOTAQueryEngine {
             top_degree = entities.first().map(|e| e.degree).unwrap_or(0),
             "Sorted entities by degree"
         );
+    }
+
+    /// Hydrate chunk content from KV storage.
+    ///
+    /// Chunks retrieved from S3 Vectors only contain lean metadata (chunk_id,
+    /// document_id, filename, type) — the actual text content lives in DynamoDB
+    /// KV with key format `chunk:{custom_id}`. This method batch-fetches content
+    /// for any chunks with empty content and backfills them.
+    async fn hydrate_chunk_content(
+        &self,
+        context: &mut crate::context::QueryContext,
+        kv: &Arc<dyn KVStorage>,
+    ) {
+        let ids_to_hydrate: Vec<String> = context
+            .chunks
+            .iter()
+            .filter(|c| c.content.is_empty())
+            .map(|c| format!("chunk:{}", c.id))
+            .collect();
+
+        if ids_to_hydrate.is_empty() {
+            return;
+        }
+
+        match kv.get_by_ids(&ids_to_hydrate).await {
+            Ok(values) => {
+                let mut content_map: std::collections::HashMap<String, String> =
+                    std::collections::HashMap::new();
+                for val in &values {
+                    if let (Some(id), Some(content)) = (
+                        val.get("id").and_then(|v| v.as_str()),
+                        val.get("content").and_then(|v| v.as_str()),
+                    ) {
+                        let chunk_id = id.strip_prefix("chunk:").unwrap_or(id);
+                        content_map.insert(chunk_id.to_string(), content.to_string());
+                    }
+                }
+                let mut hydrated = 0usize;
+                for chunk in &mut context.chunks {
+                    if chunk.content.is_empty() {
+                        if let Some(content) = content_map.get(&chunk.id) {
+                            chunk.content = content.clone();
+                            chunk.token_count = (content.len() as f32 / 4.0).ceil() as usize;
+                            hydrated += 1;
+                        }
+                    }
+                }
+                tracing::debug!(
+                    requested = ids_to_hydrate.len(),
+                    returned = values.len(),
+                    hydrated = hydrated,
+                    "KV chunk hydration complete"
+                );
+            }
+            Err(e) => {
+                tracing::warn!("KV chunk hydration failed: {e}");
+            }
+        }
     }
 
     /// Validate keywords against the knowledge graph.
@@ -680,6 +753,16 @@ impl SOTAQueryEngine {
         // Step 4.6: Sort entities by degree for importance-based ranking
         self.sort_entities_by_degree(&mut context.entities);
 
+        // Step 4.7: Hydrate chunk content from KV storage
+        let should_hydrate = request
+            .enable_chunk_content
+            .unwrap_or(self.config.enable_chunk_content);
+        if should_hydrate {
+            if let Some(ref kv) = self.kv_storage {
+                self.hydrate_chunk_content(&mut context, kv).await;
+            }
+        }
+
         // Step 5: Apply truncation
         let (truncated_entities, truncated_relationships, truncated_chunks) = balance_context(
             context.entities.clone(),
@@ -858,6 +941,16 @@ impl SOTAQueryEngine {
 
         // Step 4.6: Sort entities by degree
         self.sort_entities_by_degree(&mut context.entities);
+
+        // Step 4.7: Hydrate chunk content from KV storage
+        let should_hydrate = request
+            .enable_chunk_content
+            .unwrap_or(self.config.enable_chunk_content);
+        if should_hydrate {
+            if let Some(ref kv) = self.kv_storage {
+                self.hydrate_chunk_content(&mut context, kv).await;
+            }
+        }
 
         // Step 5: Apply truncation
         let (truncated_entities, truncated_relationships, truncated_chunks) = balance_context(
@@ -1064,6 +1157,16 @@ impl SOTAQueryEngine {
         // Step 4.6: Sort entities by degree
         self.sort_entities_by_degree(&mut context.entities);
 
+        // Step 4.7: Hydrate chunk content from KV storage
+        let should_hydrate = request
+            .enable_chunk_content
+            .unwrap_or(self.config.enable_chunk_content);
+        if should_hydrate {
+            if let Some(ref kv) = self.kv_storage {
+                self.hydrate_chunk_content(&mut context, kv).await;
+            }
+        }
+
         // Step 5: Apply truncation
         let (truncated_entities, truncated_relationships, truncated_chunks) = balance_context(
             context.entities.clone(),
@@ -1256,6 +1359,16 @@ impl SOTAQueryEngine {
         // Step 4.6: Sort entities by degree
         self.sort_entities_by_degree(&mut context.entities);
 
+        // Step 4.7: Hydrate chunk content from KV storage
+        let should_hydrate = request
+            .enable_chunk_content
+            .unwrap_or(self.config.enable_chunk_content);
+        if should_hydrate {
+            if let Some(ref kv) = self.kv_storage {
+                self.hydrate_chunk_content(&mut context, kv).await;
+            }
+        }
+
         // Step 5: Apply truncation
         let (truncated_entities, truncated_relationships, truncated_chunks) = balance_context(
             context.entities.clone(),
@@ -1427,6 +1540,16 @@ impl SOTAQueryEngine {
 
         // Step 4.6: Sort entities by degree
         self.sort_entities_by_degree(&mut context.entities);
+
+        // Step 4.7: Hydrate chunk content from KV storage
+        let should_hydrate = request
+            .enable_chunk_content
+            .unwrap_or(self.config.enable_chunk_content);
+        if should_hydrate {
+            if let Some(ref kv) = self.kv_storage {
+                self.hydrate_chunk_content(&mut context, kv).await;
+            }
+        }
 
         // Step 5: Apply truncation
         let (truncated_entities, truncated_relationships, truncated_chunks) = balance_context(
@@ -1635,6 +1758,16 @@ impl SOTAQueryEngine {
         // Step 4.6: Sort entities by degree for importance-based ranking
         self.sort_entities_by_degree(&mut context.entities);
 
+        // Step 4.7: Hydrate chunk content from KV storage
+        let should_hydrate = request
+            .enable_chunk_content
+            .unwrap_or(self.config.enable_chunk_content);
+        if should_hydrate {
+            if let Some(ref kv) = self.kv_storage {
+                self.hydrate_chunk_content(&mut context, kv).await;
+            }
+        }
+
         // Step 5: Apply truncation
         let (truncated_entities, truncated_relationships, truncated_chunks) = balance_context(
             context.entities.clone(),
@@ -1780,6 +1913,16 @@ impl SOTAQueryEngine {
 
         // Step 4.6: Sort entities by degree for importance-based ranking
         self.sort_entities_by_degree(&mut context.entities);
+
+        // Step 4.7: Hydrate chunk content from KV storage
+        let should_hydrate = request
+            .enable_chunk_content
+            .unwrap_or(self.config.enable_chunk_content);
+        if should_hydrate {
+            if let Some(ref kv) = self.kv_storage {
+                self.hydrate_chunk_content(&mut context, kv).await;
+            }
+        }
 
         // Step 5: Apply truncation
         let (truncated_entities, truncated_relationships, truncated_chunks) = balance_context(
@@ -2089,6 +2232,16 @@ impl SOTAQueryEngine {
 
         // Step 4.6: Sort entities by degree for importance-based ranking
         self.sort_entities_by_degree(&mut context.entities);
+
+        // Step 4.7: Hydrate chunk content from KV storage
+        let should_hydrate = request
+            .enable_chunk_content
+            .unwrap_or(self.config.enable_chunk_content);
+        if should_hydrate {
+            if let Some(ref kv) = self.kv_storage {
+                self.hydrate_chunk_content(&mut context, kv).await;
+            }
+        }
 
         // Step 5: Apply truncation
         let (truncated_entities, truncated_relationships, truncated_chunks) = balance_context(
