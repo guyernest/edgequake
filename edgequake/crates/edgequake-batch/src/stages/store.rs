@@ -104,11 +104,24 @@ pub async fn run_store(
         }
     }
 
-    // Batch upsert vectors
+    // Batch upsert chunk vectors to S3 Vectors
+    let mut chunk_vectors_stored = 0;
     for batch in vector_entries.chunks(100) {
-        vectors.upsert(batch).await.ok();
+        match vectors.upsert(batch).await {
+            Ok(_) => {
+                chunk_vectors_stored += batch.len();
+            }
+            Err(e) => {
+                warn!(error = %e, batch_size = batch.len(), "Failed to store chunk vectors to S3 Vectors");
+            }
+        }
     }
-    bar.finish_with_message(format!("Stored {} chunks", chunks.len()));
+    info!(
+        total_chunks = chunks.len(),
+        vectors_stored = chunk_vectors_stored,
+        "Stored chunk vectors to S3 Vectors"
+    );
+    bar.finish_with_message(format!("Stored {} chunks ({} vectors)", chunks.len(), chunk_vectors_stored));
 
     // Step 3: Store entities and relationships in Neptune via bulk load
     if config.neptune_endpoint.is_some()
@@ -130,62 +143,210 @@ pub async fn run_store(
     let total_entities: usize = extractions.values().map(|r| r.entities.len()).sum();
     let bar = progress.document_bar(total_entities as u64, "Storing entity vectors");
 
-    let mut entity_vectors: Vec<(String, Vec<f32>, serde_json::Value)> = Vec::new();
+    info!(
+        total_entities = total_entities,
+        embeddings_available = embeddings.entity_embeddings.len(),
+        "Preparing entity vectors for S3 Vectors storage"
+    );
+
+    // Use HashMap to deduplicate entities by name (same entity may appear in multiple chunks)
+    let mut entity_map: std::collections::HashMap<String, (Vec<f32>, serde_json::Value)> = std::collections::HashMap::new();
+    let mut missing_embeddings = 0;
+
     for result in extractions.values() {
         for entity in &result.entities {
+            // Skip if we've already processed this entity
+            if entity_map.contains_key(&entity.name) {
+                bar.inc(1);
+                continue;
+            }
+
             if let Some(embedding) = embeddings.entity_embeddings.get(&entity.name) {
                 let source_chunk_ids = entity.source_chunk_ids.join("|");
-                let metadata = serde_json::json!({
-                    "entity_name": entity.name,
-                    "entity_type": entity.entity_type,
+
+                // S3 Vectors metadata constraints:
+                // - Only strings, numbers, booleans, or arrays of these types
+                // - No nested objects or null values
+                let mut metadata = serde_json::json!({
+                    "entity_name": entity.name.clone(),
+                    "entity_type": entity.entity_type.clone(),
                     "type": "entity",
                     "source_chunk_ids": source_chunk_ids,
-                    "source_document_id": entity.source_document_id,
-                    "source_file_path": entity.source_file_path,
                 });
-                entity_vectors.push((
-                    format!("entity:{}", entity.name),
-                    embedding.clone(),
-                    metadata,
-                ));
+
+                // Only add optional fields if they exist
+                if let Some(ref doc_id) = entity.source_document_id {
+                    metadata.as_object_mut().unwrap().insert(
+                        "source_document_id".to_string(),
+                        serde_json::Value::String(doc_id.clone())
+                    );
+                }
+                if let Some(ref file_path) = entity.source_file_path {
+                    metadata.as_object_mut().unwrap().insert(
+                        "source_file_path".to_string(),
+                        serde_json::Value::String(file_path.clone())
+                    );
+                }
+
+                entity_map.insert(
+                    entity.name.clone(),
+                    (embedding.clone(), metadata)
+                );
+            } else {
+                missing_embeddings += 1;
+                if missing_embeddings <= 5 {
+                    warn!(entity_name = %entity.name, "Entity missing embedding");
+                }
             }
             bar.inc(1);
         }
     }
 
-    for batch in entity_vectors.chunks(100) {
-        vectors.upsert(batch).await.ok();
+    if missing_embeddings > 0 {
+        warn!(
+            total_entities = total_entities,
+            missing_embeddings = missing_embeddings,
+            "Some entities are missing embeddings and will not be stored to S3 Vectors"
+        );
     }
-    bar.finish_with_message(format!("Stored {} entity vectors", entity_vectors.len()));
+
+    // Convert deduplicated map to vector list
+    let entity_vectors: Vec<(String, Vec<f32>, serde_json::Value)> = entity_map
+        .into_iter()
+        .map(|(name, (embedding, metadata))| {
+            (format!("entity:{}", name), embedding, metadata)
+        })
+        .collect();
+
+    info!(
+        unique_entities = entity_vectors.len(),
+        "Deduplicated entity vectors ready for S3 Vectors storage"
+    );
+
+    // Batch upsert entity vectors to S3 Vectors (same destination as chunks)
+    let mut entity_vectors_stored = 0;
+    for batch in entity_vectors.chunks(100) {
+        match vectors.upsert(batch).await {
+            Ok(_) => {
+                entity_vectors_stored += batch.len();
+            }
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    batch_size = batch.len(),
+                    "Failed to store entity vectors to S3 Vectors"
+                );
+            }
+        }
+    }
+    info!(
+        total_entities = total_entities,
+        vectors_prepared = entity_vectors.len(),
+        vectors_stored = entity_vectors_stored,
+        "Stored entity vectors to S3 Vectors"
+    );
+    bar.finish_with_message(format!(
+        "Stored {} entity vectors to S3 Vectors",
+        entity_vectors_stored
+    ));
 
     let total_rels: usize = extractions.values().map(|r| r.relationships.len()).sum();
     let bar = progress.document_bar(total_rels as u64, "Storing relationship vectors");
 
-    let mut rel_vectors: Vec<(String, Vec<f32>, serde_json::Value)> = Vec::new();
+    info!(
+        total_relationships = total_rels,
+        embeddings_available = embeddings.relationship_embeddings.len(),
+        "Preparing relationship vectors for S3 Vectors storage"
+    );
+
+    // Use HashMap to deduplicate relationships by (source, target) pair
+    let mut rel_map: std::collections::HashMap<(String, String), (Vec<f32>, serde_json::Value)> = std::collections::HashMap::new();
+
     for result in extractions.values() {
         for rel in &result.relationships {
             let rel_key = (rel.source.clone(), rel.target.clone());
+
+            // Skip if we've already processed this relationship
+            if rel_map.contains_key(&rel_key) {
+                bar.inc(1);
+                continue;
+            }
+
             if let Some(embedding) = embeddings.relationship_embeddings.get(&rel_key) {
-                let metadata = serde_json::json!({
-                    "source": rel.source,
-                    "target": rel.target,
+                // S3 Vectors metadata constraints: only strings, numbers, booleans, or arrays
+                let mut metadata = serde_json::json!({
+                    "source": rel.source.clone(),
+                    "target": rel.target.clone(),
                     "type": "relationship",
                     "keywords": rel.keywords.join(", "),
-                    "source_chunk_id": rel.source_chunk_id,
-                    "source_document_id": rel.source_document_id,
-                    "source_file_path": rel.source_file_path,
                 });
-                let vector_id = format!("rel:{}:{}", rel.source, rel.target);
-                rel_vectors.push((vector_id, embedding.clone(), metadata));
+
+                // Only add optional fields if they exist
+                if let Some(ref chunk_id) = rel.source_chunk_id {
+                    metadata.as_object_mut().unwrap().insert(
+                        "source_chunk_id".to_string(),
+                        serde_json::Value::String(chunk_id.clone())
+                    );
+                }
+                if let Some(ref doc_id) = rel.source_document_id {
+                    metadata.as_object_mut().unwrap().insert(
+                        "source_document_id".to_string(),
+                        serde_json::Value::String(doc_id.clone())
+                    );
+                }
+                if let Some(ref file_path) = rel.source_file_path {
+                    metadata.as_object_mut().unwrap().insert(
+                        "source_file_path".to_string(),
+                        serde_json::Value::String(file_path.clone())
+                    );
+                }
+
+                rel_map.insert(rel_key.clone(), (embedding.clone(), metadata));
             }
             bar.inc(1);
         }
     }
 
+    // Convert deduplicated map to vector list
+    let rel_vectors: Vec<(String, Vec<f32>, serde_json::Value)> = rel_map
+        .into_iter()
+        .map(|((source, target), (embedding, metadata))| {
+            let vector_id = format!("rel:{}:{}", source, target);
+            (vector_id, embedding, metadata)
+        })
+        .collect();
+
+    info!(
+        unique_relationships = rel_vectors.len(),
+        "Deduplicated relationship vectors ready for S3 Vectors storage"
+    );
+
+    // Batch upsert relationship vectors to S3 Vectors (same destination as chunks)
+    let mut rel_vectors_stored = 0;
     for batch in rel_vectors.chunks(100) {
-        vectors.upsert(batch).await.ok();
+        match vectors.upsert(batch).await {
+            Ok(_) => {
+                rel_vectors_stored += batch.len();
+            }
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    batch_size = batch.len(),
+                    "Failed to store relationship vectors to S3 Vectors"
+                );
+            }
+        }
     }
-    bar.finish_with_message(format!("Stored {} relationship vectors", rel_vectors.len()));
+    info!(
+        total_relationships = total_rels,
+        vectors_prepared = rel_vectors.len(),
+        vectors_stored = rel_vectors_stored,
+        "Stored relationship vectors to S3 Vectors"
+    );
+    bar.finish_with_message(format!(
+        "Stored {} relationship vectors to S3 Vectors",
+        rel_vectors_stored
+    ));
 
     // Finalize
     job.phase = Phase::Completed;

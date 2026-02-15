@@ -19,11 +19,74 @@ pub struct ExtractResult {
     /// Extraction results keyed by custom_id.
     pub results: HashMap<String, ExtractionResult>,
 
-    /// Number of successful extractions.
+    /// Number of successful extractions (with entities or relationships).
     pub success_count: usize,
 
-    /// Number of failed extractions.
+    /// Number of empty extractions (no entities/relationships).
+    pub empty_count: usize,
+
+    /// Number of failed extractions (parsing errors).
     pub error_count: usize,
+}
+
+/// Create a batch job with automatic retry on token limit errors.
+///
+/// This function implements exponential backoff retry logic specifically for
+/// the "token_limit_exceeded" error, which occurs when too many batches are
+/// already queued in OpenAI's system. It will automatically wait and retry
+/// up to max_attempts times.
+async fn create_batch_with_retry(
+    client: &OpenAIBatchClient,
+    file_id: &str,
+    model: &str,
+    max_attempts: u32,
+    initial_delay_secs: u64,
+) -> anyhow::Result<edgequake_llm::providers::openai_batch::BatchJob> {
+    let mut attempt = 0;
+    let mut delay_secs = initial_delay_secs;
+
+    loop {
+        attempt += 1;
+
+        match client.create_batch(file_id, model).await {
+            Ok(batch) => return Ok(batch),
+            Err(e) => {
+                let error_str = e.to_string();
+                let is_token_limit = error_str.contains("token_limit_exceeded")
+                    || error_str.contains("Enqueued token limit reached");
+
+                if is_token_limit && attempt < max_attempts {
+                    warn!(
+                        attempt = attempt,
+                        max_attempts = max_attempts,
+                        retry_in_secs = delay_secs,
+                        "Token limit exceeded - waiting for in-progress batches to complete"
+                    );
+
+                    info!(
+                        "⏳ Automatic retry {}/{} - sleeping for {} seconds...",
+                        attempt, max_attempts, delay_secs
+                    );
+
+                    tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)).await;
+
+                    // Exponential backoff: double the delay each time, up to 30 minutes
+                    delay_secs = (delay_secs * 2).min(1800);
+
+                    info!("🔄 Retrying batch creation (attempt {}/{})", attempt + 1, max_attempts);
+                } else if is_token_limit {
+                    return Err(anyhow::anyhow!(
+                        "Token limit exceeded after {} retry attempts. In-progress batches are still consuming the 2M token limit. \
+                        Use 'make batch-list' to check status. Wait longer or reduce batch size.",
+                        max_attempts
+                    ));
+                } else {
+                    // Non-token-limit error - fail immediately
+                    return Err(e.into());
+                }
+            }
+        }
+    }
 }
 
 /// Run Phase 2: Extract.
@@ -40,6 +103,12 @@ pub async fn run_extract(
     progress: &BatchProgress,
 ) -> anyhow::Result<ExtractResult> {
     info!("Phase 2: EXTRACT starting");
+    info!(
+        "💡 Automatic retry enabled: Will retry up to {} times if token limits are hit (exponential backoff: {}s → {}s → ...)",
+        config.max_retries,
+        config.retry_delay_secs,
+        config.retry_delay_secs * 2
+    );
     job.phase = Phase::Extracting;
     job.updated_at = chrono::Utc::now().to_rfc3339();
     state_mgr.save_job(job).await?;
@@ -50,6 +119,7 @@ pub async fn run_extract(
 
     let mut results: HashMap<String, ExtractionResult> = HashMap::new();
     let mut success_count = 0;
+    let mut empty_count = 0;
     let mut error_count = 0;
 
     let bar = progress.document_bar(jsonl_paths.len() as u64, "Batch files");
@@ -66,8 +136,15 @@ pub async fn run_extract(
         let file_id = client.upload_jsonl(path).await?;
         job.input_file_ids.push(file_id.clone());
 
-        // Step 2: Create batch job
-        let batch = client.create_batch(&file_id, &config.extraction_model).await?;
+        // Step 2: Create batch job (with automatic retry on token limit)
+        let batch = create_batch_with_retry(
+            &client,
+            &file_id,
+            &config.extraction_model,
+            config.max_retries,
+            config.retry_delay_secs,
+        )
+        .await?;
         let batch_id = batch.id.clone();
         job.batch_ids.push(batch.id);
 
@@ -91,9 +168,31 @@ pub async fn run_extract(
                 match OpenAIBatchClient::extract_content(&batch_result) {
                     Some(content) => match parser.parse(&content, custom_id) {
                         Ok(extraction) => {
+                            // Apply entity resolution (from remote)
                             let extraction = resolver.resolve_extraction(extraction);
+
+                            // Check if extraction is empty or has actual data (our changes)
+                            let is_empty = extraction.entities.is_empty()
+                                && extraction.relationships.is_empty();
+
+                            let is_marked_empty = extraction.metadata
+                                .get("empty_response")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
+
+                            if is_empty || is_marked_empty {
+                                empty_count += 1;
+                                if is_marked_empty {
+                                    tracing::debug!(
+                                        custom_id = %custom_id,
+                                        "Empty response detected (LLM returned minimal content)"
+                                    );
+                                }
+                            } else {
+                                success_count += 1;
+                            }
+
                             results.insert(custom_id.clone(), extraction);
-                            success_count += 1;
                         }
                         Err(e) => {
                             warn!(
@@ -154,9 +253,19 @@ pub async fn run_extract(
         entities = total_entities,
         relationships = total_relationships,
         success = success_count,
+        empty = empty_count,
         errors = error_count,
         "Phase 2: EXTRACT complete"
     );
+
+    // Log summary statistics
+    if empty_count > 0 {
+        info!(
+            empty_count = empty_count,
+            empty_pct = format!("{:.1}%", (empty_count as f64 / results.len() as f64) * 100.0),
+            "Note: Some chunks produced empty extractions (no entities/relationships found)"
+        );
+    }
 
     // Cache results to disk for standalone embed/store commands
     let cache_path = config.work_dir.join("extract_results.json");
@@ -171,6 +280,7 @@ pub async fn run_extract(
     Ok(ExtractResult {
         results,
         success_count,
+        empty_count,
         error_count,
     })
 }

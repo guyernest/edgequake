@@ -1304,18 +1304,25 @@ impl EdgeQuake {
         Ok(Vec::new())
     }
 
-    /// Search entities by name using vector similarity.
+    /// Search entities by name using hybrid vector + graph search.
     ///
     /// # Implements
     ///
     /// - **UC0102**: Search Entities by Name
     /// - **FEAT0201**: Vector Similarity Search
+    /// - **FEAT0202**: Graph Text Search
     ///
-    /// # WHY: Fuzzy Entity Discovery
+    /// # WHY: Hybrid Search Strategy
     ///
-    /// Users often don't know exact entity names. Vector similarity enables:
+    /// Combines semantic vector search with exact text matching:
+    /// - **Vector search**: Semantic matching (e.g., "people involved in aviation" finds entities with flight-related descriptions)
+    /// - **Graph search**: Exact substring matching (e.g., "BRADLEY" finds BRADLEY_EDWARDS)
+    /// - **Deduplication**: Merges results, preferring vector scores for ranking
+    ///
+    /// This enables:
     /// - Typo tolerance (finding "Apple Inc" when searching "apple company")
     /// - Semantic matching (finding "Microsoft" when searching "software giant")
+    /// - Exact matches (finding "BRADLEY_EDWARDS" when searching "BRADLEY")
     pub async fn search_entities(&self, query: &str, limit: usize) -> Result<Vec<ContextEntity>> {
         if !self.initialized {
             return Err(Error::not_initialized("EdgeQuake not initialized"));
@@ -1342,20 +1349,82 @@ impl EdgeQuake {
             .first()
             .ok_or_else(|| Error::internal("No embedding generated"))?;
 
-        // 2. Search vector store
-        let results = vector_storage.query(query_embedding, limit, None).await?;
+        // 2. Vector search for entity embeddings
+        // Request more results than limit to allow for filtering
+        let vector_results = vector_storage
+            .query(query_embedding, limit * 2, None)
+            .await?;
 
-        // 3. Map to ContextEntity
-        let mut entities = Vec::new();
-        for result in results {
-            if let Some(node) = graph_storage.get_node(&result.id).await? {
-                entities.push(ContextEntity {
-                    name: node
-                        .properties
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or(&result.id)
-                        .to_string(),
+        // Filter for entity vectors only
+        let entity_vector_results: Vec<_> = vector_results
+            .iter()
+            .filter(|r| {
+                r.metadata
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .map(|t| t == "entity")
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        // Check if entity vectors exist (backward compatibility)
+        let has_entity_vectors = !entity_vector_results.is_empty();
+
+        if !has_entity_vectors {
+            tracing::info!("No entity vectors found, falling back to graph-only search");
+        }
+
+        // 3. Build entity map from vector results
+        let mut entities_map: HashMap<String, ContextEntity> = HashMap::new();
+
+        for result in entity_vector_results {
+            // Extract entity name from metadata or vector ID
+            let entity_name = result
+                .metadata
+                .get("entity_name")
+                .or_else(|| result.metadata.get("entity_id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_else(|| {
+                    // Fallback: extract from vector ID (format: "entity:{name}")
+                    result.id.strip_prefix("entity:").unwrap_or(&result.id)
+                });
+
+            // Hydrate entity from graph storage
+            if let Some(node) = graph_storage.get_node(entity_name).await? {
+                entities_map.insert(
+                    entity_name.to_string(),
+                    ContextEntity {
+                        name: node.id.clone(),
+                        entity_type: node
+                            .properties
+                            .get("entity_type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("UNKNOWN")
+                            .to_string(),
+                        description: node
+                            .properties
+                            .get("description")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        score: result.score,
+                    },
+                );
+            }
+        }
+
+        // 4. Graph text search (fallback for exact matches)
+        // WHY: Ensures substring matches like "BRADLEY" still work
+        let graph_results = graph_storage
+            .search_nodes(query, limit, None, self.config.tenant_id.as_deref(), self.config.workspace_id.as_deref())
+            .await
+            .unwrap_or_default();
+
+        // Add graph results with lower score for text matches
+        for (node, _degree) in graph_results {
+            entities_map.entry(node.id.clone()).or_insert_with(|| {
+                ContextEntity {
+                    name: node.id.clone(),
                     entity_type: node
                         .properties
                         .get("entity_type")
@@ -1368,10 +1437,15 @@ impl EdgeQuake {
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string(),
-                    score: result.score,
-                });
-            }
+                    score: 0.5, // Lower score for text matches
+                }
+            });
         }
+
+        // 5. Sort by score (descending) and limit
+        let mut entities: Vec<_> = entities_map.into_values().collect();
+        entities.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        entities.truncate(limit);
 
         Ok(entities)
     }

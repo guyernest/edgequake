@@ -93,6 +93,14 @@ pub struct Cli {
     #[arg(long, default_value = "0", env = "BATCH_OFFSET")]
     pub offset: usize,
 
+    /// Maximum retry attempts for token limit errors (default: 10)
+    #[arg(long, default_value = "10", env = "BATCH_MAX_RETRIES")]
+    pub max_retries: u32,
+
+    /// Initial retry delay in seconds for token limit errors (default: 60, doubles each attempt)
+    #[arg(long, default_value = "60", env = "BATCH_RETRY_DELAY")]
+    pub retry_delay_secs: u64,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -120,4 +128,11 @@ pub enum Command {
 
     /// Resume from last checkpoint
     Resume,
+
+    /// List all batch jobs in OpenAI (shows what's consuming token limits)
+    ListBatches {
+        /// Number of batches to show (default: 20, max: 100)
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+    },
 }

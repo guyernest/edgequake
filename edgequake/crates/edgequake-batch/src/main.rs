@@ -75,12 +75,19 @@ async fn main() -> anyhow::Result<()> {
         vector_index: cli.vector_index.clone(),
         limit: cli.limit,
         offset: cli.offset,
+        max_retries: cli.max_retries,
+        retry_delay_secs: cli.retry_delay_secs,
     };
 
     // Create work directory
     std::fs::create_dir_all(&config.work_dir)?;
 
-    // Initialize state manager with DynamoDB
+    // ListBatches doesn't need DynamoDB - handle it early
+    if let Command::ListBatches { limit } = cli.command {
+        return list_openai_batches(&cli.api_key, limit).await;
+    }
+
+    // Initialize state manager with DynamoDB for other commands
     let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let dynamo_client = aws_sdk_dynamodb::Client::new(&aws_config);
 
@@ -208,6 +215,10 @@ async fn main() -> anyhow::Result<()> {
         Command::Resume => {
             info!(phase = %job.phase, "Resuming from checkpoint");
             run_full_pipeline(&config, &cli.api_key, &aws_config, &state_mgr, &mut job, &progress).await?;
+        }
+        Command::ListBatches { .. } => {
+            // Handled earlier before DynamoDB initialization
+            unreachable!()
         }
     }
 
@@ -390,4 +401,119 @@ fn print_status(job: &state::JobState) {
         println!("Error:           {}", error);
     }
     println!("========================\n");
+}
+
+/// List all OpenAI batch jobs to identify what's consuming token limits.
+async fn list_openai_batches(api_key: &str, limit: usize) -> anyhow::Result<()> {
+    use edgequake_llm::providers::openai_batch::{BatchStatus, OpenAIBatchClient};
+
+    let client = OpenAIBatchClient::new(api_key);
+    let batches = client.list_batches(Some(limit)).await?;
+
+    if batches.is_empty() {
+        println!("\n=== No batch jobs found in your OpenAI organization ===\n");
+        return Ok(());
+    }
+
+    println!("\n=== OpenAI Batch Jobs (showing {} most recent) ===", batches.len());
+    println!();
+
+    let mut in_progress_count = 0;
+    let mut validating_count = 0;
+    let mut total_in_progress_requests = 0;
+
+    for batch in &batches {
+        // Count in-progress batches for summary
+        match batch.status {
+            BatchStatus::InProgress | BatchStatus::Finalizing => {
+                in_progress_count += 1;
+                if let Some(ref counts) = batch.request_counts {
+                    total_in_progress_requests += counts.total - counts.completed;
+                }
+            }
+            BatchStatus::Validating => {
+                validating_count += 1;
+                if let Some(ref counts) = batch.request_counts {
+                    total_in_progress_requests += counts.total;
+                }
+            }
+            _ => {}
+        }
+
+        // Format status with emoji
+        let status_display = match batch.status {
+            BatchStatus::InProgress => "🔄 In Progress",
+            BatchStatus::Validating => "⏳ Validating",
+            BatchStatus::Completed => "✅ Completed",
+            BatchStatus::Failed => "❌ Failed",
+            BatchStatus::Expired => "⏰ Expired",
+            BatchStatus::Cancelled => "🚫 Cancelled",
+            BatchStatus::Finalizing => "🔄 Finalizing",
+            _ => "❓ Unknown",
+        };
+
+        println!("Batch ID:     {}", batch.id);
+        println!("Status:       {}", status_display);
+
+        if let Some(ref counts) = batch.request_counts {
+            let progress = if counts.total > 0 {
+                (counts.completed as f64 / counts.total as f64 * 100.0)
+            } else {
+                0.0
+            };
+            println!(
+                "Progress:     {}/{} ({:.1}%)",
+                counts.completed, counts.total, progress
+            );
+            if counts.failed > 0 {
+                println!("Failed:       {}", counts.failed);
+            }
+        }
+
+        // Show creation time
+        let created = chrono::DateTime::from_timestamp(batch.created_at, 0)
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+            .unwrap_or_else(|| "Unknown".to_string());
+        println!("Created:      {}", created);
+
+        // Show completion/failure time if available
+        if let Some(completed_at) = batch.completed_at {
+            let completed = chrono::DateTime::from_timestamp(completed_at, 0)
+                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                .unwrap_or_else(|| "Unknown".to_string());
+            println!("Completed:    {}", completed);
+        }
+        if let Some(failed_at) = batch.failed_at {
+            let failed = chrono::DateTime::from_timestamp(failed_at, 0)
+                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                .unwrap_or_else(|| "Unknown".to_string());
+            println!("Failed:       {}", failed);
+        }
+
+        // Show errors if present
+        if let Some(ref errors) = batch.errors {
+            for error in &errors.data {
+                if let Some(ref msg) = error.message {
+                    println!("Error:        {}", msg);
+                }
+            }
+        }
+
+        println!();
+    }
+
+    // Print summary
+    println!("=== Summary ===");
+    println!("Total batches shown:     {}", batches.len());
+    println!("In progress/finalizing:  {}", in_progress_count);
+    println!("Validating:              {}", validating_count);
+    if total_in_progress_requests > 0 {
+        println!("Pending requests:        {}", total_in_progress_requests);
+        println!();
+        println!("💡 Tip: These pending requests are consuming your 2M token limit.");
+        println!("   Wait for them to complete before submitting new batches.");
+    }
+    println!("====================\n");
+
+    Ok(())
 }

@@ -62,6 +62,12 @@ pub struct BatchConfig {
 
     /// Number of documents to skip before processing (0 = start from beginning).
     pub offset: usize,
+
+    /// Maximum retry attempts for token limit errors.
+    pub max_retries: u32,
+
+    /// Initial retry delay in seconds (doubles with each attempt).
+    pub retry_delay_secs: u64,
 }
 
 impl BatchConfig {

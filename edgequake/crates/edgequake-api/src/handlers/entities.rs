@@ -360,6 +360,45 @@ pub async fn create_entity(
         .upsert_node(&entity_name, properties.clone())
         .await?;
 
+    // Create embedding for manually created entity
+    if !req.description.is_empty() {
+        let embedding_text = format!("{}: {}", entity_name, req.description);
+
+        match state.embedding_provider.embed(&[embedding_text]).await {
+            Ok(embeddings) => {
+                if let Some(embedding) = embeddings.first() {
+                    let mut metadata = serde_json::json!({
+                        "type": "entity",
+                        "entity_name": entity_name,
+                        "entity_type": req.entity_type,
+                    });
+
+                    // Add tenant and workspace IDs if present
+                    if let Some(ref tenant_id) = tenant_ctx.tenant_id {
+                        metadata["tenant_id"] = serde_json::json!(tenant_id);
+                    }
+                    if let Some(ref workspace_id) = tenant_ctx.workspace_id {
+                        metadata["workspace_id"] = serde_json::json!(workspace_id);
+                    }
+
+                    let vector_id = format!("entity:{}", entity_name);
+                    if let Err(e) = state
+                        .vector_storage
+                        .upsert(&[(vector_id, embedding.clone(), metadata)])
+                        .await
+                    {
+                        tracing::warn!(error = %e, entity = %entity_name, "Failed to embed manually created entity");
+                    } else {
+                        tracing::info!(entity = %entity_name, "Embedded manually created entity");
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, entity = %entity_name, "Failed to generate embedding for manually created entity");
+            }
+        }
+    }
+
     // Reconstruct node for response
     let node = GraphNode {
         id: entity_name.clone(),
@@ -492,6 +531,7 @@ pub async fn update_entity(
         .map(|s| s.to_string());
 
     let mut fields_updated = Vec::new();
+    let mut description_changed = false;
 
     // Update fields
     if let Some(entity_type) = req.entity_type {
@@ -504,6 +544,7 @@ pub async fn update_entity(
         node.properties
             .insert("description".to_string(), description.into());
         fields_updated.push("description".to_string());
+        description_changed = true;
     }
 
     if let Some(metadata) = req.metadata {
@@ -520,6 +561,59 @@ pub async fn update_entity(
         .graph_storage
         .upsert_node(&entity_name, node.properties.clone())
         .await?;
+
+    // Re-embed if description changed
+    if description_changed {
+        let new_desc = node
+            .properties
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        if !new_desc.is_empty() {
+            let embedding_text = format!("{}: {}", entity_name, new_desc);
+
+            match state.embedding_provider.embed(&[embedding_text]).await {
+                Ok(embeddings) => {
+                    if let Some(embedding) = embeddings.first() {
+                        let entity_type = node
+                            .properties
+                            .get("entity_type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("UNKNOWN");
+
+                        let mut metadata = serde_json::json!({
+                            "type": "entity",
+                            "entity_name": entity_name,
+                            "entity_type": entity_type,
+                        });
+
+                        // Add tenant and workspace IDs if present
+                        if let Some(tenant_id) = node.properties.get("tenant_id").and_then(|v| v.as_str()) {
+                            metadata["tenant_id"] = serde_json::json!(tenant_id);
+                        }
+                        if let Some(workspace_id) = node.properties.get("workspace_id").and_then(|v| v.as_str()) {
+                            metadata["workspace_id"] = serde_json::json!(workspace_id);
+                        }
+
+                        let vector_id = format!("entity:{}", entity_name);
+                        if let Err(e) = state
+                            .vector_storage
+                            .upsert(&[(vector_id, embedding.clone(), metadata)])
+                            .await
+                        {
+                            tracing::warn!(error = %e, entity = %entity_name, "Failed to re-embed updated entity");
+                        } else {
+                            tracing::info!(entity = %entity_name, "Re-embedded updated entity");
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, entity = %entity_name, "Failed to generate embedding for updated entity");
+                }
+            }
+        }
+    }
 
     let degree = state.graph_storage.node_degree(&entity_name).await?;
     let entity = node_to_entity_response(node, degree);
@@ -750,6 +844,63 @@ pub async fn merge_entities(
         .graph_storage
         .upsert_node(&target_entity, target_node.properties.clone())
         .await?;
+
+    // Re-embed merged entity (use same format as batch pipeline: "{name}: {description}")
+    let merged_desc = target_node
+        .properties
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    if !merged_desc.is_empty() {
+        let embedding_text = format!("{}: {}", target_entity, merged_desc);
+
+        match state.embedding_provider.embed(&[embedding_text]).await {
+            Ok(embeddings) => {
+                if let Some(embedding) = embeddings.first() {
+                    let entity_type = target_node
+                        .properties
+                        .get("entity_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("UNKNOWN");
+
+                    let mut metadata = serde_json::json!({
+                        "type": "entity",
+                        "entity_name": target_entity,
+                        "entity_type": entity_type,
+                    });
+
+                    // Add tenant and workspace IDs if present
+                    if let Some(tenant_id) = target_node.properties.get("tenant_id").and_then(|v| v.as_str()) {
+                        metadata["tenant_id"] = serde_json::json!(tenant_id);
+                    }
+                    if let Some(workspace_id) = target_node.properties.get("workspace_id").and_then(|v| v.as_str()) {
+                        metadata["workspace_id"] = serde_json::json!(workspace_id);
+                    }
+
+                    let vector_id = format!("entity:{}", target_entity);
+                    if let Err(e) = state
+                        .vector_storage
+                        .upsert(&[(vector_id, embedding.clone(), metadata)])
+                        .await
+                    {
+                        tracing::warn!(error = %e, entity = %target_entity, "Failed to re-embed merged entity");
+                    } else {
+                        tracing::info!(entity = %target_entity, "Re-embedded merged entity");
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, entity = %target_entity, "Failed to generate embedding for merged entity");
+            }
+        }
+    }
+
+    // Delete source entity's vector
+    let source_vector_id = format!("entity:{}", source_entity);
+    if let Err(e) = state.vector_storage.delete(&[source_vector_id]).await {
+        tracing::warn!(error = %e, entity = %source_entity, "Failed to delete source entity vector");
+    }
 
     // Delete source node
     state.graph_storage.delete_node(&source_entity).await?;

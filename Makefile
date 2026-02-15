@@ -187,6 +187,7 @@ help: ## Show this help message
 	@echo "  $(GREEN)make batch-embed$(RESET)    Phase 3: Generate embeddings"
 	@echo "  $(GREEN)make batch-store$(RESET)    Phase 4: Write to Neptune/S3/DynamoDB"
 	@echo "  $(GREEN)make batch-status$(RESET)   Show job progress"
+	@echo "  $(GREEN)make batch-list$(RESET)     List OpenAI batches (find token limit usage)"
 	@echo "  $(GREEN)make batch-resume$(RESET)   Resume from checkpoint"
 	@echo ""
 	@echo "$(BOLD)$(BLUE)☁️  CDK Infrastructure$(RESET)"
@@ -1004,6 +1005,13 @@ batch-status: ## Show batch job status
 batch-resume: ## Resume batch pipeline from last checkpoint
 	@echo "$(BLUE)Resuming batch pipeline...$(RESET)"
 	@cd $(BACKEND_DIR) && cargo run --release -p edgequake-batch -- $(BATCH_ARGS) resume
+
+batch-list: ## List all OpenAI batch jobs (shows what's consuming token limits)
+	@echo "$(BLUE)Listing OpenAI batch jobs...$(RESET)"
+	@cd $(BACKEND_DIR) && cargo run --release -p edgequake-batch -- \
+		--data $(BATCH_DATA) --api-key $(OPENAI_API_KEY) \
+		--work-dir $(BATCH_WORK_DIR) \
+		list-batches --limit 50
 
 # ============================================================================
 # MCP Server Integration

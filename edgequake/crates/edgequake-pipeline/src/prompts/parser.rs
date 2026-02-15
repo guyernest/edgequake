@@ -230,6 +230,22 @@ impl JsonExtractionParser {
         // Try to extract JSON from the response
         let json_str = extract_json_from_response(response);
 
+        // Early detection of empty or completion-only responses
+        // WHY: Avoid noisy warnings when LLM returns just <|COMPLETE|> or empty content
+        let trimmed = json_str.trim();
+        if trimmed.is_empty()
+            || trimmed == DEFAULT_COMPLETION_DELIMITER
+            || trimmed.len() < 10 {
+            tracing::debug!(
+                chunk_id = %chunk_id,
+                response_preview = %trimmed.chars().take(50).collect::<String>(),
+                "Empty or minimal response - returning empty extraction"
+            );
+            result.metadata.insert("parser".to_string(), serde_json::json!("json"));
+            result.metadata.insert("empty_response".to_string(), serde_json::json!(true));
+            return Ok(result);
+        }
+
         // Sanitize JSON to fix common LLM mistakes
         let sanitized_json = sanitize_json(&json_str);
 
@@ -383,6 +399,31 @@ impl HybridExtractionParser {
 
     /// Parse extraction result, auto-detecting format.
     pub fn parse(&self, response: &str, chunk_id: &str) -> Result<ExtractionResult> {
+        // Early detection: Check if response is essentially empty or just completion marker
+        // WHY: Avoid cascading parser attempts and warnings for genuinely empty responses
+        let trimmed = response.trim();
+        if trimmed.is_empty() {
+            tracing::debug!(chunk_id = %chunk_id, "Empty response - returning empty extraction");
+            let mut result = ExtractionResult::new(chunk_id);
+            result.metadata.insert("parser".to_string(), serde_json::json!("hybrid"));
+            result.metadata.insert("empty_response".to_string(), serde_json::json!(true));
+            return Ok(result);
+        }
+
+        // If response is ONLY the completion delimiter or very minimal content
+        if trimmed == DEFAULT_COMPLETION_DELIMITER || (trimmed.len() < 20 && !trimmed.contains(DEFAULT_TUPLE_DELIMITER)) {
+            tracing::debug!(
+                chunk_id = %chunk_id,
+                response_preview = %trimmed.chars().take(50).collect::<String>(),
+                "Minimal/completion-only response - returning empty extraction"
+            );
+            let mut result = ExtractionResult::new(chunk_id);
+            result.metadata.insert("parser".to_string(), serde_json::json!("hybrid"));
+            result.metadata.insert("empty_response".to_string(), serde_json::json!(true));
+            result.metadata.insert("is_complete".to_string(), serde_json::json!(true));
+            return Ok(result);
+        }
+
         // Detect format by content
         let has_tuple_markers = response.contains(DEFAULT_TUPLE_DELIMITER)
             || response.contains("entity<|")
@@ -893,5 +934,69 @@ relation<|#|>A<|#|>   <|#|>broken<|#|>Empty target
         let result = parser.parse(response, "chunk-1").unwrap();
         assert_eq!(result.relationships.len(), 1);
         assert_eq!(result.relationships[0].relation_type, "VALID");
+    }
+
+    // =========================================================================
+    // Empty response handling tests
+    // =========================================================================
+
+    #[test]
+    fn test_hybrid_parser_empty_response() {
+        let parser = HybridExtractionParser::new(true);
+        let response = "";
+
+        let result = parser.parse(response, "chunk-1").unwrap();
+        assert_eq!(result.entities.len(), 0);
+        assert_eq!(result.relationships.len(), 0);
+        assert_eq!(
+            result.metadata.get("empty_response").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn test_hybrid_parser_completion_only_response() {
+        let parser = HybridExtractionParser::new(true);
+        let response = "<|COMPLETE|>";
+
+        let result = parser.parse(response, "chunk-1").unwrap();
+        assert_eq!(result.entities.len(), 0);
+        assert_eq!(result.relationships.len(), 0);
+        assert_eq!(
+            result.metadata.get("empty_response").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            result.metadata.get("is_complete").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn test_json_parser_minimal_response() {
+        let parser = JsonExtractionParser::new();
+        let response = "   ";
+
+        let result = parser.parse(response, "chunk-1").unwrap();
+        assert_eq!(result.entities.len(), 0);
+        assert_eq!(result.relationships.len(), 0);
+        assert_eq!(
+            result.metadata.get("empty_response").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn test_hybrid_parser_whitespace_only() {
+        let parser = HybridExtractionParser::new(true);
+        let response = "   \n\n  \t  ";
+
+        let result = parser.parse(response, "chunk-1").unwrap();
+        assert_eq!(result.entities.len(), 0);
+        assert_eq!(result.relationships.len(), 0);
+        assert_eq!(
+            result.metadata.get("empty_response").and_then(|v| v.as_bool()),
+            Some(true)
+        );
     }
 }

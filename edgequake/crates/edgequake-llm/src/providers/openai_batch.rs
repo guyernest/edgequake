@@ -346,6 +346,40 @@ impl OpenAIBatchClient {
         Ok(batch_resp.into())
     }
 
+    /// List all batch jobs in the organization.
+    ///
+    /// Returns batches ordered by created_at (newest first).
+    /// Optional limit parameter to control how many to fetch (default: 20, max: 100).
+    pub async fn list_batches(&self, limit: Option<usize>) -> Result<Vec<BatchJob>> {
+        debug!(limit = ?limit, "Listing batch jobs");
+
+        let limit = limit.unwrap_or(20).min(100);
+        let resp = self
+            .client
+            .get(format!("{}/v1/batches", self.base_url))
+            .bearer_auth(&self.api_key)
+            .query(&[("limit", limit)])
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(BatchError::Api {
+                status: status.as_u16(),
+                message: body,
+            });
+        }
+
+        #[derive(Deserialize)]
+        struct BatchListResponse {
+            data: Vec<BatchCreateResponse>,
+        }
+
+        let list_resp: BatchListResponse = resp.json().await?;
+        Ok(list_resp.data.into_iter().map(|b| b.into()).collect())
+    }
+
     /// Download and parse batch results from the output file.
     ///
     /// Each line in the output JSONL is a `BatchResult` with the original
