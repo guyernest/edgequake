@@ -23,6 +23,31 @@ use edgequake_storage::{GraphEdge, GraphNode, GraphStorage, KnowledgeGraph};
 
 use crate::error::AwsStorageError;
 
+/// Extract a descriptive error message from an AWS SDK error.
+///
+/// `SdkError::to_string()` often returns just "service error" which is useless
+/// for debugging. This helper extracts the actual service error message using
+/// the Debug trait when Display is uninformative.
+fn neptune_err<E, R>(err: aws_smithy_runtime_api::client::result::SdkError<E, R>) -> AwsStorageError
+where
+    E: std::fmt::Display + std::fmt::Debug,
+    R: std::fmt::Debug,
+{
+    let msg = match &err {
+        aws_smithy_runtime_api::client::result::SdkError::ServiceError(ctx) => {
+            let display = format!("{}", ctx.err());
+            let debug = format!("{:?}", ctx.err());
+            if display.contains("unhandled") || display == "service error" {
+                debug
+            } else {
+                display
+            }
+        }
+        other => format!("{:?}", other),
+    };
+    AwsStorageError::NeptuneError(msg)
+}
+
 /// Escape a string value for safe inclusion in a Gremlin single-quoted string literal.
 ///
 /// Prevents injection by escaping single quotes and backslashes in entity IDs
@@ -150,7 +175,7 @@ impl NeptuneGraphStorage {
             .gremlin_query(query)
             .send()
             .await
-            .map_err(|e| AwsStorageError::NeptuneError(format!("Query failed: {}", e)))?;
+            .map_err(neptune_err)?;
 
         // The result field contains the Gremlin response as a Document.
         // Structure: {"data": {"@type": "g:List", "@value": [...]}, "meta": {...}}
@@ -668,9 +693,10 @@ impl GraphStorage for NeptuneGraphStorage {
             escaped_source, self.config.namespace, escaped_target
         )).await?;
 
-        // Add new edge
+        // Add new edge (use __.V() anonymous traversal inside .to() — Neptune
+        // requires child traversals to be spawned anonymously, not via g.V())
         let query = format!(
-            "g.V('{}').has('namespace', '{}').addE('relates_to').to(g.V('{}').has('namespace', '{}')){}",
+            "g.V('{}').has('namespace', '{}').addE('relates_to').to(__.V('{}').has('namespace', '{}')){}",
             escaped_source, self.config.namespace, escaped_target, self.config.namespace, props
         );
 
@@ -829,10 +855,12 @@ impl GraphStorage for NeptuneGraphStorage {
         query_str: &str,
         limit: usize,
     ) -> edgequake_storage::error::Result<Vec<String>> {
+        // Use TextP.containing() for server-side filtering.
+        // IDs are uppercase, so uppercase the query for matching.
+        let escaped_upper = gremlin_escape(&query_str.to_uppercase());
         let query = format!(
-            "g.V().has('namespace', '{}').limit({}).id()",
-            self.config.namespace,
-            limit * 10
+            "g.V().has('namespace', '{}').has(T.id, TextP.containing('{}')).limit({}).id()",
+            self.config.namespace, escaped_upper, limit
         );
 
         let results = self.execute(&query).await?;
@@ -840,12 +868,7 @@ impl GraphStorage for NeptuneGraphStorage {
         let mut labels = Vec::new();
         for result in results {
             if let Some(label) = result.as_str() {
-                if label.starts_with(query_str) {
-                    labels.push(label.to_string());
-                    if labels.len() >= limit {
-                        break;
-                    }
-                }
+                labels.push(label.to_string());
             }
         }
 
@@ -860,11 +883,25 @@ impl GraphStorage for NeptuneGraphStorage {
         _tenant_id: Option<&str>,
         _workspace_id: Option<&str>,
     ) -> edgequake_storage::error::Result<Vec<(GraphNode, usize)>> {
+        // Push text filter into Gremlin using TextP.containing() so Neptune
+        // filters server-side instead of fetching random vertices.
+        // Entity IDs are uppercase (e.g. BRADLEY_EDWARDS), so we match
+        // the uppercased query against the ID and the original query against
+        // the description (mixed-case text).
+        let escaped = gremlin_escape(query_str);
+        let escaped_upper = gremlin_escape(&query_str.to_uppercase());
+
         let mut query = format!("g.V().has('namespace', '{}')", self.config.namespace);
 
         if let Some(et) = entity_type {
-            query.push_str(&format!(".has('entity_type', '{}')", et));
+            query.push_str(&format!(".has('entity_type', '{}')", gremlin_escape(et)));
         }
+
+        // Filter: ID contains uppercased query OR description contains original query
+        query.push_str(&format!(
+            ".or(__.has(T.id, TextP.containing('{}')), __.has('description', TextP.containing('{}')))",
+            escaped_upper, escaped
+        ));
 
         query.push_str(&format!(
             ".limit({}).project('node', 'degree').by(elementMap()).by(bothE().count())",
@@ -877,19 +914,8 @@ impl GraphStorage for NeptuneGraphStorage {
         for result in results {
             if let (Some(node_data), Some(degree)) = (result.get("node"), result.get("degree")) {
                 if let Ok(node) = self.vertex_to_node(node_data) {
-                    // Filter by query string
-                    let matches = node.id.contains(query_str)
-                        || node
-                            .properties
-                            .get("description")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.contains(query_str))
-                            .unwrap_or(false);
-
-                    if matches {
-                        let deg = degree.as_u64().unwrap_or(0) as usize;
-                        nodes.push((node, deg));
-                    }
+                    let deg = degree.as_u64().unwrap_or(0) as usize;
+                    nodes.push((node, deg));
                 }
             }
         }
@@ -952,6 +978,46 @@ impl GraphStorage for NeptuneGraphStorage {
         }
 
         Ok(edges)
+    }
+
+    async fn get_popular_nodes_with_degree(
+        &self,
+        limit: usize,
+        min_degree: Option<usize>,
+        entity_type: Option<&str>,
+        _tenant_id: Option<&str>,
+        _workspace_id: Option<&str>,
+    ) -> edgequake_storage::error::Result<Vec<(GraphNode, usize)>> {
+        // Server-side Gremlin query that pushes all filters into Neptune,
+        // avoiding the default trait impl's N+1 pattern and in-memory filtering.
+        let mut query = format!("g.V().has('namespace', '{}')", self.config.namespace);
+
+        if let Some(et) = entity_type {
+            query.push_str(&format!(".has('entity_type', '{}')", gremlin_escape(et)));
+        }
+
+        query.push_str(".project('node','degree').by(elementMap()).by(bothE().count())");
+        query.push_str(".order().by(select('degree'), desc)");
+
+        if let Some(min) = min_degree {
+            query.push_str(&format!(".where(select('degree').is(gte({})))", min));
+        }
+
+        query.push_str(&format!(".limit({})", limit));
+
+        let results = self.execute(&query).await?;
+
+        let mut nodes = Vec::new();
+        for result in results {
+            if let (Some(node_data), Some(degree)) = (result.get("node"), result.get("degree")) {
+                if let Ok(node) = self.vertex_to_node(node_data) {
+                    let deg = degree.as_u64().unwrap_or(0) as usize;
+                    nodes.push((node, deg));
+                }
+            }
+        }
+
+        Ok(nodes)
     }
 
     // ========== Utility Operations ==========

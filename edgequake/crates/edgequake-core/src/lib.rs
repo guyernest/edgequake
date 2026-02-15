@@ -76,6 +76,7 @@ pub use keyword_extractor::{ExtractedKeywords, KeywordExtractor};
 // Re-export tenant manager
 #[cfg(feature = "pipeline")]
 pub use tenant_manager::TenantRAGManager;
+#[cfg(feature = "pipeline")]
 pub use tenant_manager::{TenantConfig, TenantKBKey, TenantService};
 
 // Re-export workspace service
