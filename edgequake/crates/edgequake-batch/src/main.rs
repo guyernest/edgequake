@@ -468,7 +468,10 @@ async fn list_openai_batches(api_key: &str, limit: usize) -> anyhow::Result<()> 
         return Ok(());
     }
 
-    println!("\n=== OpenAI Batch Jobs (showing {} most recent) ===", batches.len());
+    println!(
+        "\n=== OpenAI Batch Jobs (showing {} most recent) ===",
+        batches.len()
+    );
     println!();
 
     let mut in_progress_count = 0;
@@ -510,7 +513,7 @@ async fn list_openai_batches(api_key: &str, limit: usize) -> anyhow::Result<()> 
 
         if let Some(ref counts) = batch.request_counts {
             let progress = if counts.total > 0 {
-                (counts.completed as f64 / counts.total as f64 * 100.0)
+                counts.completed as f64 / counts.total as f64 * 100.0
             } else {
                 0.0
             };
