@@ -522,44 +522,73 @@ impl KVStorage for DynamoKVStorage {
     }
 
     async fn count(&self) -> edgequake_storage::error::Result<usize> {
-        // Query with count only
-        let result = self
-            .client
-            .query()
-            .table_name(&self.config.table_name)
-            .key_condition_expression("#ns = :namespace")
-            .expression_attribute_names("#ns", "namespace")
-            .expression_attribute_values(
-                ":namespace",
-                AttributeValue::S(self.config.namespace.clone()),
-            )
-            .select(aws_sdk_dynamodb::types::Select::Count)
-            .send()
-            .await
-            .map_err(dynamo_err)?;
+        let mut total: usize = 0;
+        let mut last_evaluated_key = None;
 
-        Ok(result.count() as usize)
+        loop {
+            let mut query = self
+                .client
+                .query()
+                .table_name(&self.config.table_name)
+                .key_condition_expression("#ns = :namespace")
+                .expression_attribute_names("#ns", "namespace")
+                .expression_attribute_values(
+                    ":namespace",
+                    AttributeValue::S(self.config.namespace.clone()),
+                )
+                .select(aws_sdk_dynamodb::types::Select::Count);
+
+            if let Some(key) = last_evaluated_key {
+                query = query.set_exclusive_start_key(Some(key));
+            }
+
+            let result = query.send().await.map_err(dynamo_err)?;
+
+            total += result.count() as usize;
+
+            last_evaluated_key = result.last_evaluated_key;
+            if last_evaluated_key.is_none() {
+                break;
+            }
+        }
+
+        Ok(total)
     }
 
     async fn count_by_prefix(&self, prefix: &str) -> edgequake_storage::error::Result<usize> {
-        let result = self
-            .client
-            .query()
-            .table_name(&self.config.table_name)
-            .key_condition_expression("#ns = :namespace AND begins_with(#id, :prefix)")
-            .expression_attribute_names("#ns", "namespace")
-            .expression_attribute_names("#id", "id")
-            .expression_attribute_values(
-                ":namespace",
-                AttributeValue::S(self.config.namespace.clone()),
-            )
-            .expression_attribute_values(":prefix", AttributeValue::S(prefix.to_string()))
-            .select(aws_sdk_dynamodb::types::Select::Count)
-            .send()
-            .await
-            .map_err(dynamo_err)?;
+        let mut total: usize = 0;
+        let mut last_evaluated_key = None;
 
-        Ok(result.count() as usize)
+        loop {
+            let mut query = self
+                .client
+                .query()
+                .table_name(&self.config.table_name)
+                .key_condition_expression("#ns = :namespace AND begins_with(#id, :prefix)")
+                .expression_attribute_names("#ns", "namespace")
+                .expression_attribute_names("#id", "id")
+                .expression_attribute_values(
+                    ":namespace",
+                    AttributeValue::S(self.config.namespace.clone()),
+                )
+                .expression_attribute_values(":prefix", AttributeValue::S(prefix.to_string()))
+                .select(aws_sdk_dynamodb::types::Select::Count);
+
+            if let Some(key) = last_evaluated_key {
+                query = query.set_exclusive_start_key(Some(key));
+            }
+
+            let result = query.send().await.map_err(dynamo_err)?;
+
+            total += result.count() as usize;
+
+            last_evaluated_key = result.last_evaluated_key;
+            if last_evaluated_key.is_none() {
+                break;
+            }
+        }
+
+        Ok(total)
     }
 
     async fn keys(&self) -> edgequake_storage::error::Result<Vec<String>> {
