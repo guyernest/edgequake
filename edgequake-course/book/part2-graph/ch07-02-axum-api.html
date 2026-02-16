@@ -1,0 +1,580 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>The Axum API Layer - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="72-the-axum-api-layer"><a class="header" href="#72-the-axum-api-layer">7.2 The Axum API Layer</a></h2>
+<p>The <code>edgequake-api</code> crate exposes the orchestrator as a REST API using
+<a href="https://github.com/tokio-rs/axum">Axum</a>, a Rust web framework built
+on top of <code>tokio</code> and <code>tower</code>. This section covers the route structure,
+middleware stack, and streaming response patterns.</p>
+<h3 id="route-structure"><a class="header" href="#route-structure">Route Structure</a></h3>
+<p>The API follows RESTful conventions with versioned endpoints:</p>
+<pre><code class="language-text">/                           # Root
+├── health                  # Health check (GET)
+├── ready                   # Kubernetes readiness probe (GET)
+├── live                    # Kubernetes liveness probe (GET)
+├── ws/                     # WebSocket endpoints
+│   └── pipeline/progress   # Real-time pipeline updates
+└── api/v1/                 # Versioned API
+    ├── documents/          # Document ingestion
+    │   ├── POST            # Upload document
+    │   ├── GET             # List documents
+    │   └── {document_id}/  # CRUD per document
+    ├── query/              # RAG queries
+    │   ├── POST            # Execute query
+    │   └── stream POST     # Stream query response
+    ├── chat/               # Chat completions
+    │   └── completions/    # POST + stream
+    └── graph/              # Knowledge graph
+        ├── GET             # Get graph data
+        ├── nodes/{id}      # Node operations
+        ├── entities/       # Entity CRUD
+        └── relationships/  # Relationship CRUD
+</code></pre>
+<h3 id="building-the-router"><a class="header" href="#building-the-router">Building the Router</a></h3>
+<p>Axum routes are defined in <code>edgequake-api::routes</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use axum::{
+    routing::{delete, get, post, put},
+    Router,
+};
+
+pub fn create_router(state: AppState) -&gt; Router {
+    Router::new()
+        // Health probes (no auth required)
+        .route("/health", get(handlers::health_check))
+        .route("/ready", get(handlers::readiness_check))
+        .route("/live", get(handlers::liveness_check))
+
+        // WebSocket for pipeline progress
+        .route("/ws/pipeline/progress", get(handlers::ws_pipeline_progress))
+
+        // API v1 (auth + tenant middleware applied)
+        .nest("/api/v1", api_v1_routes())
+
+        // Shared application state
+        .with_state(state)
+}
+
+fn api_v1_routes() -&gt; Router&lt;AppState&gt; {
+    Router::new()
+        // Documents
+        .route("/documents", post(handlers::upload_document))
+        .route("/documents", get(handlers::list_documents))
+        .route("/documents/{document_id}", get(handlers::get_document))
+        .route("/documents/{document_id}", delete(handlers::delete_document))
+
+        // Query
+        .route("/query", post(handlers::execute_query))
+        .route("/query/stream", post(handlers::stream_query))
+
+        // Graph
+        .route("/graph", get(handlers::get_graph))
+        .route("/graph/nodes/{node_id}", get(handlers::get_node))
+        .route("/graph/entities", get(handlers::list_entities))
+        .route("/graph/entities/{entity_name}", get(handlers::get_entity))
+        .route("/graph/relationships", get(handlers::list_relationships))
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="application-state"><a class="header" href="#application-state">Application State</a></h3>
+<p>The <code>AppState</code> struct holds the orchestrator and shared resources:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct AppState {
+    /// The EdgeQuake orchestrator.
+    pub orchestrator: Arc&lt;EdgeQuake&gt;,
+
+    /// Provider resolver (for workspace-specific LLM/embedding selection).
+    pub provider_resolver: Arc&lt;WorkspaceProviderResolver&gt;,
+
+    /// Configuration.
+    pub config: Arc&lt;ApiConfig&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Because <code>AppState</code> implements <code>Clone</code> (all fields are <code>Arc</code>), Axum can
+share it across handler tasks safely.</p>
+<h3 id="route-handlers"><a class="header" href="#route-handlers">Route Handlers</a></h3>
+<p>A typical handler extracts state and request data, delegates to the
+orchestrator, and returns a JSON response:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Execute a RAG query with multi-mode retrieval.
+pub async fn execute_query(
+    State(state): State&lt;AppState&gt;,
+    tenant: TenantContext,  // Extracted by middleware
+    Json(request): Json&lt;QueryRequest&gt;,
+) -&gt; ApiResult&lt;Json&lt;QueryResponse&gt;&gt; {
+    // 1. Validate the query
+    validate_query(&amp;request.query)?;
+
+    // 2. Parse query mode (default: hybrid)
+    let mode = request.mode
+        .as_deref()
+        .and_then(QueryMode::parse)
+        .unwrap_or_default();
+
+    // 3. Build engine request with tenant context
+    let engine_request = EngineQueryRequest {
+        query: request.query.clone(),
+        mode,
+        top_k: request.top_k.unwrap_or(10),
+        workspace_id: tenant.workspace_id,
+        conversation_history: request.conversation_history.clone(),
+        ..Default::default()
+    };
+
+    // 4. Execute via orchestrator
+    let result = state.orchestrator
+        .query(&amp;engine_request)
+        .await
+        .map_err(ApiError::from)?;
+
+    // 5. Build response with sources
+    Ok(Json(QueryResponse {
+        response: result.response,
+        sources: result.sources,
+        mode: mode.as_str().to_string(),
+        stats: QueryStats {
+            entities_used: result.context.entities.len(),
+            relationships_used: result.context.relationships.len(),
+            chunks_used: result.context.chunks.len(),
+            total_tokens: result.token_usage.total,
+        },
+    }))
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Note how the handler is thin -- it validates input, maps types, and
+delegates to the orchestrator. Business logic stays in <code>edgequake-core</code>.</p>
+<h3 id="the-middleware-stack"><a class="header" href="#the-middleware-stack">The Middleware Stack</a></h3>
+<p>Requests pass through several middleware layers before reaching handlers:</p>
+<pre class="mermaid">flowchart TB
+    R[&quot;HTTP Request&quot;] --&gt; CORS[&quot;CORS Middleware&quot;]
+    CORS --&gt; Log[&quot;Request Logging&quot;]
+    Log --&gt; Auth[&quot;Authentication&lt;br/&gt;(JWT / API Key)&quot;]
+    Auth --&gt; Tenant[&quot;Tenant Extraction&lt;br/&gt;(workspace_id from JWT)&quot;]
+    Tenant --&gt; Handler[&quot;Route Handler&quot;]
+    Handler --&gt; Resp[&quot;Response&quot;]
+</pre>
+<h4 id="authentication-middleware"><a class="header" href="#authentication-middleware">Authentication Middleware</a></h4>
+<p>Extracts and validates JWT tokens or API keys:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct AuthMiddleware;
+
+impl AuthMiddleware {
+    pub async fn authenticate(
+        headers: &amp;HeaderMap,
+        state: &amp;AppState,
+    ) -&gt; Result&lt;AuthContext, ApiError&gt; {
+        // Try Bearer token first
+        if let Some(token) = extract_bearer_token(headers) {
+            return validate_jwt(token, &amp;state.config.jwt_secret);
+        }
+
+        // Try API key
+        if let Some(key) = headers.get("X-API-Key") {
+            return validate_api_key(key, &amp;state.kv_storage).await;
+        }
+
+        Err(ApiError::Unauthorized("No credentials provided".into()))
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="tenant-context-middleware"><a class="header" href="#tenant-context-middleware">Tenant Context Middleware</a></h4>
+<p>Extracts workspace and tenant information for multi-tenant isolation:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct TenantContext {
+    pub tenant_id: Option&lt;uuid::Uuid&gt;,
+    pub workspace_id: Option&lt;uuid::Uuid&gt;,
+    pub user_id: Option&lt;uuid::Uuid&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The tenant context flows from JWT claims into every handler, ensuring
+that queries and ingestion are scoped to the correct workspace.</p>
+<h3 id="streaming-responses"><a class="header" href="#streaming-responses">Streaming Responses</a></h3>
+<p>For the query endpoint, EdgeQuake supports streaming -- sending LLM
+output token-by-token as Server-Sent Events (SSE):</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub async fn stream_query(
+    State(state): State&lt;AppState&gt;,
+    tenant: TenantContext,
+    Json(request): Json&lt;QueryRequest&gt;,
+) -&gt; Sse&lt;impl Stream&lt;Item = Result&lt;Event, Infallible&gt;&gt;&gt; {
+    let (tx, rx) = tokio::sync::mpsc::channel(32);
+
+    // Spawn the query execution in a background task
+    tokio::spawn(async move {
+        let result = state.orchestrator
+            .query_streaming(&amp;request, tx.clone())
+            .await;
+
+        if let Err(e) = result {
+            let _ = tx.send(StreamEvent::Error(e.to_string())).await;
+        }
+        let _ = tx.send(StreamEvent::Done).await;
+    });
+
+    // Convert channel receiver to SSE stream
+    Sse::new(ReceiverStream::new(rx).map(|event| {
+        Ok(Event::default()
+            .event(event.event_type())
+            .data(event.to_json()))
+    }))
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The client receives events like:</p>
+<pre><code class="language-text">event: token
+data: {"content": "Based"}
+
+event: token
+data: {"content": " on"}
+
+event: token
+data: {"content": " the"}
+
+event: token
+data: {"content": " knowledge"}
+
+...
+
+event: sources
+data: {"sources": [{"chunk_id": "c1", "score": 0.92}]}
+
+event: done
+data: {}
+</code></pre>
+<p>This provides immediate feedback to the user instead of waiting for the
+full response to generate.</p>
+<h3 id="document-upload-handler"><a class="header" href="#document-upload-handler">Document Upload Handler</a></h3>
+<p>The document ingestion endpoint shows the pipeline integration:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub async fn upload_document(
+    State(state): State&lt;AppState&gt;,
+    tenant: TenantContext,
+    Json(request): Json&lt;UploadRequest&gt;,
+) -&gt; ApiResult&lt;Json&lt;UploadResponse&gt;&gt; {
+    // Validate document
+    if request.content.is_empty() {
+        return Err(ApiError::BadRequest("Empty content".into()));
+    }
+
+    // Run the ingestion pipeline
+    let result = state.orchestrator.insert(
+        &amp;request.content,
+        request.document_id.as_deref(),
+    ).await?;
+
+    Ok(Json(UploadResponse {
+        document_id: result.document_id,
+        chunks_created: result.chunks.len(),
+        entities_extracted: result.entity_count(),
+        relationships_extracted: result.relationship_count(),
+        processing_time_ms: result.processing_time_ms,
+    }))
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h3>
+<p>The API uses a unified error type that maps to HTTP status codes:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub enum ApiError {
+    BadRequest(String),          // 400
+    Unauthorized(String),        // 401
+    Forbidden(String),           // 403
+    NotFound(String),            // 404
+    Conflict(String),            // 409
+    InternalError(String),       // 500
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -&gt; Response {
+        let (status, message) = match &amp;self {
+            ApiError::BadRequest(msg) =&gt; (StatusCode::BAD_REQUEST, msg),
+            ApiError::Unauthorized(msg) =&gt; (StatusCode::UNAUTHORIZED, msg),
+            // ...
+        };
+
+        (status, Json(json!({"error": message}))).into_response()
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Storage errors, pipeline errors, and query errors all map through this
+type, providing consistent JSON error responses to clients.</p>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>The API layer is a thin translation between HTTP and the orchestrator.</li>
+<li>Axum's <code>State</code>, <code>Json</code>, and extractor patterns keep handlers clean and
+testable.</li>
+<li>Middleware handles cross-cutting concerns: authentication, tenant
+extraction, logging.</li>
+<li>Streaming responses use SSE via Axum's <code>Sse</code> type with a <code>tokio</code>
+channel bridge.</li>
+<li>All endpoints follow RESTful conventions under <code>/api/v1/</code>.</li>
+<li>Unified error handling maps domain errors to appropriate HTTP status
+codes.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch07-03-request-flow.html">7.3 End-to-End Request Flow</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part2-graph/ch07-01-core-architecture.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part2-graph/ch07-03-request-flow.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part2-graph/ch07-01-core-architecture.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part2-graph/ch07-03-request-flow.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

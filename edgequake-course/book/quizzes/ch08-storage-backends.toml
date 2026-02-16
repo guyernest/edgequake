@@ -1,0 +1,87 @@
+# Quiz: Storage Backend Architecture
+
+id = "ch08-storage-backends"
+title = "Storage Backend Architecture"
+lesson_id = "ch08"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What is the primary benefit of EdgeQuake's trait-based storage abstraction (GraphStorage, VectorStorage, KVStorage)?"
+prompt.distractors = [
+    "It forces all backends to use the same database engine for consistency",
+    "It eliminates the need for error handling in storage operations",
+    "It automatically migrates data between different storage backends"
+]
+answer.answer = "It allows swapping storage implementations without changing application logic"
+context = """
+The trait abstraction (GraphStorage, VectorStorage, KVStorage) defines a contract that any backend must fulfill. \
+This means you can develop locally with in-memory or PostgreSQL backends and deploy to production with AWS-managed \
+services like Neptune, S3 Vectors, and DynamoDB — all without modifying the core application code. The business \
+logic depends only on the trait interface, not the concrete implementation.
+"""
+id = "a1b2c3d4-1001-4a0e-b001-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Which storage trait is responsible for storing and querying entity-relationship data with graph traversal capabilities?"
+prompt.distractors = [
+    "VectorStorage — because entities are stored as vector embeddings",
+    "KVStorage — because entities and relationships are key-value pairs",
+    "DocumentStorage — because entities originate from document extraction"
+]
+answer.answer = "GraphStorage — it manages nodes, edges, and supports traversal queries"
+context = """
+GraphStorage is the trait designed for entity-relationship data. It handles creating nodes (entities) and edges \
+(relationships), and supports graph traversal queries. VectorStorage handles embedding vectors for similarity \
+search, and KVStorage handles simple key-value persistence like configuration and state. Each trait serves a \
+distinct purpose in the overall architecture.
+"""
+id = "a1b2c3d4-1001-4a0e-b001-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "When would you use MemoryGraphStorage instead of a PostgreSQL or AWS-backed implementation?"
+prompt.distractors = [
+    "In production deployments that require high availability and durability",
+    "When you need data to persist across application restarts",
+    "When processing large-scale batch ingestion workloads"
+]
+answer.answer = "During unit testing and rapid prototyping where persistence is not required"
+context = """
+MemoryGraphStorage stores all data in-memory, which means it is fast and requires no external dependencies, \
+but all data is lost when the process exits. This makes it ideal for unit tests (where you want isolated, \
+fast-running tests) and quick prototyping (where you want to iterate without setting up databases). For any \
+scenario requiring durability or scale, you would use PostgreSQL or AWS backends.
+"""
+id = "a1b2c3d4-1001-4a0e-b001-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "How does PostgreSQL serve as both a graph and vector storage backend in EdgeQuake's local development setup?"
+prompt.distractors = [
+    "PostgreSQL natively supports graph queries and vector search without any extensions",
+    "EdgeQuake uses PostgreSQL only for vector storage and a separate Neo4j instance for graph queries",
+    "PostgreSQL stores raw data which is then exported to specialized graph and vector databases"
+]
+answer.answer = "The pgvector extension provides vector similarity search while Apache AGE adds graph query capabilities"
+context = """
+PostgreSQL alone does not support graph traversals or vector similarity search. By adding the pgvector extension, \
+it gains the ability to store and query high-dimensional vectors with operations like cosine similarity. By adding \
+the Apache AGE extension, it gains openCypher-compatible graph query capabilities. Together, these extensions allow \
+a single PostgreSQL instance to fulfill both the VectorStorage and GraphStorage trait contracts, simplifying local \
+development by avoiding the need for multiple specialized databases.
+"""
+id = "a1b2c3d4-1001-4a0e-b001-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What is the name of the alternative constructor method that accepts a pre-configured AWS SDK client, avoiding the creation of a new client internally?"
+answer.answer = "new_with_client"
+context = """
+AWS storage implementations provide two constructors: new(config), which creates its own AWS SDK client internally, \
+and new_with_client(config, client), which accepts a pre-configured client. The new_with_client pattern is important \
+for testing (you can inject mock clients), for sharing clients across multiple storage instances (reducing connection \
+overhead), and for using custom client configurations like specific endpoints or credentials providers.
+"""
+id = "a1b2c3d4-1001-4a0e-b001-000000000005"

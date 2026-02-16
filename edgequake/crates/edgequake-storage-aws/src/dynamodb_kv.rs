@@ -51,7 +51,7 @@ use std::collections::HashSet;
 
 use async_trait::async_trait;
 use aws_sdk_dynamodb::types::{
-    AttributeValue, PutRequest, WriteRequest, KeysAndAttributes, ReturnValue,
+    AttributeValue, KeysAndAttributes, PutRequest, ReturnValue, WriteRequest,
 };
 use aws_sdk_dynamodb::Client as DynamoDbClient;
 use serde_json::Value as JsonValue;
@@ -118,7 +118,7 @@ impl DynamoKVConfig {
             table_name: table_name.into(),
             namespace: namespace.into(),
             region: None,
-            on_demand: true,  // Pay-per-request by default
+            on_demand: true, // Pay-per-request by default
             read_capacity: 5,
             write_capacity: 5,
             enable_pitr: true,
@@ -193,13 +193,19 @@ impl DynamoKVStorage {
     /// Convert namespace and id to DynamoDB key.
     fn make_key(&self, id: &str) -> std::collections::HashMap<String, AttributeValue> {
         let mut key = std::collections::HashMap::new();
-        key.insert("namespace".to_string(), AttributeValue::S(self.config.namespace.clone()));
+        key.insert(
+            "namespace".to_string(),
+            AttributeValue::S(self.config.namespace.clone()),
+        );
         key.insert("id".to_string(), AttributeValue::S(id.to_string()));
         key
     }
 
     /// Parse DynamoDB item to JSON value.
-    fn parse_item(&self, item: &std::collections::HashMap<String, AttributeValue>) -> crate::error::Result<JsonValue> {
+    fn parse_item(
+        &self,
+        item: &std::collections::HashMap<String, AttributeValue>,
+    ) -> crate::error::Result<JsonValue> {
         let data_attr = item
             .get("data")
             .ok_or_else(|| AwsStorageError::DynamoDbError("Missing 'data' attribute".into()))?;
@@ -225,8 +231,10 @@ impl KVStorage for DynamoKVStorage {
     }
 
     async fn initialize(&self) -> edgequake_storage::error::Result<()> {
-        info!("Initializing DynamoDB KV storage: table={}, namespace={}",
-              self.config.table_name, self.config.namespace);
+        info!(
+            "Initializing DynamoDB KV storage: table={}, namespace={}",
+            self.config.table_name, self.config.namespace
+        );
 
         // Check if table exists
         match self
@@ -243,10 +251,16 @@ impl KVStorage for DynamoKVStorage {
                     .map(|s| format!("{:?}", s))
                     .unwrap_or_else(|| "Unknown".to_string());
 
-                info!("DynamoDB table '{}' exists with status: {}", self.config.table_name, status);
+                info!(
+                    "DynamoDB table '{}' exists with status: {}",
+                    self.config.table_name, status
+                );
             }
             Err(e) => {
-                warn!("Table '{}' does not exist or cannot be accessed: {}", self.config.table_name, e);
+                warn!(
+                    "Table '{}' does not exist or cannot be accessed: {}",
+                    self.config.table_name, e
+                );
                 return Err(AwsStorageError::DynamoDbError(format!(
                     "Table '{}' not found. Create it first with: aws dynamodb create-table",
                     self.config.table_name
@@ -294,10 +308,7 @@ impl KVStorage for DynamoKVStorage {
 
         // DynamoDB BatchGetItem has a limit of 100 items
         for chunk in ids.chunks(100) {
-            let keys: Vec<_> = chunk
-                .iter()
-                .map(|id| self.make_key(id))
-                .collect();
+            let keys: Vec<_> = chunk.iter().map(|id| self.make_key(id)).collect();
 
             let keys_and_attrs = KeysAndAttributes::builder()
                 .set_keys(Some(keys))
@@ -326,7 +337,10 @@ impl KVStorage for DynamoKVStorage {
         Ok(results)
     }
 
-    async fn filter_keys(&self, keys: HashSet<String>) -> edgequake_storage::error::Result<HashSet<String>> {
+    async fn filter_keys(
+        &self,
+        keys: HashSet<String>,
+    ) -> edgequake_storage::error::Result<HashSet<String>> {
         if keys.is_empty() {
             return Ok(HashSet::new());
         }
@@ -335,10 +349,7 @@ impl KVStorage for DynamoKVStorage {
 
         // Check which keys exist
         for chunk in keys.iter().collect::<Vec<_>>().chunks(100) {
-            let dynamo_keys: Vec<_> = chunk
-                .iter()
-                .map(|id| self.make_key(id))
-                .collect();
+            let dynamo_keys: Vec<_> = chunk.iter().map(|id| self.make_key(id)).collect();
 
             let keys_and_attrs = KeysAndAttributes::builder()
                 .set_keys(Some(dynamo_keys))
@@ -372,44 +383,95 @@ impl KVStorage for DynamoKVStorage {
             return Ok(());
         }
 
-        info!("Upserting {} items to DynamoDB", data.len());
+        debug!("Upserting {} items to DynamoDB", data.len());
 
         let timestamp = Self::timestamp();
+        const MAX_RETRIES: u32 = 8;
 
         // DynamoDB BatchWriteItem has a limit of 25 items
         for chunk in data.chunks(25) {
-            let mut write_requests = Vec::new();
+            let mut write_requests: Vec<WriteRequest> = Vec::new();
 
             for (id, value) in chunk {
                 let json_str = serde_json::to_string(value)?;
 
                 let mut item = std::collections::HashMap::new();
-                item.insert("namespace".to_string(), AttributeValue::S(self.config.namespace.clone()));
+                item.insert(
+                    "namespace".to_string(),
+                    AttributeValue::S(self.config.namespace.clone()),
+                );
                 item.insert("id".to_string(), AttributeValue::S(id.clone()));
                 item.insert("data".to_string(), AttributeValue::S(json_str));
-                item.insert("updated_at".to_string(), AttributeValue::N(timestamp.to_string()));
+                item.insert(
+                    "updated_at".to_string(),
+                    AttributeValue::N(timestamp.to_string()),
+                );
 
                 // Add created_at only if it doesn't exist (handled by update expression in production)
-                item.insert("created_at".to_string(), AttributeValue::N(timestamp.to_string()));
+                item.insert(
+                    "created_at".to_string(),
+                    AttributeValue::N(timestamp.to_string()),
+                );
 
                 let put_request = PutRequest::builder()
                     .set_item(Some(item))
                     .build()
                     .map_err(|e| AwsStorageError::DynamoDbError(e.to_string()))?;
 
-                let write_request = WriteRequest::builder()
-                    .put_request(put_request)
-                    .build();
+                let write_request = WriteRequest::builder().put_request(put_request).build();
 
                 write_requests.push(write_request);
             }
 
-            self.client
-                .batch_write_item()
-                .request_items(&self.config.table_name, write_requests)
-                .send()
-                .await
-                .map_err(dynamo_err)?;
+            // Retry loop for unprocessed items with exponential backoff
+            let mut attempt = 0u32;
+            loop {
+                let result = self
+                    .client
+                    .batch_write_item()
+                    .request_items(&self.config.table_name, write_requests.clone())
+                    .send()
+                    .await
+                    .map_err(dynamo_err)?;
+
+                // Check for unprocessed items
+                let unprocessed = result
+                    .unprocessed_items()
+                    .and_then(|items| items.get(&self.config.table_name))
+                    .map(|items| items.to_vec())
+                    .unwrap_or_default();
+
+                if unprocessed.is_empty() {
+                    break;
+                }
+
+                attempt += 1;
+                if attempt >= MAX_RETRIES {
+                    warn!(
+                        unprocessed = unprocessed.len(),
+                        attempts = attempt,
+                        "Giving up on unprocessed items after max retries"
+                    );
+                    return Err(AwsStorageError::DynamoDbError(format!(
+                        "{} items still unprocessed after {} retries",
+                        unprocessed.len(),
+                        MAX_RETRIES
+                    ))
+                    .into());
+                }
+
+                debug!(
+                    unprocessed = unprocessed.len(),
+                    attempt = attempt,
+                    "Retrying unprocessed items with backoff"
+                );
+
+                // Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms, 1.6s, 3.2s, 6.4s
+                let delay_ms = 50 * (1u64 << attempt);
+                tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+
+                write_requests = unprocessed;
+            }
         }
 
         debug!("Upserted {} items successfully", data.len());
@@ -467,7 +529,31 @@ impl KVStorage for DynamoKVStorage {
             .table_name(&self.config.table_name)
             .key_condition_expression("#ns = :namespace")
             .expression_attribute_names("#ns", "namespace")
-            .expression_attribute_values(":namespace", AttributeValue::S(self.config.namespace.clone()))
+            .expression_attribute_values(
+                ":namespace",
+                AttributeValue::S(self.config.namespace.clone()),
+            )
+            .select(aws_sdk_dynamodb::types::Select::Count)
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
+        Ok(result.count() as usize)
+    }
+
+    async fn count_by_prefix(&self, prefix: &str) -> edgequake_storage::error::Result<usize> {
+        let result = self
+            .client
+            .query()
+            .table_name(&self.config.table_name)
+            .key_condition_expression("#ns = :namespace AND begins_with(#id, :prefix)")
+            .expression_attribute_names("#ns", "namespace")
+            .expression_attribute_names("#id", "id")
+            .expression_attribute_values(
+                ":namespace",
+                AttributeValue::S(self.config.namespace.clone()),
+            )
+            .expression_attribute_values(":prefix", AttributeValue::S(prefix.to_string()))
             .select(aws_sdk_dynamodb::types::Select::Count)
             .send()
             .await
@@ -487,17 +573,17 @@ impl KVStorage for DynamoKVStorage {
                 .table_name(&self.config.table_name)
                 .key_condition_expression("#ns = :namespace")
                 .expression_attribute_names("#ns", "namespace")
-                .expression_attribute_values(":namespace", AttributeValue::S(self.config.namespace.clone()))
+                .expression_attribute_values(
+                    ":namespace",
+                    AttributeValue::S(self.config.namespace.clone()),
+                )
                 .projection_expression("id");
 
             if let Some(key) = last_evaluated_key {
                 query = query.set_exclusive_start_key(Some(key));
             }
 
-            let result = query
-                .send()
-                .await
-                .map_err(dynamo_err)?;
+            let result = query.send().await.map_err(dynamo_err)?;
 
             if let Some(items) = result.items {
                 for item in items {
@@ -517,7 +603,10 @@ impl KVStorage for DynamoKVStorage {
     }
 
     async fn clear(&self) -> edgequake_storage::error::Result<()> {
-        warn!("Clearing all items for namespace: {}", self.config.namespace);
+        warn!(
+            "Clearing all items for namespace: {}",
+            self.config.namespace
+        );
 
         // Get all keys
         let keys = self.keys().await?;
@@ -546,16 +635,25 @@ impl KVStorage for DynamoKVStorage {
             .update_expression("SET #status = :new_status, updated_at = :timestamp")
             .condition_expression("#status = :expected_status")
             .expression_attribute_names("#status", "status")
-            .expression_attribute_values(":expected_status", AttributeValue::S(expected_status.to_string()))
+            .expression_attribute_values(
+                ":expected_status",
+                AttributeValue::S(expected_status.to_string()),
+            )
             .expression_attribute_values(":new_status", AttributeValue::S(new_status.to_string()))
-            .expression_attribute_values(":timestamp", AttributeValue::N(Self::timestamp().to_string()))
+            .expression_attribute_values(
+                ":timestamp",
+                AttributeValue::N(Self::timestamp().to_string()),
+            )
             .return_values(ReturnValue::AllNew)
             .send()
             .await;
 
         match result {
             Ok(_) => {
-                debug!("Status transition successful: {} -> {}", expected_status, new_status);
+                debug!(
+                    "Status transition successful: {} -> {}",
+                    expected_status, new_status
+                );
                 Ok(true)
             }
             Err(e) => {

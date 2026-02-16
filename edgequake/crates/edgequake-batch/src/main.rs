@@ -21,10 +21,11 @@
 
 mod cli;
 mod config;
+pub mod domain_config;
+mod domain_prompts;
 mod jsonl;
 mod parquet_reader;
 mod progress;
-mod prompts;
 mod stages;
 mod state;
 
@@ -46,6 +47,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cli = Cli::parse();
+
+    // Load domain configuration (CLI flag → env → ./domain.toml → ~/.edgequake/ → built-in)
+    let domain_config = domain_config::DomainConfig::load(cli.domain_config.as_deref())?;
+    info!(domain = %domain_config.domain.name, "Loaded domain config");
+    let domain_config = std::sync::Arc::new(domain_config);
 
     // Generate or use provided job ID
     let job_id = cli
@@ -91,11 +97,10 @@ async fn main() -> anyhow::Result<()> {
     let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let dynamo_client = aws_sdk_dynamodb::Client::new(&aws_config);
 
-    let dynamo_config = edgequake_storage_aws::DynamoKVConfig::new(
-        &config.dynamo_table,
-        &config.namespace,
-    );
-    let dynamo_kv = edgequake_storage_aws::DynamoKVStorage::new_with_client(dynamo_config, dynamo_client);
+    let dynamo_config =
+        edgequake_storage_aws::DynamoKVConfig::new(&config.dynamo_table, &config.namespace);
+    let dynamo_kv =
+        edgequake_storage_aws::DynamoKVStorage::new_with_client(dynamo_config, dynamo_client);
 
     // Verify table exists before proceeding (gives clear error on misconfiguration)
     use edgequake_storage::KVStorage;
@@ -119,18 +124,35 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Run => {
-            run_full_pipeline(&config, &cli.api_key, &aws_config, &state_mgr, &mut job, &progress).await?;
+            run_full_pipeline(
+                &config,
+                &cli.api_key,
+                &aws_config,
+                &domain_config,
+                &state_mgr,
+                &mut job,
+                &progress,
+            )
+            .await?;
         }
         Command::Prepare => {
-            stages::prepare::run_prepare(&config, &state_mgr, &mut job, &progress).await?;
+            stages::prepare::run_prepare(&config, &domain_config, &state_mgr, &mut job, &progress)
+                .await?;
         }
         Command::Extract => {
             // Extract requires prepare results; load from state
-            let prepare_result =
-                stages::prepare::run_prepare(&config, &state_mgr, &mut job, &progress).await?;
+            let prepare_result = stages::prepare::run_prepare(
+                &config,
+                &domain_config,
+                &state_mgr,
+                &mut job,
+                &progress,
+            )
+            .await?;
             stages::extract::run_extract(
                 &config,
                 &cli.api_key,
+                &domain_config,
                 &state_mgr,
                 &mut job,
                 &prepare_result.jsonl_result.file_paths,
@@ -141,16 +163,25 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Embed => {
             // Re-run prepare (fast, local only) to get chunks in memory
-            let prepare_result =
-                stages::prepare::run_prepare(&config, &state_mgr, &mut job, &progress).await?;
+            let prepare_result = stages::prepare::run_prepare(
+                &config,
+                &domain_config,
+                &state_mgr,
+                &mut job,
+                &progress,
+            )
+            .await?;
 
             // Load cached extraction results from disk (avoids re-submitting to OpenAI)
-            let extract_results = stages::extract::load_cached_results(&config)
-                .ok_or_else(|| anyhow::anyhow!(
-                    "No cached extraction results found. Run 'extract' first, then 'embed'."
-                ))?;
+            let extract_results = stages::extract::load_cached_results(&config, &domain_config)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "No cached extraction results found. Run 'extract' first, then 'embed'."
+                    )
+                })?;
 
-            let embedding_provider = create_embedding_provider(&cli.api_key, &config.embedding_model)?;
+            let embedding_provider =
+                create_embedding_provider(&cli.api_key, &config.embedding_model)?;
             stages::embed::run_embed(
                 &config,
                 embedding_provider,
@@ -164,33 +195,43 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Store => {
             // Re-run prepare (fast, local only) to get chunks/documents in memory
-            let prepare_result =
-                stages::prepare::run_prepare(&config, &state_mgr, &mut job, &progress).await?;
+            let prepare_result = stages::prepare::run_prepare(
+                &config,
+                &domain_config,
+                &state_mgr,
+                &mut job,
+                &progress,
+            )
+            .await?;
 
             // Load cached extraction results from disk
-            let extract_results = stages::extract::load_cached_results(&config)
-                .ok_or_else(|| anyhow::anyhow!(
-                    "No cached extraction results found. Run 'extract' first, then 'store'."
-                ))?;
+            let extract_results = stages::extract::load_cached_results(&config, &domain_config)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "No cached extraction results found. Run 'extract' first, then 'store'."
+                    )
+                })?;
 
             // Load cached embed results, or re-run embed if not cached
-            let embed_result = if let Some(cached) = stages::embed::load_cached_embed_results(&config) {
-                info!("Using cached embed results");
-                cached
-            } else {
-                info!("No cached embed results, running embed phase");
-                let embedding_provider = create_embedding_provider(&cli.api_key, &config.embedding_model)?;
-                stages::embed::run_embed(
-                    &config,
-                    embedding_provider,
-                    &state_mgr,
-                    &mut job,
-                    &prepare_result.chunks,
-                    &extract_results,
-                    &progress,
-                )
-                .await?
-            };
+            let embed_result =
+                if let Some(cached) = stages::embed::load_cached_embed_results(&config) {
+                    info!("Using cached embed results");
+                    cached
+                } else {
+                    info!("No cached embed results, running embed phase");
+                    let embedding_provider =
+                        create_embedding_provider(&cli.api_key, &config.embedding_model)?;
+                    stages::embed::run_embed(
+                        &config,
+                        embedding_provider,
+                        &state_mgr,
+                        &mut job,
+                        &prepare_result.chunks,
+                        &extract_results,
+                        &progress,
+                    )
+                    .await?
+                };
 
             // Run store to persist to Neptune/S3/DynamoDB
             let (vectors, kv) = create_storage_backends(&config).await?;
@@ -214,7 +255,16 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Resume => {
             info!(phase = %job.phase, "Resuming from checkpoint");
-            run_full_pipeline(&config, &cli.api_key, &aws_config, &state_mgr, &mut job, &progress).await?;
+            run_full_pipeline(
+                &config,
+                &cli.api_key,
+                &aws_config,
+                &domain_config,
+                &state_mgr,
+                &mut job,
+                &progress,
+            )
+            .await?;
         }
         Command::ListBatches { .. } => {
             // Handled earlier before DynamoDB initialization
@@ -230,6 +280,7 @@ async fn run_full_pipeline(
     config: &BatchConfig,
     api_key: &str,
     aws_config: &aws_config::SdkConfig,
+    domain_config: &std::sync::Arc<domain_config::DomainConfig>,
     state_mgr: &StateManager,
     job: &mut state::JobState,
     progress: &BatchProgress,
@@ -237,24 +288,19 @@ async fn run_full_pipeline(
     info!("Running full batch pipeline");
 
     // Phase 1: Prepare
-    let prepare_result = if matches!(
-        job.phase,
-        state::Phase::Pending | state::Phase::Preparing
-    ) {
-        stages::prepare::run_prepare(config, state_mgr, job, progress).await?
+    let prepare_result = if matches!(job.phase, state::Phase::Pending | state::Phase::Preparing) {
+        stages::prepare::run_prepare(config, domain_config, state_mgr, job, progress).await?
     } else {
         info!("Phase 1 already complete, re-running for data");
-        stages::prepare::run_prepare(config, state_mgr, job, progress).await?
+        stages::prepare::run_prepare(config, domain_config, state_mgr, job, progress).await?
     };
 
     // Phase 2: Extract
-    let extract_result = if matches!(
-        job.phase,
-        state::Phase::Prepared | state::Phase::Extracting
-    ) {
+    let extract_result = if matches!(job.phase, state::Phase::Prepared | state::Phase::Extracting) {
         stages::extract::run_extract(
             config,
             api_key,
+            domain_config,
             state_mgr,
             job,
             &prepare_result.jsonl_result.file_paths,
@@ -262,13 +308,20 @@ async fn run_full_pipeline(
             progress,
         )
         .await?
-    } else if matches!(job.phase, state::Phase::Extracted | state::Phase::Embedding | state::Phase::Embedded | state::Phase::Storing) {
+    } else if matches!(
+        job.phase,
+        state::Phase::Extracted
+            | state::Phase::Embedding
+            | state::Phase::Embedded
+            | state::Phase::Storing
+    ) {
         info!("Phase 2 already complete, skipping extract (results need to be re-derived)");
         // For resume, we'd need to re-derive from stored state
         // For now, re-run extract
         stages::extract::run_extract(
             config,
             api_key,
+            domain_config,
             state_mgr,
             job,
             &prepare_result.jsonl_result.file_paths,
@@ -280,6 +333,7 @@ async fn run_full_pipeline(
         stages::extract::run_extract(
             config,
             api_key,
+            domain_config,
             state_mgr,
             job,
             &prepare_result.jsonl_result.file_paths,
@@ -330,8 +384,8 @@ fn create_embedding_provider(
     api_key: &str,
     model: &str,
 ) -> anyhow::Result<std::sync::Arc<dyn edgequake_llm::traits::EmbeddingProvider>> {
-    let provider = edgequake_llm::providers::openai::OpenAIProvider::new(api_key)
-        .with_embedding_model(model);
+    let provider =
+        edgequake_llm::providers::openai::OpenAIProvider::new(api_key).with_embedding_model(model);
     Ok(std::sync::Arc::new(provider))
 }
 
@@ -361,7 +415,8 @@ async fn create_storage_backends(
             };
             let s3v_client = edgequake_storage_aws::aws_sdk_s3vectors::Client::new(&aws_config);
             std::sync::Arc::new(edgequake_storage_aws::S3VectorsStorage::new_with_client(
-                vectors_config, s3v_client,
+                vectors_config,
+                s3v_client,
             ))
         } else {
             info!("No vector bucket configured, using in-memory vector storage");
@@ -375,11 +430,9 @@ async fn create_storage_backends(
     let dynamo_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let dynamo_config =
         edgequake_storage_aws::DynamoKVConfig::new(&config.dynamo_table, &config.namespace);
-    let kv: std::sync::Arc<dyn edgequake_storage::traits::KVStorage> =
-        std::sync::Arc::new(edgequake_storage_aws::DynamoKVStorage::new_with_client(
-            dynamo_config,
-            dynamo_client,
-        ));
+    let kv: std::sync::Arc<dyn edgequake_storage::traits::KVStorage> = std::sync::Arc::new(
+        edgequake_storage_aws::DynamoKVStorage::new_with_client(dynamo_config, dynamo_client),
+    );
 
     Ok((vectors, kv))
 }

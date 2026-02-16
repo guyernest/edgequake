@@ -1,0 +1,351 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Security and Multi-Tenancy - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="chapter-11-security-and-multi-tenancy"><a class="header" href="#chapter-11-security-and-multi-tenancy">Chapter 11: Security and Multi-Tenancy</a></h1>
+<blockquote>
+<p><strong>"In a multi-tenant knowledge base, a security failure is not a bug -- it is a data breach."</strong></p>
+</blockquote>
+<p>Moving a knowledge base from a single-user prototype to a production enterprise
+system introduces an entirely new class of requirements. You must authenticate
+every request, authorize every operation, and guarantee that one tenant's data
+never leaks into another tenant's queries. These are not optional features you
+bolt on later -- they are architectural decisions that must be baked into the
+system from the start.</p>
+<p>EdgeQuake's approach to enterprise security rests on three pillars:</p>
+<ol>
+<li><strong>JWT authentication</strong> at the API boundary -- every request carries a
+cryptographically signed token that identifies the caller.</li>
+<li><strong>Role-based access control (RBAC)</strong> inside the application layer --
+permissions are checked against the caller's role before any operation
+proceeds.</li>
+<li><strong>Namespace-based tenant isolation</strong> at the storage layer -- the
+<code>GraphStorage</code> trait's <code>namespace()</code> method ensures that queries and
+mutations are scoped to a single tenant's data.</li>
+</ol>
+<pre class="mermaid">flowchart LR
+    subgraph &quot;API Boundary&quot;
+        A[HTTP Request] --&gt; B[JWT Validation]
+    end
+    subgraph &quot;Application Layer&quot;
+        B --&gt; C[RBAC Check]
+    end
+    subgraph &quot;Storage Layer&quot;
+        C --&gt; D[Namespace Isolation]
+        D --&gt; E[(Tenant A Data)]
+        D --&gt; F[(Tenant B Data)]
+    end
+    style E fill:#2d5016,stroke:#4a8c28
+    style F fill:#16305a,stroke:#2868a8
+</pre>
+<p>This layered approach means that even if one layer has a misconfiguration, the
+others provide defense-in-depth. A request that somehow bypasses RBAC still
+cannot read Tenant B's data if it authenticated as Tenant A, because the
+storage layer enforces namespace boundaries independently.</p>
+<h2 id="learning-objectives"><a class="header" href="#learning-objectives">Learning Objectives</a></h2>
+<p>After completing this chapter you will be able to:</p>
+<ol>
+<li><strong>Implement JWT validation middleware</strong> in Axum that rejects unauthenticated
+requests and extracts tenant and role claims.</li>
+<li><strong>Design an RBAC system</strong> with hierarchical roles (admin, editor, viewer)
+and apply permission checks to API endpoints.</li>
+<li><strong>Explain how namespace isolation works</strong> in EdgeQuake's <code>GraphStorage</code>
+trait and why it is the strongest guarantee against cross-tenant data
+leakage.</li>
+<li><strong>Identify common multi-tenancy pitfalls</strong> and how EdgeQuake's architecture
+avoids them.</li>
+</ol>
+<h2 id="chapter-outline"><a class="header" href="#chapter-outline">Chapter Outline</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Section</th><th>Topic</th></tr></thead><tbody>
+<tr><td><a href="ch11-01-jwt-auth.html">11.1 JWT Authentication</a></td><td>Token validation, claim extraction, Axum middleware</td></tr>
+<tr><td><a href="ch11-02-rbac.html">11.2 Role-Based Access Control</a></td><td>Role hierarchy, permission checks, endpoint protection</td></tr>
+<tr><td><a href="ch11-03-tenant-isolation.html">11.3 Namespace-Based Tenant Isolation</a></td><td>Storage-layer isolation, workspace filtering, cleanup</td></tr>
+</tbody></table>
+</div>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<ul>
+<li>Familiarity with Axum middleware and extractors (Chapter 7)</li>
+<li>Understanding of EdgeQuake's <code>GraphStorage</code> trait (Chapter 4)</li>
+<li>Basic knowledge of JWT structure (header, payload, signature)</li>
+</ul>
+<h2 id="key-terminology"><a class="header" href="#key-terminology">Key Terminology</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+<tr><td><strong>JWT</strong></td><td>JSON Web Token -- a compact, URL-safe token format for transmitting claims between parties</td></tr>
+<tr><td><strong>RBAC</strong></td><td>Role-Based Access Control -- permissions determined by a user's assigned role</td></tr>
+<tr><td><strong>Tenant</strong></td><td>An organizational entity (company, team, workspace) whose data must be isolated</td></tr>
+<tr><td><strong>Namespace</strong></td><td>A logical partition in the storage layer that scopes all operations to one tenant</td></tr>
+<tr><td><strong>Claims</strong></td><td>Key-value pairs encoded in a JWT payload (e.g., <code>sub</code>, <code>role</code>, <code>workspace_id</code>)</td></tr>
+</tbody></table>
+</div>
+<h2 id="the-security-threat-model"><a class="header" href="#the-security-threat-model">The Security Threat Model</a></h2>
+<p>Before diving into implementation, consider what you are defending against:</p>
+<div class="table-wrapper"><table><thead><tr><th>Threat</th><th>Mitigation</th></tr></thead><tbody>
+<tr><td>Unauthenticated access</td><td>JWT validation rejects requests without valid tokens</td></tr>
+<tr><td>Privilege escalation</td><td>RBAC enforces least-privilege per role</td></tr>
+<tr><td>Cross-tenant data access</td><td>Namespace isolation partitions storage queries</td></tr>
+<tr><td>Token replay after expiration</td><td>Expiration (<code>exp</code>) claim validation</td></tr>
+<tr><td>Token tampering</td><td>Cryptographic signature verification</td></tr>
+</tbody></table>
+</div>
+<p>Each section in this chapter addresses one or more of these threats. Together,
+they form a defense-in-depth strategy where no single point of failure
+compromises the entire system.</p>
+<hr />
+<p><em>Next: <a href="ch11-01-jwt-auth.html">11.1 JWT Authentication</a></em></p>
+<div class="quiz-placeholder" data-quiz-name="&quot;ch11-security&quot;" data-quiz-questions="{&quot;id&quot;:&quot;ch11-security&quot;,&quot;lesson_id&quot;:&quot;ch11&quot;,&quot;pass_threshold&quot;:0.7,&quot;title&quot;:&quot;Security and Multi-Tenancy&quot;,&quot;questions&quot;:[{&quot;context&quot;:&quot;JWT (JSON Web Token) validation serves as EdgeQuake's authentication mechanism. When a request arrives, the JWT is validated by checking its cryptographic signature (ensuring it was issued by a trusted authority), verifying it has not expired, and extracting claims like user identity, roles, and workspace_id. This information is then used downstream for authorization decisions. Without valid JWT validation, there would be no way to verify who is making a request.\n&quot;,&quot;id&quot;:&quot;d4e5f6a7-4001-4d3b-e001-000000000001&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;To authenticate incoming requests by verifying the token's signature and extracting the caller's identity and permissions&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;To encrypt all data at rest in the storage backends&quot;,&quot;To rate-limit API requests based on the token's expiration time&quot;,&quot;To generate unique session IDs for tracking user activity in logs&quot;],&quot;prompt&quot;:&quot;What is the primary purpose of JWT validation in EdgeQuake's security architecture?&quot;}},{&quot;context&quot;:&quot;RBAC works by assigning users to roles (such as admin, editor, viewer), and each role defines a set of permissions that grant or deny access to specific operations. For example, an admin role might permit create, read, update, and delete operations, while a viewer role might only permit read operations. The role is typically embedded in the JWT claims and evaluated by authorization middleware before the request reaches the handler.\n&quot;,&quot;id&quot;:&quot;d4e5f6a7-4001-4d3b-e001-000000000002&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;The role assigned to the user, which maps to a set of permitted actions on specific resources&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;The IP address range from which the request originates&quot;,&quot;The specific storage backend being used (PostgreSQL vs AWS)&quot;,&quot;The size of the data payload included in the request&quot;],&quot;prompt&quot;:&quot;In EdgeQuake's RBAC (Role-Based Access Control) model, what determines which operations a user can perform?&quot;}},{&quot;context&quot;:&quot;Namespace isolation in EdgeQuake uses a workspace_id that is associated with every piece of stored data — graph nodes, vector embeddings, and key-value entries. When a query is executed, the system automatically applies a workspace_id filter derived from the authenticated user's JWT claims. This ensures that even though all tenants may share the same physical database, each tenant can only see and modify their own data. It is a logical isolation approach rather than physical isolation.\n&quot;,&quot;id&quot;:&quot;d4e5f6a7-4001-4d3b-e001-000000000003&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;By tagging all data with a workspace_id and automatically filtering queries to only return data matching the current tenant's workspace&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;By running separate database instances for each tenant with different connection strings&quot;,&quot;By encrypting each tenant's data with a unique encryption key that only they possess&quot;,&quot;By deploying separate application instances per tenant in isolated VPCs&quot;],&quot;prompt&quot;:&quot;How does namespace isolation prevent one tenant from accessing another tenant's data in EdgeQuake?&quot;}},{&quot;context&quot;:&quot;Cross-tenant data leakage is one of the most serious security vulnerabilities in multi-tenant systems. If a query omits the workspace_id filter, it would operate on the entire dataset across all tenants, potentially exposing confidential data to unauthorized users. This is why EdgeQuake enforces workspace_id filtering at the storage trait level rather than relying on individual query authors to remember it — defense in depth ensures the filter is applied consistently.\n&quot;,&quot;id&quot;:&quot;d4e5f6a7-4001-4d3b-e001-000000000004&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;The query could return data from other tenants, creating a cross-tenant data leak vulnerability&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;The query would fail with a permission denied error from the database&quot;,&quot;The query would return empty results because workspace_id is a required field&quot;,&quot;The query would be automatically corrected by the storage backend's built-in tenant filter&quot;],&quot;prompt&quot;:&quot;What would happen if workspace_id filtering were accidentally omitted from a storage query in a multi-tenant deployment?&quot;}},{&quot;context&quot;:&quot;The workspace_id is a claim embedded in the JWT token that identifies which tenant (workspace) the authenticated user belongs to. Every storage operation uses this workspace_id to scope data access — writes tag data with it, and reads filter by it. This single field is the foundation of EdgeQuake's multi-tenant data isolation strategy.\n&quot;,&quot;id&quot;:&quot;d4e5f6a7-4001-4d3b-e001-000000000005&quot;,&quot;type&quot;:&quot;ShortAnswer&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;workspace_id&quot;},&quot;prompt&quot;:{&quot;prompt&quot;:&quot;What field extracted from the JWT token is used to scope all storage queries to a specific tenant's data?&quot;}}]}" data-quiz-fullscreen="true" data-quiz-cache-answers="true"></div>
+<script type="text/javascript" src="../quiz/quiz-embed.iife.js"></script><link rel="stylesheet" type="text/css" href="../quiz/style.css">
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../exercises/ch10/cdk-stack.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part4-enterprise/ch11-01-jwt-auth.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../exercises/ch10/cdk-stack.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part4-enterprise/ch11-01-jwt-auth.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

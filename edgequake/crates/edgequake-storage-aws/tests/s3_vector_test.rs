@@ -149,8 +149,16 @@ async fn test_s3_vector_persistence() {
         storage.initialize().await.unwrap();
 
         let data = vec![
-            ("p1".to_string(), vec![0.5; 128], json!({"persistent": true})),
-            ("p2".to_string(), vec![0.6; 128], json!({"persistent": true})),
+            (
+                "p1".to_string(),
+                vec![0.5; 128],
+                json!({"persistent": true}),
+            ),
+            (
+                "p2".to_string(),
+                vec![0.6; 128],
+                json!({"persistent": true}),
+            ),
         ];
 
         storage.upsert(&data).await.unwrap();

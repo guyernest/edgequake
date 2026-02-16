@@ -1,0 +1,500 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Contextual Retrieval - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="31-contextual-retrieval"><a class="header" href="#31-contextual-retrieval">3.1 Contextual Retrieval</a></h1>
+<p>A chunk that reads "The policy was amended in Q3 to include these new
+provisions" is nearly meaningless to an embedding model. <em>Which</em> policy?
+<em>Which</em> Q3? <em>What</em> provisions? The chunk has lost the context of its
+source document.</p>
+<p>Contextual retrieval, introduced by Anthropic, addresses this by prepending
+a short document-level summary to each chunk <em>before</em> embedding. The result
+is chunks that carry their own context, dramatically improving retrieval
+relevance.</p>
+<h2 id="the-problem-context-poor-chunks"><a class="header" href="#the-problem-context-poor-chunks">The Problem: Context-Poor Chunks</a></h2>
+<p>When we chunk a document, each chunk loses awareness of the broader
+document it came from. Consider a 50-page legal contract chunked into
+100 pieces. Chunk #47 might read:</p>
+<pre><code class="language-text">The parties agree that Section 12.3 shall be amended to reflect the
+updated indemnification terms as described above. The effective date
+of this amendment is thirty (30) days from execution.
+</code></pre>
+<p>This chunk is relevant to a query about "indemnification amendment dates"
+but the embedding model has no idea which contract, which parties, or
+what the "updated terms" refer to. The embedding will be generic -- and
+may not rank highly for the right queries.</p>
+<h2 id="the-solution-contextual-prefixes"><a class="header" href="#the-solution-contextual-prefixes">The Solution: Contextual Prefixes</a></h2>
+<p>Before embedding, prepend a short context passage that situates the chunk
+within its document:</p>
+<pre><code class="language-text">[Context: This chunk is from the Master Services Agreement between
+Acme Corp and Widget Inc., dated January 2024. This section discusses
+amendments to the indemnification provisions in Article 12.]
+
+The parties agree that Section 12.3 shall be amended to reflect the
+updated indemnification terms as described above. The effective date
+of this amendment is thirty (30) days from execution.
+</code></pre>
+<p>Now the embedding model captures the connection between this chunk and
+queries about "Acme Corp indemnification" or "Widget Inc contract amendments."</p>
+<h2 id="generating-context-prefixes"><a class="header" href="#generating-context-prefixes">Generating Context Prefixes</a></h2>
+<p>The context prefix is generated by sending the full document (or a summary)
+along with each chunk to an LLM, asking it to produce a brief contextual
+description:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Generate a contextual prefix for a chunk using an LLM
+async fn generate_context_prefix(
+    llm: &amp;dyn LlmClient,
+    document_summary: &amp;str,
+    chunk_text: &amp;str,
+) -&gt; Result&lt;String&gt; {
+    let prompt = format!(
+        "&lt;document_summary&gt;\n\
+         {document_summary}\n\
+         &lt;/document_summary&gt;\n\n\
+         &lt;chunk&gt;\n\
+         {chunk_text}\n\
+         &lt;/chunk&gt;\n\n\
+         Please give a short succinct context (2-3 sentences) to situate \
+         this chunk within the overall document. The context should help a \
+         search engine understand what this chunk is about. Respond with \
+         only the context, no preamble."
+    );
+
+    let response = llm.complete(&amp;prompt).await?;
+    Ok(response.trim().to_string())
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="applying-context-to-chunks"><a class="header" href="#applying-context-to-chunks">Applying Context to Chunks</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Prepend contextual prefixes to all chunks from a document
+async fn contextualize_chunks(
+    llm: &amp;dyn LlmClient,
+    document: &amp;Document,
+    chunks: &amp;mut [Chunk],
+) -&gt; Result&lt;()&gt; {
+    // Generate or use existing document summary
+    let summary = if let Some(s) = document.metadata.get("summary") {
+        s.clone()
+    } else {
+        generate_document_summary(llm, &amp;document.content).await?
+    };
+
+    for chunk in chunks.iter_mut() {
+        let prefix = generate_context_prefix(
+            llm,
+            &amp;summary,
+            &amp;chunk.text,
+        ).await?;
+
+        // Prepend the context to the chunk text
+        chunk.text = format!(
+            "[Context: {}]\n\n{}",
+            prefix,
+            chunk.text
+        );
+
+        // Store the prefix separately for debugging
+        chunk.metadata.insert(
+            "context_prefix".to_string(),
+            prefix,
+        );
+    }
+
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="the-architecture"><a class="header" href="#the-architecture">The Architecture</a></h2>
+<pre class="mermaid">flowchart TD
+    D[Document] --&gt; S[Generate Summary]
+    D --&gt; C[Chunk Document]
+    S --&gt; CTX[Generate Context Prefix\nfor each chunk]
+    C --&gt; CTX
+    CTX --&gt; PC[Contextualized Chunks]
+    PC --&gt; E[Embed]
+    E --&gt; VS[(Vector Store)]
+
+    style CTX fill:#f9f,stroke:#333,stroke-width:2px
+</pre>
+<p>The key insight is that contextualization happens <em>once</em> at ingestion time.
+The per-chunk LLM calls are an offline cost, not a query-time cost.</p>
+<h2 id="cost-and-latency-tradeoffs"><a class="header" href="#cost-and-latency-tradeoffs">Cost and Latency Tradeoffs</a></h2>
+<p>Contextual retrieval adds LLM calls during ingestion:</p>
+<div class="table-wrapper"><table><thead><tr><th>Corpus Size</th><th>Chunks</th><th>Context Generation Cost*</th><th>Time**</th></tr></thead><tbody>
+<tr><td>1,000 docs</td><td>~10,000 chunks</td><td>~$2</td><td>~30 min</td></tr>
+<tr><td>10,000 docs</td><td>~100,000 chunks</td><td>~$20</td><td>~5 hours</td></tr>
+<tr><td>100,000 docs</td><td>~1,000,000 chunks</td><td>~$200</td><td>~2 days</td></tr>
+</tbody></table>
+</div>
+<p><em>Using Claude Haiku for context generation at ~$0.25/M input tokens</em>
+*<em>With parallelism; sequential would be much slower</em></p>
+<p>For large corpora, EdgeQuake's batch pipeline amortizes this cost using
+the OpenAI Batch API (50% discount) or parallel Claude API calls with
+rate limiting.</p>
+<h3 id="caching-strategy"><a class="header" href="#caching-strategy">Caching Strategy</a></h3>
+<p>Since context generation is expensive, cache aggressively:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::collections::HashMap;
+
+/// Cache context prefixes to avoid regenerating for unchanged chunks
+struct ContextCache {
+    cache: HashMap&lt;String, String&gt;, // chunk_hash -&gt; context_prefix
+}
+
+impl ContextCache {
+    fn get_or_generate(
+        &amp;mut self,
+        chunk: &amp;Chunk,
+        generate_fn: impl FnOnce(&amp;str) -&gt; Result&lt;String&gt;,
+    ) -&gt; Result&lt;String&gt; {
+        let hash = compute_hash(&amp;chunk.text);
+
+        if let Some(cached) = self.cache.get(&amp;hash) {
+            return Ok(cached.clone());
+        }
+
+        let prefix = generate_fn(&amp;chunk.text)?;
+        self.cache.insert(hash, prefix.clone());
+        Ok(prefix)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="impact-on-retrieval-quality"><a class="header" href="#impact-on-retrieval-quality">Impact on Retrieval Quality</a></h2>
+<p>Anthropic's benchmarks show that contextual retrieval reduces retrieval
+failure rates by up to 49% compared to standard chunking. The impact is
+most pronounced for:</p>
+<ul>
+<li><strong>Ambiguous chunks</strong> that reference "it", "this", "the above" without
+antecedents</li>
+<li><strong>Domain-specific documents</strong> where the same terms have different meanings
+in different contexts</li>
+<li><strong>Multi-section documents</strong> where each section builds on earlier context</li>
+</ul>
+<h3 id="when-contextual-retrieval-helps-most"><a class="header" href="#when-contextual-retrieval-helps-most">When Contextual Retrieval Helps Most</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Document Type</th><th>Improvement</th><th>Why</th></tr></thead><tbody>
+<tr><td>Legal contracts</td><td>High</td><td>Heavy cross-referencing between sections</td></tr>
+<tr><td>Technical manuals</td><td>Medium</td><td>Sections often self-contained</td></tr>
+<tr><td>Chat transcripts</td><td>High</td><td>Pronouns and references lose meaning out of context</td></tr>
+<tr><td>API documentation</td><td>Low</td><td>Each endpoint is typically self-contained</td></tr>
+<tr><td>Financial reports</td><td>High</td><td>Numbers and trends meaningless without entity context</td></tr>
+</tbody></table>
+</div>
+<h2 id="combining-with-other-techniques"><a class="header" href="#combining-with-other-techniques">Combining with Other Techniques</a></h2>
+<p>Contextual retrieval is <em>complementary</em> to the other techniques in this
+chapter. It improves the quality of the embeddings themselves, while
+hybrid search and reranking improve how those embeddings are searched and
+ranked:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Full pipeline: contextual retrieval + hybrid search + reranking
+async fn advanced_retrieval(
+    query: &amp;str,
+    vector_store: &amp;VectorStore,  // Contains contextualized embeddings
+    bm25_index: &amp;Bm25Index,      // Contains contextualized text
+    reranker: &amp;dyn Reranker,
+) -&gt; Vec&lt;SearchResult&gt; {
+    // Step 1: Dense retrieval over contextualized embeddings
+    let dense_results = vector_store.search(query, 20).await;
+
+    // Step 2: Lexical retrieval over contextualized text
+    let lexical_results = bm25_index.search(query, 20);
+
+    // Step 3: Fuse results (covered in Section 3.2)
+    let fused = reciprocal_rank_fusion(&amp;dense_results, &amp;lexical_results, 20);
+
+    // Step 4: Rerank (covered in Section 3.3)
+    let reranked = reranker.rerank(query, &amp;fused, 5).await;
+
+    reranked
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="implementation-tips"><a class="header" href="#implementation-tips">Implementation Tips</a></h2>
+<ol>
+<li>
+<p><strong>Use a fast, cheap model for context generation.</strong> Claude Haiku or
+GPT-4o-mini are ideal -- the context prefix does not need to be
+literary, just informative.</p>
+</li>
+<li>
+<p><strong>Keep prefixes short.</strong> 2--3 sentences (50--80 tokens). Longer
+prefixes dilute the embedding signal from the actual chunk content.</p>
+</li>
+<li>
+<p><strong>Include entity names.</strong> The most valuable context is <em>who</em> and
+<em>what</em> -- specific names, dates, and identifiers that the chunk
+references implicitly.</p>
+</li>
+<li>
+<p><strong>Store the prefix as metadata.</strong> At retrieval time you may want to
+display the original chunk text without the prefix, or use the prefix
+for additional filtering.</p>
+</li>
+</ol>
+<h2 id="summary"><a class="header" href="#summary">Summary</a></h2>
+<p>Contextual retrieval prepends a document-level context summary to each
+chunk before embedding, giving the embedding model the information it
+needs to produce semantically rich vectors. It is an offline, ingestion-time
+optimization that dramatically improves retrieval relevance -- especially
+for documents with heavy cross-referencing or ambiguous pronoun usage.
+Combined with hybrid search and reranking, it forms the foundation of
+production-grade retrieval.</p>
+<hr />
+<p><em>Next: <a href="ch03-02-hybrid-search.html">3.2 Hybrid Search</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part1-foundations/ch03-advanced-retrieval.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part1-foundations/ch03-02-hybrid-search.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part1-foundations/ch03-advanced-retrieval.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part1-foundations/ch03-02-hybrid-search.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,520 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>PostgreSQL with pgvector and AGE - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="92-postgresql-with-pgvector-and-age"><a class="header" href="#92-postgresql-with-pgvector-and-age">9.2 PostgreSQL with pgvector and AGE</a></h2>
+<p>One of EdgeQuake's most practical design decisions is running both vector search
+and graph queries inside a single PostgreSQL instance. This section explains
+how pgvector and Apache AGE coexist, what SQL schemas they create, and how
+EdgeQuake's storage adapters interact with each.</p>
+<h3 id="two-extensions-one-database"><a class="header" href="#two-extensions-one-database">Two Extensions, One Database</a></h3>
+<pre class="mermaid">graph TD
+    subgraph &quot;PostgreSQL 16&quot;
+        direction TB
+        EXT1[pgvector Extension&lt;br/&gt;vector type + HNSW/IVFFlat indexes]
+        EXT2[Apache AGE Extension&lt;br/&gt;ag_catalog schema + Cypher engine]
+        STD[Standard SQL&lt;br/&gt;JSONB tables for KV storage]
+    end
+
+    PGV[PgVectorStorage] --&gt; EXT1
+    AGE[PostgresAGEGraphStorage] --&gt; EXT2
+    KV[PostgresKVStorage] --&gt; STD
+</pre>
+<p>Each extension operates in its own namespace:</p>
+<div class="table-wrapper"><table><thead><tr><th>Extension</th><th>Schema</th><th>Key Objects</th></tr></thead><tbody>
+<tr><td>pgvector</td><td><code>public</code></td><td><code>vector</code> type, <code>&lt;=&gt;</code> operator, <code>hnsw</code>/<code>ivfflat</code> index types</td></tr>
+<tr><td>Apache AGE</td><td><code>ag_catalog</code></td><td><code>cypher()</code> function, <code>agtype</code> type, graph catalog</td></tr>
+<tr><td>Standard</td><td><code>public</code></td><td>KV tables, migration tracking</td></tr>
+</tbody></table>
+</div>
+<h3 id="pgvector-vector-similarity-search"><a class="header" href="#pgvector-vector-similarity-search">pgvector: Vector Similarity Search</a></h3>
+<p>pgvector adds a <code>vector(N)</code> column type to PostgreSQL, where <code>N</code> is the
+dimensionality. It also provides specialized index types for approximate
+nearest neighbor (ANN) search.</p>
+<h4 id="creating-the-extension"><a class="header" href="#creating-the-extension">Creating the Extension</a></h4>
+<pre><code class="language-sql">CREATE EXTENSION IF NOT EXISTS vector;
+</code></pre>
+<p>This is a one-line operation that makes the <code>vector</code> type available across
+all databases in the instance.</p>
+<h4 id="table-schema-for-vectors"><a class="header" href="#table-schema-for-vectors">Table Schema for Vectors</a></h4>
+<p>EdgeQuake's <code>PgVectorStorage</code> creates tables via SQLx migrations:</p>
+<pre><code class="language-sql">CREATE TABLE IF NOT EXISTS eq_default_vectors (
+    id TEXT PRIMARY KEY,
+    embedding vector(1536) NOT NULL,
+    metadata JSONB DEFAULT '{}',
+    workspace_id UUID,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+</code></pre>
+<p>The <code>vector(1536)</code> column stores 1536-dimensional float32 embeddings. The
+dimension is fixed at table creation time -- attempting to insert a vector
+with a different dimension raises a runtime error.</p>
+<h4 id="hnsw-index"><a class="header" href="#hnsw-index">HNSW Index</a></h4>
+<p>EdgeQuake defaults to HNSW (Hierarchical Navigable Small World) indexing,
+which provides excellent recall with sub-linear query time:</p>
+<pre><code class="language-sql">CREATE INDEX IF NOT EXISTS eq_default_vectors_hnsw_idx
+    ON eq_default_vectors
+    USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Default</th><th>Effect</th></tr></thead><tbody>
+<tr><td><code>m</code></td><td>16</td><td>Maximum connections per node. Higher = better recall, more memory</td></tr>
+<tr><td><code>ef_construction</code></td><td>64</td><td>Build-time search width. Higher = better index quality, slower build</td></tr>
+</tbody></table>
+</div>
+<p>At query time, pgvector uses a separate <code>ef_search</code> parameter (default 40)
+that controls recall vs speed tradeoff:</p>
+<pre><code class="language-sql">-- Increase for better recall at the cost of latency
+SET hnsw.ef_search = 100;
+</code></pre>
+<h4 id="similarity-queries"><a class="header" href="#similarity-queries">Similarity Queries</a></h4>
+<p>pgvector provides three distance operators:</p>
+<div class="table-wrapper"><table><thead><tr><th>Operator</th><th>Distance</th><th>Use Case</th></tr></thead><tbody>
+<tr><td><code>&lt;=&gt;</code></td><td>Cosine</td><td>Normalized embeddings (most common)</td></tr>
+<tr><td><code>&lt;-&gt;</code></td><td>L2 (Euclidean)</td><td>Raw embeddings</td></tr>
+<tr><td><code>&lt;#&gt;</code></td><td>Inner product</td><td>When embeddings are not normalized</td></tr>
+</tbody></table>
+</div>
+<p>EdgeQuake uses cosine distance exclusively:</p>
+<pre><code class="language-sql">SELECT id,
+       1 - (embedding &lt;=&gt; $1::vector) AS score,
+       metadata
+FROM eq_default_vectors
+WHERE workspace_id = $2
+ORDER BY embedding &lt;=&gt; $1::vector
+LIMIT $3;
+</code></pre>
+<p>The <code>1 - distance</code> conversion produces a similarity score where 1.0 is
+identical and -1.0 is maximally dissimilar.</p>
+<h3 id="apache-age-graph-queries"><a class="header" href="#apache-age-graph-queries">Apache AGE: Graph Queries</a></h3>
+<p>Apache AGE (A Graph Extension) adds graph database capabilities to PostgreSQL,
+supporting the Cypher query language used by Neo4j.</p>
+<h4 id="creating-the-extension-1"><a class="header" href="#creating-the-extension-1">Creating the Extension</a></h4>
+<pre><code class="language-sql">CREATE EXTENSION IF NOT EXISTS age CASCADE;
+
+-- AGE requires its catalog in the search path
+SET search_path = ag_catalog, "$user", public;
+</code></pre>
+<p>The <code>CASCADE</code> option installs any dependencies AGE needs. After installation,
+the <code>ag_catalog</code> schema must be added to the search path for Cypher functions
+to be accessible.</p>
+<h4 id="graph-structure"><a class="header" href="#graph-structure">Graph Structure</a></h4>
+<p>AGE stores graphs in a catalog. Each graph has a name and contains vertices
+and edges:</p>
+<pre><code class="language-sql">-- Create a graph namespace
+SELECT create_graph('edgequake');
+
+-- Query the graph using Cypher
+SELECT * FROM cypher('edgequake', $$
+    MATCH (n:Entity {id: 'ALICE'})-[r]-&gt;(m:Entity)
+    RETURN n.id, type(r), m.id
+$$) as (source agtype, rel_type agtype, target agtype);
+</code></pre>
+<h4 id="vertex-and-edge-storage"><a class="header" href="#vertex-and-edge-storage">Vertex and Edge Storage</a></h4>
+<p>Under the hood, AGE stores vertices and edges in PostgreSQL tables within the
+<code>ag_catalog</code> schema:</p>
+<pre><code class="language-text">ag_catalog.edgequake._ag_label_vertex  -- All vertices
+ag_catalog.edgequake._ag_label_edge    -- All edges
+ag_catalog.edgequake."Entity"          -- Vertex label table
+ag_catalog.edgequake."relates_to"      -- Edge label table
+</code></pre>
+<p>EdgeQuake uses a single vertex label (<code>Entity</code>) and a single edge label
+(<code>relates_to</code>), with <code>entity_type</code> and <code>relationship_type</code> stored as
+properties. This simplifies the schema while maintaining full expressiveness
+through the property graph model.</p>
+<h4 id="cypher-query-examples"><a class="header" href="#cypher-query-examples">Cypher Query Examples</a></h4>
+<p>Creating entities and relationships:</p>
+<pre><code class="language-sql">-- Upsert a node
+SELECT * FROM cypher('edgequake', $$
+    MERGE (n:Entity {id: 'ALICE'})
+    SET n.entity_type = 'PERSON',
+        n.description = 'A researcher studying graph databases',
+        n.namespace = 'workspace-1'
+    RETURN n
+$$) as (v agtype);
+
+-- Create a relationship
+SELECT * FROM cypher('edgequake', $$
+    MATCH (a:Entity {id: 'ALICE'}), (b:Entity {id: 'GRAPH_DB_LAB'})
+    MERGE (a)-[r:relates_to]-&gt;(b)
+    SET r.description = 'works at',
+        r.weight = 0.9,
+        r.namespace = 'workspace-1'
+    RETURN r
+$$) as (e agtype);
+</code></pre>
+<p>Graph traversal:</p>
+<pre><code class="language-sql">-- Find 2-hop neighbors
+SELECT * FROM cypher('edgequake', $$
+    MATCH (start:Entity {id: 'ALICE'})-[*1..2]-(neighbor:Entity)
+    WHERE neighbor.namespace = 'workspace-1'
+    RETURN DISTINCT neighbor.id, neighbor.entity_type
+$$) as (id agtype, entity_type agtype);
+</code></pre>
+<h3 id="how-both-extensions-coexist"><a class="header" href="#how-both-extensions-coexist">How Both Extensions Coexist</a></h3>
+<p>pgvector and Apache AGE are independent PostgreSQL extensions that share the
+same database instance without interference:</p>
+<pre class="mermaid">graph LR
+    subgraph &quot;public schema&quot;
+        VT[eq_default_vectors&lt;br/&gt;vector columns + HNSW]
+        KVT[eq_default_kv&lt;br/&gt;JSONB columns]
+    end
+
+    subgraph &quot;ag_catalog schema&quot;
+        GC[Graph catalog]
+        GT[Vertex/edge tables]
+    end
+
+    VT ~~~ GC
+</pre>
+<p>Key points about coexistence:</p>
+<ol>
+<li><strong>No schema conflicts</strong> -- pgvector operates in the <code>public</code> schema while
+AGE uses <code>ag_catalog</code>.</li>
+<li><strong>Shared connection pool</strong> -- both extensions use the same <code>sqlx::PgPool</code>.
+EdgeQuake's <code>PostgresPool</code> sets the search path to include both schemas.</li>
+<li><strong>Independent indexes</strong> -- HNSW indexes on vector columns do not interfere
+with AGE's graph indexes.</li>
+<li><strong>Single backup</strong> -- a standard <code>pg_dump</code> captures everything: vectors,
+graph data, and KV tables.</li>
+</ol>
+<h4 id="the-search-path"><a class="header" href="#the-search-path">The Search Path</a></h4>
+<p>The search path must include <code>ag_catalog</code> for Cypher queries to work:</p>
+<pre><code class="language-sql">SET search_path = ag_catalog, "$user", public;
+</code></pre>
+<p>EdgeQuake's <code>PostgresPool</code> sets this during initialization:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn setup_extensions(&amp;self, pool: &amp;PgPool) -&gt; Result&lt;()&gt; {
+    sqlx::query("CREATE EXTENSION IF NOT EXISTS vector")
+        .execute(pool).await?;
+
+    match sqlx::query("CREATE EXTENSION IF NOT EXISTS age CASCADE")
+        .execute(pool).await
+    {
+        Ok(_) =&gt; {
+            sqlx::query("SET search_path = ag_catalog, \"$user\", public")
+                .execute(pool).await?;
+        }
+        Err(e) =&gt; {
+            tracing::warn!("Apache AGE not available: {}", e);
+            // Graceful degradation -- graph features use fallback
+        }
+    }
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="schema-setup-sql"><a class="header" href="#schema-setup-sql">Schema Setup SQL</a></h3>
+<p>Here is the complete initialization script that runs on first database creation:</p>
+<pre><code class="language-sql">-- 1. Set default search path for the application user
+ALTER USER edgequake SET search_path TO public;
+
+-- 2. UUID generation (used for workspace IDs)
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 3. Vector similarity search
+CREATE EXTENSION IF NOT EXISTS "vector";
+
+-- 4. Graph database (optional -- graceful fallback if unavailable)
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS "age" CASCADE;
+    RAISE NOTICE 'Apache AGE extension enabled successfully';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Apache AGE not available: %. Using fallback.', SQLERRM;
+END $$;
+</code></pre>
+<p>Table creation is handled separately by SQLx migrations (not by this init
+script), ensuring schema versioning and rollback support.</p>
+<h3 id="verifying-the-setup"><a class="header" href="#verifying-the-setup">Verifying the Setup</a></h3>
+<p>After starting the Docker Compose stack, verify both extensions are working:</p>
+<pre><code class="language-bash"># Connect to the database
+docker exec -it edgequake-postgres psql -U edgequake -d edgequake
+
+# Check installed extensions
+edgequake=# \dx
+                     List of installed extensions
+   Name   | Version |   Schema   |         Description
+----------+---------+------------+-----------------------------
+ age      | 1.6.0   | ag_catalog | Apache AGE graph extension
+ plpgsql  | 1.0     | pg_catalog | PL/pgSQL procedural language
+ uuid-ossp| 1.1     | public     | UUID generation functions
+ vector   | 0.7.4   | public     | vector data type and ivfflat
+                                    and hnsw access methods
+
+# Test pgvector
+edgequake=# SELECT '[1,2,3]'::vector &lt;=&gt; '[1,2,4]'::vector AS distance;
+     distance
+------------------
+ 0.00853986601633
+
+# Test Apache AGE
+edgequake=# SELECT create_graph('test_graph');
+edgequake=# SELECT * FROM cypher('test_graph', $$ CREATE (n:Test {name: 'hello'}) RETURN n $$) as (v agtype);
+</code></pre>
+<h3 id="summary"><a class="header" href="#summary">Summary</a></h3>
+<p>pgvector and Apache AGE coexist harmoniously in a single PostgreSQL instance.
+pgvector provides the <code>vector</code> type and HNSW indexes for similarity search in
+the <code>public</code> schema, while AGE adds Cypher-based graph queries in the
+<code>ag_catalog</code> schema. EdgeQuake's connection pool initialization enables both
+extensions and sets the correct search path. A single <code>pg_dump</code> backs up
+everything, and a single connection pool serves all storage adapters.</p>
+<hr />
+<p><em>Next: <a href="ch09-03-llm-providers.html">9.3 LLM Provider Configuration</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part3-production/ch09-01-docker-compose.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part3-production/ch09-03-llm-providers.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part3-production/ch09-01-docker-compose.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part3-production/ch09-03-llm-providers.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

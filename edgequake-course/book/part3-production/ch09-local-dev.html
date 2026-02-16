@@ -1,0 +1,348 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Local Development Environment - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="chapter-9-local-development-environment"><a class="header" href="#chapter-9-local-development-environment">Chapter 9: Local Development Environment</a></h1>
+<blockquote>
+<p><strong>"If it takes more than <code>make dev</code> to get started, your developer experience
+needs work."</strong></p>
+</blockquote>
+<p>A production knowledge base system has real dependencies: a database with graph
+and vector extensions, an LLM provider for extraction and embedding, and
+configuration glue to wire it all together. Getting these running locally --
+reproducibly, on every developer's machine -- is a prerequisite for effective
+development.</p>
+<p>In this chapter we build a complete local development environment for EdgeQuake.
+You will set up a Docker Compose stack with PostgreSQL (including pgvector and
+Apache AGE), configure the database extensions for graph and vector operations,
+and wire up LLM providers for both cloud and fully-local inference.</p>
+<h2 id="learning-objectives"><a class="header" href="#learning-objectives">Learning Objectives</a></h2>
+<p>After completing this chapter you will be able to:</p>
+<ol>
+<li><strong>Launch the full local stack</strong> with a single <code>docker compose up</code> command
+that provides PostgreSQL with pgvector and Apache AGE extensions.</li>
+<li><strong>Understand the PostgreSQL extension architecture</strong> -- how pgvector and
+Apache AGE coexist in a single instance and what SQL schemas each creates.</li>
+<li><strong>Configure LLM providers</strong> -- switch between OpenAI API and local Ollama
+models using environment variables, enabling offline development.</li>
+<li><strong>Run integration tests</strong> against the local stack with realistic storage
+backends.</li>
+</ol>
+<h2 id="chapter-outline"><a class="header" href="#chapter-outline">Chapter Outline</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Section</th><th>Topic</th></tr></thead><tbody>
+<tr><td><a href="ch09-01-docker-compose.html">9.1 Docker Compose Stack</a></td><td>Service definitions, volumes, health checks, networking</td></tr>
+<tr><td><a href="ch09-02-pgvector-age.html">9.2 PostgreSQL with pgvector and AGE</a></td><td>Extension installation, schema setup, coexistence</td></tr>
+<tr><td><a href="ch09-03-llm-providers.html">9.3 LLM Provider Configuration</a></td><td>OpenAI, Ollama, environment variables, runtime switching</td></tr>
+</tbody></table>
+</div>
+<h2 id="key-terminology"><a class="header" href="#key-terminology">Key Terminology</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+<tr><td><strong>pgvector</strong></td><td>PostgreSQL extension adding vector column types and similarity search indexes</td></tr>
+<tr><td><strong>Apache AGE</strong></td><td>PostgreSQL extension adding graph database capabilities with Cypher query support</td></tr>
+<tr><td><strong>Docker Compose</strong></td><td>Tool for defining multi-container Docker applications via YAML</td></tr>
+<tr><td><strong>Health check</strong></td><td>A periodic probe that verifies a container is ready to accept connections</td></tr>
+<tr><td><strong>Ollama</strong></td><td>Local inference server that runs open-source LLMs on consumer hardware</td></tr>
+</tbody></table>
+</div>
+<h2 id="the-local-development-stack"><a class="header" href="#the-local-development-stack">The Local Development Stack</a></h2>
+<pre class="mermaid">graph TB
+    subgraph &quot;Docker Compose&quot;
+        PG[PostgreSQL 16&lt;br/&gt;+ pgvector 0.7.4&lt;br/&gt;+ Apache AGE 1.6]
+        EQ[EdgeQuake API&lt;br/&gt;Rust / Axum]
+        FE[Frontend&lt;br/&gt;Next.js]
+    end
+
+    DEV[Developer] --&gt; FE
+    FE --&gt; EQ
+    EQ --&gt; PG
+
+    subgraph &quot;Host Machine&quot;
+        LLM{LLM Provider}
+        LLM --&gt;|Cloud| OAI[OpenAI API]
+        LLM --&gt;|Local| OLL[Ollama]
+    end
+
+    EQ --&gt; LLM
+</pre>
+<p>The stack has three containers (PostgreSQL, the EdgeQuake API, and the
+frontend) plus an LLM provider that runs on the host. This separation keeps
+the Docker configuration simple while giving you flexibility to choose between
+cloud and local inference.</p>
+<h2 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h2>
+<p>Before we dive into the Docker Compose file, here are the environment variables
+that configure the stack:</p>
+<div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Default</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>POSTGRES_PASSWORD</code></td><td><code>edgequake_secret</code></td><td>Database password</td></tr>
+<tr><td><code>POSTGRES_PORT</code></td><td><code>5432</code></td><td>Host-mapped PostgreSQL port</td></tr>
+<tr><td><code>EDGEQUAKE_PORT</code></td><td><code>8080</code></td><td>Host-mapped API port</td></tr>
+<tr><td><code>FRONTEND_PORT</code></td><td><code>3000</code></td><td>Host-mapped frontend port</td></tr>
+<tr><td><code>OPENAI_API_KEY</code></td><td>(none)</td><td>OpenAI API key for embeddings and extraction</td></tr>
+<tr><td><code>OLLAMA_HOST</code></td><td><code>http://localhost:11434</code></td><td>Ollama server URL for local models</td></tr>
+<tr><td><code>DATABASE_URL</code></td><td>(auto)</td><td>Full PostgreSQL connection string</td></tr>
+</tbody></table>
+</div>
+<p>Create a <code>.env</code> file at the project root to override defaults:</p>
+<pre><code class="language-bash"># .env
+POSTGRES_PASSWORD=my_secure_password
+OPENAI_API_KEY=sk-...
+</code></pre>
+<p>Let us start by examining the Docker Compose configuration.</p>
+<hr />
+<p><em>Next: <a href="ch09-01-docker-compose.html">9.1 Docker Compose Stack</a></em></p>
+<div class="quiz-placeholder" data-quiz-name="&quot;ch09-local-dev&quot;" data-quiz-questions="{&quot;id&quot;:&quot;ch09-local-dev&quot;,&quot;lesson_id&quot;:&quot;ch09&quot;,&quot;pass_threshold&quot;:0.7,&quot;title&quot;:&quot;Local Development Environment&quot;,&quot;questions&quot;:[{&quot;context&quot;:&quot;Docker Compose defines and runs the external services that EdgeQuake depends on — primarily PostgreSQL with the pgvector and Apache AGE extensions pre-installed. This gives developers a one-command setup to spin up a local environment that mirrors the storage capabilities needed for development and integration testing, without manually installing database extensions or managing service lifecycle.\n&quot;,&quot;id&quot;:&quot;b2c3d4e5-2001-4b1f-c001-000000000001&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;It orchestrates dependent services like PostgreSQL with pgvector and AGE extensions so developers can run the full stack locally&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;It compiles the Rust codebase inside isolated containers for reproducible builds&quot;,&quot;It deploys the application to a local Kubernetes cluster for production-like testing&quot;,&quot;It replaces the need for the Makefile by orchestrating build and test commands&quot;],&quot;prompt&quot;:&quot;What role does Docker Compose play in EdgeQuake's local development workflow?&quot;}},{&quot;context&quot;:&quot;The pgvector extension adds a vector column type and similarity search operators (cosine, L2, inner product) to PostgreSQL. This allows EdgeQuake's PostgreSQL-based VectorStorage implementation to store embedding vectors generated during the ingestion pipeline and perform nearest-neighbor queries for retrieval-augmented generation. Without pgvector, PostgreSQL has no native capability to handle vector operations.\n&quot;,&quot;id&quot;:&quot;b2c3d4e5-2001-4b1f-c001-000000000002&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;To enable storage and similarity search of high-dimensional embedding vectors directly in PostgreSQL&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;To enable full-text search indexing on document content&quot;,&quot;To provide JSON document storage capabilities for unstructured data&quot;,&quot;To add row-level security policies for multi-tenant isolation&quot;],&quot;prompt&quot;:&quot;Why is the pgvector extension installed in the local PostgreSQL container?&quot;}},{&quot;context&quot;:&quot;Apache AGE (A Graph Extension) transforms PostgreSQL into a graph database by adding support for openCypher graph queries. This allows the PostgreSQL-backed GraphStorage implementation to create nodes, edges, and perform graph traversals — the same operations that Neptune handles in AWS. The name AGE stands for Apache Graph Extension, not data aging or expiration.\n&quot;,&quot;id&quot;:&quot;b2c3d4e5-2001-4b1f-c001-000000000003&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;OpenCypher-compatible graph query capabilities for traversing entity-relationship data&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;Time-series data storage for tracking ingestion pipeline metrics over time&quot;,&quot;Automatic data aging and expiration policies for old graph data&quot;,&quot;Foreign data wrapper support for connecting to remote graph databases&quot;],&quot;prompt&quot;:&quot;What does the Apache AGE extension add to PostgreSQL in EdgeQuake's local setup?&quot;}},{&quot;context&quot;:&quot;EdgeQuake uses environment variables to select the LLM provider and supply credentials at runtime. This means a developer can switch from OpenAI to Anthropic (or another supported provider) simply by changing environment variables — no recompilation or code changes needed. This runtime configuration approach is a standard twelve-factor app practice that keeps secrets out of code and enables flexible deployment.\n&quot;,&quot;id&quot;:&quot;b2c3d4e5-2001-4b1f-c001-000000000004&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;Through environment variables that configure the LLM provider and API key at runtime without code changes&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;By recompiling the application with a different Cargo feature flag for each provider&quot;,&quot;By editing a hardcoded provider selection in the source code and rebuilding&quot;,&quot;By deploying separate instances of the application, one per provider&quot;],&quot;prompt&quot;:&quot;How does EdgeQuake support switching between different LLM providers (e.g., OpenAI, Anthropic) during local development?&quot;}},{&quot;context&quot;:&quot;SQLx performs compile-time query verification by connecting to a live database during cargo build. When no PostgreSQL instance is available (such as in CI/CD pipelines or fresh development setups), setting SQLX_OFFLINE=true tells SQLx to use pre-cached query metadata from .sqlx/ files instead. Without this, the build will fail trying to connect to a database that does not exist.\n&quot;,&quot;id&quot;:&quot;b2c3d4e5-2001-4b1f-c001-000000000005&quot;,&quot;type&quot;:&quot;ShortAnswer&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;SQLX_OFFLINE&quot;},&quot;prompt&quot;:{&quot;prompt&quot;:&quot;What environment variable must be set to 'true' when building EdgeQuake without a running PostgreSQL instance, enabling SQLx to use cached query metadata?&quot;}}]}" data-quiz-fullscreen="true" data-quiz-cache-answers="true"></div>
+<script type="text/javascript" src="../quiz/quiz-embed.iife.js"></script><link rel="stylesheet" type="text/css" href="../quiz/style.css">
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../exercises/ch08/file-kv-storage.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part3-production/ch09-01-docker-compose.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../exercises/ch08/file-kv-storage.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part3-production/ch09-01-docker-compose.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

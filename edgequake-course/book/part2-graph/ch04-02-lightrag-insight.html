@@ -1,0 +1,460 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>The LightRAG Insight - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="42-the-lightrag-insight"><a class="header" href="#42-the-lightrag-insight">4.2 The LightRAG Insight</a></h2>
+<p>The <strong>LightRAG</strong> paper (2024) introduced a deceptively simple idea that
+dramatically improves retrieval quality: instead of searching the
+knowledge graph at a single level, search at <strong>two levels</strong> -- entities
+for local context and relationships for global themes -- then combine the
+results.</p>
+<p>This section explains why this dual-level approach works, how it enables
+multi-hop reasoning that pure vector search cannot achieve, and how
+EdgeQuake implements it.</p>
+<h3 id="the-problem-with-single-level-retrieval"><a class="header" href="#the-problem-with-single-level-retrieval">The Problem with Single-Level Retrieval</a></h3>
+<p>Consider a knowledge base about climate science. A user asks:</p>
+<blockquote>
+<p>"How do ocean currents affect global temperature regulation?"</p>
+</blockquote>
+<p><strong>Pure vector search</strong> retrieves chunks containing similar terms. It
+might find paragraphs about the Gulf Stream, thermohaline circulation,
+and heat capacity -- but each chunk is an isolated fragment. The LLM must
+stitch the narrative together from disconnected pieces.</p>
+<p><strong>Entity-only graph search</strong> finds nodes like <code>GULF_STREAM</code>,
+<code>THERMOHALINE_CIRCULATION</code>, <code>OCEAN_HEAT_CAPACITY</code> and their immediate
+neighbors. This gives structured local context but misses the broader
+thematic connections.</p>
+<p><strong>Relationship-only search</strong> finds edges with keywords like "temperature
+regulation" and "climate feedback" -- broad themes that connect multiple
+entities. This captures the big picture but may lack specific factual
+grounding.</p>
+<p><strong>LightRAG's insight</strong>: combine both. Use <strong>low-level keywords</strong> (entity
+names) for local, specific retrieval and <strong>high-level keywords</strong> (themes
+and concepts) for global, thematic retrieval.</p>
+<h3 id="dual-level-retrieval-architecture"><a class="header" href="#dual-level-retrieval-architecture">Dual-Level Retrieval Architecture</a></h3>
+<p>The following diagram shows how a single query produces two parallel
+retrieval paths:</p>
+<pre class="mermaid">flowchart TB
+    Q[&quot;User Query:&lt;br/&gt;'How do ocean currents affect&lt;br/&gt;global temperature regulation?'&quot;]
+
+    Q --&gt; KE[&quot;Keyword Extraction (LLM)&quot;]
+
+    KE --&gt; HL[&quot;High-Level Keywords&lt;br/&gt;(themes, concepts)&quot;]
+    KE --&gt; LL[&quot;Low-Level Keywords&lt;br/&gt;(entities, specifics)&quot;]
+
+    HL --&gt; |&quot;'climate regulation',&lt;br/&gt;'ocean-atmosphere coupling'&quot;| GS[&quot;Global Search&lt;br/&gt;(Relationship Vectors)&quot;]
+    LL --&gt; |&quot;'Gulf Stream',&lt;br/&gt;'thermohaline circulation'&quot;| LS[&quot;Local Search&lt;br/&gt;(Entity Vectors)&quot;]
+
+    GS --&gt; RC[&quot;Relationship Context&lt;br/&gt;- Gulf Stream REGULATES Global Temps&lt;br/&gt;- Thermohaline DRIVES Heat Distribution&lt;br/&gt;- CO2 AMPLIFIES Ocean Warming&quot;]
+
+    LS --&gt; EC[&quot;Entity Context&lt;br/&gt;- GULF_STREAM: warm current in Atlantic...&lt;br/&gt;- THERMOHALINE_CIRCULATION: density-driven...&lt;br/&gt;- OCEAN_HEAT_CAPACITY: stores 93% of...&quot;]
+
+    RC --&gt; CB[&quot;Context Builder&quot;]
+    EC --&gt; CB
+
+    CB --&gt; LLM[&quot;LLM Generation&quot;]
+    LLM --&gt; A[&quot;Comprehensive Answer&quot;]
+</pre>
+<p>The key insight: <strong>different keyword types retrieve different kinds of
+context, and the combination is more powerful than either alone</strong>.</p>
+<h3 id="why-pure-vector-search-fails-at-multi-hop"><a class="header" href="#why-pure-vector-search-fails-at-multi-hop">Why Pure Vector Search Fails at Multi-Hop</a></h3>
+<p>Multi-hop reasoning requires connecting information across a chain of
+entities. Consider this three-hop question:</p>
+<blockquote>
+<p>"Which organizations funded the research that led to the discovery of
+the Higgs boson?"</p>
+</blockquote>
+<p>The answer chain is:</p>
+<pre class="mermaid">graph LR
+    CERN[&quot;CERN&quot;] --&gt;|&quot;operated&quot;| LHC[&quot;Large Hadron Collider&quot;]
+    LHC --&gt;|&quot;detected&quot;| HB[&quot;Higgs Boson&quot;]
+    EU[&quot;European Union&quot;] --&gt;|&quot;funded&quot;| CERN
+    US_DOE[&quot;US Dept of Energy&quot;] --&gt;|&quot;contributed to&quot;| CERN
+    JAPAN[&quot;Japan (KEK)&quot;&quot;] --&gt;|&quot;contributed to&quot;| LHC
+</pre>
+<p>Pure vector search with the query "organizations funded Higgs boson
+discovery" will retrieve chunks about the Higgs boson and possibly CERN,
+but is unlikely to surface the funding relationships between EU/DOE/KEK
+and CERN -- those details live in entirely different documents.</p>
+<p>Graph traversal, starting from <code>HIGGS_BOSON</code> and walking edges backward,
+discovers the full funding chain in a single operation:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Pseudocode: graph traversal for multi-hop reasoning
+let higgs = graph.get_node("HIGGS_BOSON").await?;
+let neighbors_depth_1 = graph.get_neighbors("HIGGS_BOSON", 1).await?;
+// Returns: [LHC, ATLAS_EXPERIMENT, CMS_EXPERIMENT, ...]
+
+let neighbors_depth_2 = graph.get_neighbors("HIGGS_BOSON", 2).await?;
+// Returns: [LHC, CERN, ATLAS, CMS, EU, US_DOE, KEK, ...]
+
+let subgraph = graph.get_knowledge_graph("HIGGS_BOSON", 3, 50).await?;
+// Returns full subgraph with nodes AND edges (including funding relationships)
+<span class="boring">}</span></code></pre></pre>
+<h3 id="local-mode-vs-global-mode"><a class="header" href="#local-mode-vs-global-mode">Local Mode vs Global Mode</a></h3>
+<p>EdgeQuake implements LightRAG's dual-level retrieval as two distinct
+query modes that can be used independently or combined:</p>
+<h4 id="local-mode-entity-centric"><a class="header" href="#local-mode-entity-centric">Local Mode (Entity-Centric)</a></h4>
+<p>Local mode answers questions about <strong>specific entities and their
+immediate context</strong>.</p>
+<ol>
+<li>Extract <strong>low-level keywords</strong> from the query (entity names, specific
+terms).</li>
+<li>Search the <strong>entity vector store</strong> using these keywords.</li>
+<li>For each matched entity, fetch its <strong>graph neighborhood</strong> (connected
+nodes and edges).</li>
+<li>Build context from entity descriptions and neighbor descriptions.</li>
+</ol>
+<p><strong>Best for</strong>: "Tell me about Person X", "What does Company Y do?",
+"How are A and B related?"</p>
+<h4 id="global-mode-relationship-centric"><a class="header" href="#global-mode-relationship-centric">Global Mode (Relationship-Centric)</a></h4>
+<p>Global mode answers questions about <strong>broad themes and patterns</strong> across
+the knowledge base.</p>
+<ol>
+<li>Extract <strong>high-level keywords</strong> from the query (themes, concepts,
+abstract topics).</li>
+<li>Search the <strong>relationship vector store</strong> using these keywords.</li>
+<li>Retrieve matched relationship descriptions and their endpoint
+entities.</li>
+<li>Build context from relationship clusters that share thematic keywords.</li>
+</ol>
+<p><strong>Best for</strong>: "What are the main themes in this dataset?", "Summarize
+the financial patterns", "What trends emerge from these documents?"</p>
+<h4 id="hybrid-mode-the-default"><a class="header" href="#hybrid-mode-the-default">Hybrid Mode (The Default)</a></h4>
+<p>Hybrid mode runs <strong>both Local and Global</strong> in parallel, then merges the
+results:</p>
+<pre><code class="language-text">Hybrid = Local Context + Global Context
+       = (Entity descriptions + neighbor subgraph)
+       + (Relationship clusters + thematic summaries)
+</code></pre>
+<p>This is EdgeQuake's default mode because most real-world queries benefit
+from both specific grounding (Local) and thematic breadth (Global).</p>
+<h3 id="the-retrieval-quality-difference"><a class="header" href="#the-retrieval-quality-difference">The Retrieval Quality Difference</a></h3>
+<p>Here is a concrete comparison using the same query across modes:</p>
+<p><strong>Query</strong>: "What role did financial institutions play in the scandal?"</p>
+<div class="table-wrapper"><table><thead><tr><th>Mode</th><th>Retrieved Context</th><th>Quality</th></tr></thead><tbody>
+<tr><td><strong>Naive</strong></td><td>5 chunks mentioning "financial institutions" or "scandal"</td><td>May miss entities only mentioned by name, not the phrase "financial institution"</td></tr>
+<tr><td><strong>Local</strong></td><td>Entities: BANK_X, HEDGE_FUND_Y, REGULATOR_Z + their neighbors and descriptions</td><td>Good entity coverage but may miss the broader pattern</td></tr>
+<tr><td><strong>Global</strong></td><td>Relationships with keywords "financial", "scandal", "fraud", "compliance"</td><td>Captures the thematic pattern but may lack specific entity details</td></tr>
+<tr><td><strong>Hybrid</strong></td><td>All of the above, deduplicated and token-budgeted</td><td>Best coverage: specific entities AND thematic relationships</td></tr>
+</tbody></table>
+</div>
+<h3 id="how-edgequake-implements-it"><a class="header" href="#how-edgequake-implements-it">How EdgeQuake Implements It</a></h3>
+<p>The dual-level approach requires two separate vector stores:</p>
+<ol>
+<li>
+<p><strong>Entity vectors</strong> -- embeddings of entity descriptions, stored with
+entity metadata. Searched using low-level keywords.</p>
+</li>
+<li>
+<p><strong>Relationship vectors</strong> -- embeddings of relationship descriptions
+and keywords, stored with edge metadata. Searched using high-level
+keywords.</p>
+</li>
+</ol>
+<p>Both are stored in the same <code>VectorStorage</code> backend but distinguished
+by a <strong>type filter</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use edgequake_query::vector_filter::{filter_by_type, VectorType};
+
+// Local mode: search entity vectors
+let entity_results = vector_storage
+    .search(&amp;query_embedding, top_k)
+    .await?;
+let entities = filter_by_type(entity_results, VectorType::Entity);
+
+// Global mode: search relationship vectors
+let rel_results = vector_storage
+    .search(&amp;query_embedding, top_k)
+    .await?;
+let relationships = filter_by_type(rel_results, VectorType::Relationship);
+<span class="boring">}</span></code></pre></pre>
+<p>The graph storage then enriches these vector results with structural
+context:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// For each matched entity, get its graph neighborhood
+for entity in &amp;matched_entities {
+    let neighbors = graph_storage
+        .get_neighbors(&amp;entity.id, depth)
+        .await?;
+    // Add neighbor descriptions to context
+}
+
+// For matched relationships, get both endpoint nodes
+for rel in &amp;matched_relationships {
+    let source = graph_storage.get_node(&amp;rel.source).await?;
+    let target = graph_storage.get_node(&amp;rel.target).await?;
+    // Add source/target descriptions to context
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>LightRAG's core insight is <strong>dual-level retrieval</strong>: entity-level for
+local specificity, relationship-level for global themes.</li>
+<li>Multi-hop reasoning is only possible when entity connections are
+explicitly stored in a graph, not inferred from vector similarity.</li>
+<li>EdgeQuake implements this via separate entity and relationship vector
+spaces, combined with graph traversal for structural context.</li>
+<li><strong>Hybrid mode</strong> (Local + Global) is the default because it captures
+both specific entities and broad thematic patterns.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch04-03-graph-storage-trait.html">4.3 The GraphStorage Trait</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part2-graph/ch04-01-property-graph.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part2-graph/ch04-03-graph-storage-trait.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part2-graph/ch04-01-property-graph.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part2-graph/ch04-03-graph-storage-trait.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

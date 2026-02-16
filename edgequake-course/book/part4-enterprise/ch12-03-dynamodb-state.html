@@ -1,0 +1,744 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>DynamoDB State Management - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="123-dynamodb-state-management"><a class="header" href="#123-dynamodb-state-management">12.3 DynamoDB State Management</a></h2>
+<p>A batch pipeline processing thousands of documents over several hours will
+encounter failures -- network timeouts, API rate limits, service outages, or
+simply a process restart. Without state management, a failure in Phase 3
+(Embed) means re-running Phase 2 (Extract), wasting hours of LLM processing
+and the associated cost.</p>
+<p>EdgeQuake solves this with DynamoDB-based state management. Every phase
+transition is recorded as a checkpoint, and the pipeline can resume from the
+last completed phase at any time. DynamoDB is ideal for this role because it
+offers single-digit-millisecond writes, conditional updates for concurrency
+safety, and automatic item expiration via TTL.</p>
+<h3 id="state-schema-design"><a class="header" href="#state-schema-design">State Schema Design</a></h3>
+<p>The state table uses a composite primary key that naturally partitions data
+by batch job:</p>
+<pre><code class="language-text">Table: edgequake-batch-state
+  Partition Key (PK): batch_id     (String)
+  Sort Key (SK):      state_key    (String)
+</code></pre>
+<p>Different sort key prefixes represent different types of state:</p>
+<div class="table-wrapper"><table><thead><tr><th>Sort Key Pattern</th><th>Purpose</th><th>Example</th></tr></thead><tbody>
+<tr><td><code>PHASE#&lt;name&gt;</code></td><td>Phase checkpoint</td><td><code>PHASE#Extract</code></td></tr>
+<tr><td><code>META</code></td><td>Batch metadata (config, timing)</td><td><code>META</code></td></tr>
+<tr><td><code>MANIFEST</code></td><td>Pointer to manifest in S3</td><td><code>MANIFEST</code></td></tr>
+<tr><td><code>ERROR#&lt;chunk_id&gt;</code></td><td>Per-chunk error record</td><td><code>ERROR#chunk-001-5</code></td></tr>
+<tr><td><code>STATS#&lt;phase&gt;</code></td><td>Phase-level statistics</td><td><code>STATS#Embed</code></td></tr>
+</tbody></table>
+</div><pre class="mermaid">erDiagram
+    BATCH_STATE {
+        string PK &quot;batch_id&quot;
+        string SK &quot;state_key&quot;
+        string status &quot;completed | failed | in_progress&quot;
+        string timestamp &quot;ISO 8601&quot;
+        string s3_uri &quot;pointer to phase output&quot;
+        number ttl &quot;Unix epoch for auto-expiry&quot;
+        map details &quot;phase-specific metadata&quot;
+    }
+</pre>
+<h3 id="the-phase-enum"><a class="header" href="#the-phase-enum">The Phase Enum</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use serde::{Deserialize, Serialize};
+use std::fmt;
+
+/// The four phases of the batch pipeline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Phase {
+    Prepare,
+    Extract,
+    Embed,
+    Store,
+}
+
+impl Phase {
+    /// Return the next phase in the pipeline, if any.
+    pub fn next(&amp;self) -&gt; Option&lt;Phase&gt; {
+        match self {
+            Phase::Prepare =&gt; Some(Phase::Extract),
+            Phase::Extract =&gt; Some(Phase::Embed),
+            Phase::Embed =&gt; Some(Phase::Store),
+            Phase::Store =&gt; None,
+        }
+    }
+
+    /// Return all phases in order.
+    pub fn all() -&gt; &amp;'static [Phase] {
+        &amp;[Phase::Prepare, Phase::Extract, Phase::Embed, Phase::Store]
+    }
+}
+
+impl fmt::Display for Phase {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
+        match self {
+            Phase::Prepare =&gt; write!(f, "Prepare"),
+            Phase::Extract =&gt; write!(f, "Extract"),
+            Phase::Embed =&gt; write!(f, "Embed"),
+            Phase::Store =&gt; write!(f, "Store"),
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="the-dynamodb-state-manager"><a class="header" href="#the-dynamodb-state-manager">The DynamoDB State Manager</a></h3>
+<p>The state manager encapsulates all interactions with the DynamoDB state table:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_dynamodb::Client as DynamoClient;
+use aws_sdk_dynamodb::types::AttributeValue;
+use chrono::Utc;
+
+pub struct DynamoStateManager {
+    client: DynamoClient,
+    table_name: String,
+    /// TTL for state records in seconds (default: 30 days).
+    ttl_seconds: u64,
+}
+
+impl DynamoStateManager {
+    pub async fn new(config: &amp;DynamoConfig) -&gt; Result&lt;Self&gt; {
+        let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+        let client = DynamoClient::new(&amp;aws_config);
+
+        Ok(Self {
+            client,
+            table_name: config.table_name.clone(),
+            ttl_seconds: config.ttl_seconds.unwrap_or(30 * 24 * 3600),
+        })
+    }
+
+    /// Record that a phase has completed successfully.
+    ///
+    /// This is the checkpoint that enables resume-after-failure.
+    pub async fn checkpoint(
+        &amp;self,
+        phase: Phase,
+        batch_id: &amp;str,
+    ) -&gt; Result&lt;()&gt; {
+        let now = Utc::now();
+        let ttl = now.timestamp() as u64 + self.ttl_seconds;
+
+        self.client
+            .put_item()
+            .table_name(&amp;self.table_name)
+            .item("PK", AttributeValue::S(batch_id.to_string()))
+            .item("SK", AttributeValue::S(format!("PHASE#{}", phase)))
+            .item("status", AttributeValue::S("completed".into()))
+            .item("timestamp", AttributeValue::S(now.to_rfc3339()))
+            .item("ttl", AttributeValue::N(ttl.to_string()))
+            .send()
+            .await?;
+
+        tracing::info!(
+            batch_id = %batch_id,
+            phase = %phase,
+            "phase checkpoint recorded"
+        );
+
+        Ok(())
+    }
+
+    /// Check whether a phase has been completed for a given batch.
+    pub async fn is_phase_complete(
+        &amp;self,
+        batch_id: &amp;str,
+        phase: Phase,
+    ) -&gt; Result&lt;bool&gt; {
+        let result = self.client
+            .get_item()
+            .table_name(&amp;self.table_name)
+            .key("PK", AttributeValue::S(batch_id.to_string()))
+            .key("SK", AttributeValue::S(format!("PHASE#{}", phase)))
+            .send()
+            .await?;
+
+        match result.item() {
+            Some(item) =&gt; {
+                let status = item
+                    .get("status")
+                    .and_then(|v| v.as_s().ok())
+                    .map(|s| s.as_str());
+                Ok(status == Some("completed"))
+            }
+            None =&gt; Ok(false),
+        }
+    }
+
+    /// Determine which phase to resume from.
+    ///
+    /// Finds the last completed phase and returns the next one.
+    /// If no phases are complete, returns Phase::Prepare.
+    pub async fn find_resume_point(&amp;self, batch_id: &amp;str) -&gt; Result&lt;Phase&gt; {
+        for phase in Phase::all().iter().rev() {
+            if self.is_phase_complete(batch_id, *phase).await? {
+                return match phase.next() {
+                    Some(next) =&gt; {
+                        tracing::info!(
+                            batch_id = %batch_id,
+                            last_completed = %phase,
+                            resuming_from = %next,
+                            "found resume point"
+                        );
+                        Ok(next)
+                    }
+                    None =&gt; {
+                        tracing::info!(
+                            batch_id = %batch_id,
+                            "all phases already complete"
+                        );
+                        Ok(Phase::Store) // Already done
+                    }
+                };
+            }
+        }
+
+        tracing::info!(batch_id = %batch_id, "no checkpoints found, starting from Prepare");
+        Ok(Phase::Prepare)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="recording-phase-statistics"><a class="header" href="#recording-phase-statistics">Recording Phase Statistics</a></h3>
+<p>Beyond simple completion checkpoints, the state manager can record detailed
+statistics for each phase:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl DynamoStateManager {
+    /// Record statistics for a completed phase.
+    pub async fn record_stats(
+        &amp;self,
+        batch_id: &amp;str,
+        phase: Phase,
+        stats: &amp;serde_json::Value,
+    ) -&gt; Result&lt;()&gt; {
+        let now = Utc::now();
+        let ttl = now.timestamp() as u64 + self.ttl_seconds;
+
+        self.client
+            .put_item()
+            .table_name(&amp;self.table_name)
+            .item("PK", AttributeValue::S(batch_id.to_string()))
+            .item("SK", AttributeValue::S(format!("STATS#{}", phase)))
+            .item("timestamp", AttributeValue::S(now.to_rfc3339()))
+            .item("stats", AttributeValue::S(serde_json::to_string(stats)?))
+            .item("ttl", AttributeValue::N(ttl.to_string()))
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    /// Record an error for a specific chunk.
+    pub async fn record_chunk_error(
+        &amp;self,
+        batch_id: &amp;str,
+        chunk_id: &amp;str,
+        phase: Phase,
+        error: &amp;str,
+    ) -&gt; Result&lt;()&gt; {
+        let now = Utc::now();
+        let ttl = now.timestamp() as u64 + self.ttl_seconds;
+
+        self.client
+            .put_item()
+            .table_name(&amp;self.table_name)
+            .item("PK", AttributeValue::S(batch_id.to_string()))
+            .item("SK", AttributeValue::S(format!("ERROR#{}", chunk_id)))
+            .item("phase", AttributeValue::S(phase.to_string()))
+            .item("error", AttributeValue::S(error.to_string()))
+            .item("timestamp", AttributeValue::S(now.to_rfc3339()))
+            .item("ttl", AttributeValue::N(ttl.to_string()))
+            .send()
+            .await?;
+
+        Ok(())
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="idempotent-operations"><a class="header" href="#idempotent-operations">Idempotent Operations</a></h3>
+<p>A critical property of the pipeline is <strong>idempotency</strong> -- running the same
+phase twice with the same input produces the same result. This is essential
+for safe resume behavior. If a phase partially completes before a failure,
+re-running it must not create duplicate data.</p>
+<p>Each storage operation uses idempotent patterns:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Idempotent entity upsert -- inserts or updates based on the
+/// (workspace_id, entity_name) composite key.
+///
+/// If the entity already exists, it is updated rather than duplicated.
+async fn upsert_entity(pool: &amp;PgPool, workspace_id: &amp;str, entity: &amp;Entity) -&gt; Result&lt;()&gt; {
+    sqlx::query(
+        r#"
+        INSERT INTO entities (workspace_id, name, entity_type, description, metadata)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (workspace_id, name)
+        DO UPDATE SET
+            entity_type = EXCLUDED.entity_type,
+            description = EXCLUDED.description,
+            metadata = EXCLUDED.metadata,
+            updated_at = NOW()
+        "#,
+    )
+    .bind(workspace_id)
+    .bind(&amp;entity.name)
+    .bind(&amp;entity.entity_type)
+    .bind(&amp;entity.description)
+    .bind(&amp;entity.metadata)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Idempotent embedding upsert -- uses the chunk_id as the unique key.
+async fn upsert_embedding(
+    storage: &amp;dyn VectorStorage,
+    chunk_id: &amp;str,
+    embedding: &amp;[f32],
+) -&gt; Result&lt;()&gt; {
+    // VectorStorage.upsert_embedding is inherently idempotent --
+    // it overwrites the embedding for the given key.
+    storage.upsert_embedding(chunk_id, embedding).await?;
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The key patterns for idempotency:</p>
+<div class="table-wrapper"><table><thead><tr><th>Operation</th><th>Idempotency Mechanism</th></tr></thead><tbody>
+<tr><td>Entity insert</td><td><code>ON CONFLICT ... DO UPDATE</code> (PostgreSQL upsert)</td></tr>
+<tr><td>Relationship insert</td><td><code>ON CONFLICT ... DO UPDATE</code></td></tr>
+<tr><td>Embedding insert</td><td>Key-based overwrite in VectorStorage</td></tr>
+<tr><td>Chunk insert</td><td>Key-based overwrite in KVStorage</td></tr>
+<tr><td>DynamoDB checkpoint</td><td><code>PutItem</code> overwrites existing item</td></tr>
+</tbody></table>
+</div>
+<h3 id="querying-pipeline-status"><a class="header" href="#querying-pipeline-status">Querying Pipeline Status</a></h3>
+<p>The state table supports efficient status queries for monitoring dashboards:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl DynamoStateManager {
+    /// Get the full status of a batch job, including all phase checkpoints.
+    pub async fn get_batch_status(&amp;self, batch_id: &amp;str) -&gt; Result&lt;BatchStatus&gt; {
+        let result = self.client
+            .query()
+            .table_name(&amp;self.table_name)
+            .key_condition_expression("PK = :pk")
+            .expression_attribute_values(":pk", AttributeValue::S(batch_id.to_string()))
+            .send()
+            .await?;
+
+        let mut status = BatchStatus {
+            batch_id: batch_id.to_string(),
+            phases: Vec::new(),
+            errors: Vec::new(),
+            stats: Vec::new(),
+        };
+
+        for item in result.items() {
+            let sk = item.get("SK")
+                .and_then(|v| v.as_s().ok())
+                .unwrap_or(&amp;String::new())
+                .clone();
+
+            if sk.starts_with("PHASE#") {
+                let phase_name = sk.strip_prefix("PHASE#").unwrap_or("");
+                let phase_status = item.get("status")
+                    .and_then(|v| v.as_s().ok())
+                    .cloned()
+                    .unwrap_or_default();
+                let timestamp = item.get("timestamp")
+                    .and_then(|v| v.as_s().ok())
+                    .cloned()
+                    .unwrap_or_default();
+
+                status.phases.push(PhaseStatus {
+                    phase: phase_name.to_string(),
+                    status: phase_status,
+                    timestamp,
+                });
+            } else if sk.starts_with("ERROR#") {
+                let chunk_id = sk.strip_prefix("ERROR#").unwrap_or("");
+                let error_msg = item.get("error")
+                    .and_then(|v| v.as_s().ok())
+                    .cloned()
+                    .unwrap_or_default();
+
+                status.errors.push(ChunkError {
+                    chunk_id: chunk_id.to_string(),
+                    error: error_msg,
+                });
+            }
+        }
+
+        Ok(status)
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct BatchStatus {
+    pub batch_id: String,
+    pub phases: Vec&lt;PhaseStatus&gt;,
+    pub errors: Vec&lt;ChunkError&gt;,
+    pub stats: Vec&lt;serde_json::Value&gt;,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PhaseStatus {
+    pub phase: String,
+    pub status: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ChunkError {
+    pub chunk_id: String,
+    pub error: String,
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="concurrency-safety-with-conditional-writes"><a class="header" href="#concurrency-safety-with-conditional-writes">Concurrency Safety with Conditional Writes</a></h3>
+<p>If multiple pipeline instances might operate on the same batch (e.g., after
+a restart with a new process), you need conditional writes to prevent race
+conditions:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl DynamoStateManager {
+    /// Atomically claim a batch for processing.
+    ///
+    /// Uses a DynamoDB conditional write to ensure only one
+    /// process can claim a batch at a time.
+    pub async fn claim_batch(&amp;self, batch_id: &amp;str, worker_id: &amp;str) -&gt; Result&lt;bool&gt; {
+        let now = Utc::now();
+        let lease_expiry = now + chrono::Duration::minutes(30);
+
+        let result = self.client
+            .put_item()
+            .table_name(&amp;self.table_name)
+            .item("PK", AttributeValue::S(batch_id.to_string()))
+            .item("SK", AttributeValue::S("LOCK".into()))
+            .item("worker_id", AttributeValue::S(worker_id.to_string()))
+            .item("lease_expiry", AttributeValue::S(lease_expiry.to_rfc3339()))
+            .item("claimed_at", AttributeValue::S(now.to_rfc3339()))
+            // Only succeed if no lock exists or the existing lock has expired.
+            .condition_expression(
+                "attribute_not_exists(PK) OR lease_expiry &lt; :now"
+            )
+            .expression_attribute_values(
+                ":now",
+                AttributeValue::S(now.to_rfc3339()),
+            )
+            .send()
+            .await;
+
+        match result {
+            Ok(_) =&gt; {
+                tracing::info!(
+                    batch_id = %batch_id,
+                    worker_id = %worker_id,
+                    "batch claimed"
+                );
+                Ok(true)
+            }
+            Err(e) if is_condition_check_failed(&amp;e) =&gt; {
+                tracing::info!(
+                    batch_id = %batch_id,
+                    "batch already claimed by another worker"
+                );
+                Ok(false)
+            }
+            Err(e) =&gt; Err(e.into()),
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="ttl-based-cleanup"><a class="header" href="#ttl-based-cleanup">TTL-Based Cleanup</a></h3>
+<p>DynamoDB's Time To Live (TTL) feature automatically deletes expired items.
+Every state record includes a <code>ttl</code> attribute set to 30 days after creation.
+This ensures that state from old batch runs does not accumulate indefinitely:</p>
+<pre class="mermaid">flowchart LR
+    A[Phase Checkpoint] --&gt; B[Written with TTL = now + 30 days]
+    B --&gt; C[DynamoDB stores item]
+    C --&gt; D{TTL expired?}
+    D --&gt;|No| C
+    D --&gt;|Yes| E[Automatically deleted]
+</pre>
+<p>No cleanup code is needed -- DynamoDB handles this automatically. You only
+need to enable TTL on the table during setup:</p>
+<pre><code class="language-typescript">// In your CDK stack:
+const stateTable = new dynamodb.Table(this, 'BatchState', {
+    partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+    sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
+    billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+    timeToLiveAttribute: 'ttl',
+});
+</code></pre>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>DynamoDB state management enables resume-after-failure by checkpointing
+each phase completion.</li>
+<li>The composite key <code>(batch_id, state_key)</code> naturally partitions state by
+batch job and supports different record types via sort key prefixes.</li>
+<li>All storage operations must be idempotent -- upserts ensure that re-running
+a phase does not create duplicate data.</li>
+<li>Conditional writes prevent race conditions when multiple workers might
+claim the same batch.</li>
+<li>TTL-based cleanup ensures old state records are automatically purged.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="../part4-enterprise/ch13-observability.html">Chapter 13: Observability and Operations</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part4-enterprise/ch12-02-openai-batch.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../exercises/ch12/batch-state-machine.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part4-enterprise/ch12-02-openai-batch.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../exercises/ch12/batch-state-machine.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

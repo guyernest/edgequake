@@ -1,0 +1,506 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Docker Compose Stack - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="91-docker-compose-stack"><a class="header" href="#91-docker-compose-stack">9.1 Docker Compose Stack</a></h2>
+<p>EdgeQuake's local development environment is defined in a single
+<code>docker-compose.yml</code> file that brings up PostgreSQL (with extensions), the
+Rust API server, and optionally a Next.js frontend. Let us walk through each
+service and understand the design decisions.</p>
+<h3 id="the-full-docker-compose-file"><a class="header" href="#the-full-docker-compose-file">The Full Docker Compose File</a></h3>
+<pre><code class="language-yaml">services:
+  # EdgeQuake API Server
+  edgequake:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: edgequake
+    restart: unless-stopped
+    ports:
+      - "${EDGEQUAKE_PORT:-8080}:8080"
+    environment:
+      - EDGEQUAKE_HOST=0.0.0.0
+      - EDGEQUAKE_PORT=8080
+      - DATABASE_URL=postgres://edgequake:${POSTGRES_PASSWORD:-edgequake_secret}@postgres:5432/edgequake
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - RUST_LOG=info,edgequake=debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - edgequake-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # PostgreSQL with pgvector and Apache AGE extensions
+  postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    container_name: edgequake-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=edgequake
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-edgequake_secret}
+      - POSTGRES_DB=edgequake
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-extensions.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - edgequake-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edgequake -d edgequake"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  edgequake-network:
+    driver: bridge
+</code></pre>
+<h3 id="service-by-service-walkthrough"><a class="header" href="#service-by-service-walkthrough">Service-by-Service Walkthrough</a></h3>
+<h4 id="postgresql-service"><a class="header" href="#postgresql-service">PostgreSQL Service</a></h4>
+<p>The <code>postgres</code> service is the foundation. It uses a custom Dockerfile
+(<code>Dockerfile.postgres</code>) that builds pgvector and Apache AGE from source on
+top of the official PostgreSQL 16 image:</p>
+<pre><code class="language-dockerfile">FROM postgres:16-bookworm
+
+# Install build dependencies
+RUN apt-get update &amp;&amp; apt-get install -y \
+    build-essential \
+    postgresql-server-dev-16 \
+    curl git flex bison \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+
+# Build and install pgvector
+RUN cd /tmp &amp;&amp; \
+    git clone --branch v0.7.4 https://github.com/pgvector/pgvector.git &amp;&amp; \
+    cd pgvector &amp;&amp; make &amp;&amp; make install &amp;&amp; rm -rf /tmp/pgvector
+
+# Build and install Apache AGE
+RUN cd /tmp &amp;&amp; \
+    git clone --branch PG16/v1.6.0-rc0 https://github.com/apache/age.git &amp;&amp; \
+    cd age &amp;&amp; make &amp;&amp; make install &amp;&amp; rm -rf /tmp/age
+
+# Clean up build dependencies
+RUN apt-get remove -y build-essential postgresql-server-dev-16 git \
+    &amp;&amp; apt-get autoremove -y &amp;&amp; rm -rf /var/lib/apt/lists/*
+</code></pre>
+<p>Building from source ensures we get exactly the versions we need. The cleanup
+step removes build tools to reduce the final image size.</p>
+<h4 id="volume-mounts"><a class="header" href="#volume-mounts">Volume Mounts</a></h4>
+<p>Two volumes are mounted into the PostgreSQL container:</p>
+<div class="table-wrapper"><table><thead><tr><th>Mount</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>postgres-data:/var/lib/postgresql/data</code></td><td>Persists database data across container restarts</td></tr>
+<tr><td><code>./init-extensions.sql:/docker-entrypoint-initdb.d/init.sql:ro</code></td><td>Runs extension initialization on first start</td></tr>
+</tbody></table>
+</div>
+<p>The <code>init-extensions.sql</code> file is mounted read-only (<code>:ro</code>) into PostgreSQL's
+<code>docker-entrypoint-initdb.d</code> directory. Files in this directory are executed
+automatically when the database is first created (but not on subsequent starts).</p>
+<pre><code class="language-sql">-- init-extensions.sql
+ALTER USER edgequake SET search_path TO public;
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "vector";
+
+-- Apache AGE is optional -- if it fails to load, graph features
+-- use the fallback SQL-based storage.
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS "age" CASCADE;
+    RAISE NOTICE 'Apache AGE extension enabled successfully';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Apache AGE not available: %. Using fallback.', SQLERRM;
+END $$;
+</code></pre>
+<h4 id="health-checks"><a class="header" href="#health-checks">Health Checks</a></h4>
+<p>Health checks are essential for service dependency ordering. Without them,
+<code>depends_on</code> only waits for the container to start, not for the service inside
+to be ready.</p>
+<pre><code class="language-yaml"># PostgreSQL: checks if the database accepts connections
+healthcheck:
+  test: ["CMD-SHELL", "pg_isready -U edgequake -d edgequake"]
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 10s
+
+# EdgeQuake API: checks the /health endpoint
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 10s
+</code></pre>
+<p>The <code>start_period</code> gives the container time to initialize before health checks
+begin. PostgreSQL with AGE compilation can take 10-15 seconds on first start.</p>
+<h4 id="dependency-ordering"><a class="header" href="#dependency-ordering">Dependency Ordering</a></h4>
+<pre><code class="language-yaml">edgequake:
+  depends_on:
+    postgres:
+      condition: service_healthy
+</code></pre>
+<p>The <code>condition: service_healthy</code> ensures the API server does not start until
+PostgreSQL passes its health check. This prevents connection errors during
+startup.</p>
+<pre class="mermaid">sequenceDiagram
+    participant DC as Docker Compose
+    participant PG as PostgreSQL
+    participant EQ as EdgeQuake API
+
+    DC-&gt;&gt;PG: Start container
+    PG-&gt;&gt;PG: Initialize data directory
+    PG-&gt;&gt;PG: Run init-extensions.sql
+    PG-&gt;&gt;PG: Accept connections
+    DC-&gt;&gt;PG: Health check: pg_isready
+    PG--&gt;&gt;DC: Ready
+    DC-&gt;&gt;EQ: Start container
+    EQ-&gt;&gt;PG: Connect (DATABASE_URL)
+    EQ-&gt;&gt;EQ: Run SQLx migrations
+    EQ-&gt;&gt;EQ: Listen on :8080
+</pre>
+<h4 id="networking"><a class="header" href="#networking">Networking</a></h4>
+<p>All services join the <code>edgequake-network</code> bridge network. Within this network,
+containers reference each other by service name:</p>
+<pre><code>DATABASE_URL=postgres://edgequake:secret@postgres:5432/edgequake
+                                         ^^^^^^^
+                                     Docker service name, not "localhost"
+</code></pre>
+<p>From the host machine, services are accessible via the mapped ports:</p>
+<div class="table-wrapper"><table><thead><tr><th>Service</th><th>Container Port</th><th>Host Port</th></tr></thead><tbody>
+<tr><td>PostgreSQL</td><td>5432</td><td><code>${POSTGRES_PORT:-5432}</code></td></tr>
+<tr><td>EdgeQuake API</td><td>8080</td><td><code>${EDGEQUAKE_PORT:-8080}</code></td></tr>
+<tr><td>Frontend</td><td>3000</td><td><code>${FRONTEND_PORT:-3000}</code></td></tr>
+</tbody></table>
+</div>
+<h3 id="common-operations"><a class="header" href="#common-operations">Common Operations</a></h3>
+<h4 id="starting-the-stack"><a class="header" href="#starting-the-stack">Starting the Stack</a></h4>
+<pre><code class="language-bash"># Start all services in the background
+docker compose up -d
+
+# Start only PostgreSQL (for running EdgeQuake on the host)
+docker compose up -d postgres
+
+# Watch logs
+docker compose logs -f edgequake
+</code></pre>
+<h4 id="connecting-directly-to-postgresql"><a class="header" href="#connecting-directly-to-postgresql">Connecting Directly to PostgreSQL</a></h4>
+<pre><code class="language-bash"># Via Docker
+docker exec -it edgequake-postgres psql -U edgequake -d edgequake
+
+# From host (if port 5432 is mapped)
+psql -h localhost -U edgequake -d edgequake
+</code></pre>
+<h4 id="resetting-the-database"><a class="header" href="#resetting-the-database">Resetting the Database</a></h4>
+<pre><code class="language-bash"># Stop containers and remove the data volume
+docker compose down -v
+
+# Restart -- init-extensions.sql runs again on fresh volume
+docker compose up -d
+</code></pre>
+<h4 id="running-edgequake-on-the-host-not-in-docker"><a class="header" href="#running-edgequake-on-the-host-not-in-docker">Running EdgeQuake on the Host (Not in Docker)</a></h4>
+<p>During active development, you often want to run EdgeQuake directly on the host
+for faster edit-compile-run cycles while keeping PostgreSQL in Docker:</p>
+<pre><code class="language-bash"># Start only the database
+docker compose up -d postgres
+
+# Run EdgeQuake on the host
+export DATABASE_URL="postgres://edgequake:edgequake_secret@localhost:5432/edgequake"
+export OPENAI_API_KEY="sk-..."
+cargo run --release -p edgequake-api
+</code></pre>
+<h3 id="makefile-integration"><a class="header" href="#makefile-integration">Makefile Integration</a></h3>
+<p>Following EdgeQuake's convention of using Makefiles for all project scripts:</p>
+<pre><code class="language-makefile"># In the project Makefile
+.PHONY: dev dev-db dev-down dev-reset
+
+dev:  ## Start full local stack
+	docker compose -f docker/docker-compose.yml up -d
+
+dev-db:  ## Start only PostgreSQL
+	docker compose -f docker/docker-compose.yml up -d postgres
+
+dev-down:  ## Stop all services
+	docker compose -f docker/docker-compose.yml down
+
+dev-reset:  ## Stop services and destroy data
+	docker compose -f docker/docker-compose.yml down -v
+</code></pre>
+<h3 id="summary"><a class="header" href="#summary">Summary</a></h3>
+<p>The Docker Compose stack provides a reproducible local environment with a
+custom PostgreSQL image containing pgvector and Apache AGE. Health checks
+ensure proper service ordering, named volumes persist data across restarts,
+and an initialization script creates extensions on first run. For active
+development, you can run just the database in Docker while running EdgeQuake
+natively on the host.</p>
+<hr />
+<p><em>Next: <a href="ch09-02-pgvector-age.html">9.2 PostgreSQL with pgvector and AGE</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part3-production/ch09-local-dev.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part3-production/ch09-02-pgvector-age.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part3-production/ch09-local-dev.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part3-production/ch09-02-pgvector-age.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

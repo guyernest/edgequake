@@ -1,0 +1,755 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>OpenAI Batch API Integration - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="122-openai-batch-api-integration"><a class="header" href="#122-openai-batch-api-integration">12.2 OpenAI Batch API Integration</a></h2>
+<p>The OpenAI Batch API is designed for workloads that do not require real-time
+responses. You upload a file containing multiple requests, OpenAI processes
+them asynchronously within a 24-hour window, and you download the results when
+ready. The tradeoff is simple: you give up low latency in exchange for a <strong>50%
+cost reduction</strong>.</p>
+<p>For batch ingestion of knowledge bases, where you are processing thousands of
+documents and latency is measured in hours anyway, this tradeoff is excellent.
+The Extract phase of EdgeQuake's pipeline uses the Batch API for entity and
+relationship extraction.</p>
+<h3 id="the-batch-file-format"><a class="header" href="#the-batch-file-format">The Batch File Format</a></h3>
+<p>The Batch API expects a JSONL (JSON Lines) file where each line is a
+self-contained API request:</p>
+<pre><code class="language-json">{"custom_id": "chunk-001", "method": "POST", "url": "/v1/chat/completions", "body": {"model": "gpt-4o", "messages": [{"role": "system", "content": "Extract entities..."}, {"role": "user", "content": "Document text here..."}], "response_format": {"type": "json_object"}}}
+{"custom_id": "chunk-002", "method": "POST", "url": "/v1/chat/completions", "body": {"model": "gpt-4o", "messages": [{"role": "system", "content": "Extract entities..."}, {"role": "user", "content": "Another document..."}], "response_format": {"type": "json_object"}}}
+</code></pre>
+<p>Each line has:</p>
+<div class="table-wrapper"><table><thead><tr><th>Field</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>custom_id</code></td><td>Your identifier to match results back to inputs (the chunk_id)</td></tr>
+<tr><td><code>method</code></td><td>Always <code>"POST"</code> for chat completions</td></tr>
+<tr><td><code>url</code></td><td>The API endpoint path</td></tr>
+<tr><td><code>body</code></td><td>The complete request body, identical to what you would send in a real-time call</td></tr>
+</tbody></table>
+</div>
+<h3 id="building-the-batch-file-in-rust"><a class="header" href="#building-the-batch-file-in-rust">Building the Batch File in Rust</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use serde::Serialize;
+use std::io::Write;
+
+/// A single request in the OpenAI Batch API file.
+#[derive(Serialize)]
+struct BatchRequest {
+    custom_id: String,
+    method: String,
+    url: String,
+    body: BatchRequestBody,
+}
+
+#[derive(Serialize)]
+struct BatchRequestBody {
+    model: String,
+    messages: Vec&lt;Message&gt;,
+    response_format: ResponseFormat,
+    temperature: f32,
+}
+
+#[derive(Serialize)]
+struct Message {
+    role: String,
+    content: String,
+}
+
+#[derive(Serialize)]
+struct ResponseFormat {
+    #[serde(rename = "type")]
+    format_type: String,
+}
+
+/// Build a JSONL batch file from the manifest entries.
+///
+/// Each chunk becomes one line in the batch file with
+/// the entity extraction prompt.
+pub fn build_extraction_batch_file(
+    manifest: &amp;BatchManifest,
+    system_prompt: &amp;str,
+) -&gt; Result&lt;Vec&lt;u8&gt;&gt; {
+    let mut buffer = Vec::new();
+
+    for entry in &amp;manifest.entries {
+        let request = BatchRequest {
+            custom_id: entry.chunk_id.clone(),
+            method: "POST".into(),
+            url: "/v1/chat/completions".into(),
+            body: BatchRequestBody {
+                model: "gpt-4o".into(),
+                messages: vec![
+                    Message {
+                        role: "system".into(),
+                        content: system_prompt.to_string(),
+                    },
+                    Message {
+                        role: "user".into(),
+                        content: format!(
+                            "{}\n\n---\n\n{}",
+                            entry.context_header, entry.content
+                        ),
+                    },
+                ],
+                response_format: ResponseFormat {
+                    format_type: "json_object".into(),
+                },
+                temperature: 0.0,
+            },
+        };
+
+        serde_json::to_writer(&amp;mut buffer, &amp;request)?;
+        buffer.write_all(b"\n")?;
+    }
+
+    tracing::info!(
+        entries = manifest.entries.len(),
+        bytes = buffer.len(),
+        "batch file created"
+    );
+
+    Ok(buffer)
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="the-batch-job-lifecycle"><a class="header" href="#the-batch-job-lifecycle">The Batch Job Lifecycle</a></h3>
+<p>The Batch API has a well-defined lifecycle:</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; Uploading : Upload JSONL file
+    Uploading --&gt; Validating : File uploaded
+    Validating --&gt; InProgress : Validation passed
+    Validating --&gt; Failed : Validation errors
+    InProgress --&gt; Completed : All requests processed
+    InProgress --&gt; Failed : Unrecoverable error
+    InProgress --&gt; Expired : 24-hour window exceeded
+    Completed --&gt; [*] : Download results
+    Failed --&gt; [*] : Handle errors
+    Expired --&gt; [*] : Retry
+</pre>
+<h3 id="submitting-and-polling-batch-jobs"><a class="header" href="#submitting-and-polling-batch-jobs">Submitting and Polling Batch Jobs</a></h3>
+<p>Here is the complete flow for submitting a batch job and waiting for results:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use reqwest::Client;
+use serde::Deserialize;
+use std::time::Duration;
+use tokio::time::sleep;
+
+/// Configuration for the OpenAI API.
+pub struct OpenAIConfig {
+    pub api_key: String,
+    pub base_url: String,
+}
+
+/// Response from the batch job creation endpoint.
+#[derive(Debug, Deserialize)]
+pub struct BatchJob {
+    pub id: String,
+    pub status: String,
+    pub output_file_id: Option&lt;String&gt;,
+    pub error_file_id: Option&lt;String&gt;,
+    pub request_counts: Option&lt;RequestCounts&gt;,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestCounts {
+    pub total: usize,
+    pub completed: usize,
+    pub failed: usize,
+}
+
+/// Submit a batch job to OpenAI.
+///
+/// Steps:
+/// 1. Upload the JSONL file.
+/// 2. Create a batch job referencing the uploaded file.
+pub async fn submit_batch_job(
+    batch_file: &amp;[u8],
+    config: &amp;OpenAIConfig,
+) -&gt; Result&lt;BatchJob&gt; {
+    let client = Client::new();
+
+    // Step 1: Upload the batch file.
+    let file_response: serde_json::Value = client
+        .post(format!("{}/v1/files", config.base_url))
+        .bearer_auth(&amp;config.api_key)
+        .multipart(
+            reqwest::multipart::Form::new()
+                .text("purpose", "batch")
+                .part(
+                    "file",
+                    reqwest::multipart::Part::bytes(batch_file.to_vec())
+                        .file_name("batch_input.jsonl")
+                        .mime_str("application/jsonl")?,
+                ),
+        )
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    let file_id = file_response["id"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("missing file id in upload response"))?;
+
+    tracing::info!(file_id = %file_id, "batch file uploaded");
+
+    // Step 2: Create the batch job.
+    let batch_job: BatchJob = client
+        .post(format!("{}/v1/batches", config.base_url))
+        .bearer_auth(&amp;config.api_key)
+        .json(&amp;serde_json::json!({
+            "input_file_id": file_id,
+            "endpoint": "/v1/chat/completions",
+            "completion_window": "24h"
+        }))
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    tracing::info!(
+        batch_id = %batch_job.id,
+        status = %batch_job.status,
+        "batch job created"
+    );
+
+    Ok(batch_job)
+}
+
+/// Poll a batch job until it reaches a terminal state.
+///
+/// Uses exponential backoff starting at 30 seconds,
+/// capping at 5 minutes between polls.
+pub async fn poll_batch_completion(
+    batch_id: &amp;str,
+    config: &amp;OpenAIConfig,
+) -&gt; Result&lt;BatchJob&gt; {
+    let client = Client::new();
+    let mut interval = Duration::from_secs(30);
+    let max_interval = Duration::from_secs(300);
+
+    loop {
+        sleep(interval).await;
+
+        let job: BatchJob = client
+            .get(format!("{}/v1/batches/{}", config.base_url, batch_id))
+            .bearer_auth(&amp;config.api_key)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        match job.status.as_str() {
+            "completed" =&gt; {
+                tracing::info!(
+                    batch_id = %batch_id,
+                    completed = ?job.request_counts,
+                    "batch job completed"
+                );
+                return Ok(job);
+            }
+            "failed" | "expired" | "cancelled" =&gt; {
+                tracing::error!(
+                    batch_id = %batch_id,
+                    status = %job.status,
+                    "batch job failed"
+                );
+                return Err(anyhow::anyhow!(
+                    "batch job {} ended with status: {}",
+                    batch_id,
+                    job.status
+                ));
+            }
+            status =&gt; {
+                if let Some(counts) = &amp;job.request_counts {
+                    tracing::info!(
+                        batch_id = %batch_id,
+                        status = %status,
+                        completed = counts.completed,
+                        total = counts.total,
+                        "polling batch job"
+                    );
+                }
+            }
+        }
+
+        // Exponential backoff with cap.
+        interval = std::cmp::min(interval * 2, max_interval);
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="processing-batch-results"><a class="header" href="#processing-batch-results">Processing Batch Results</a></h3>
+<p>The output file is also JSONL, with each line containing the result for one
+request:</p>
+<pre><code class="language-json">{"id": "response-abc", "custom_id": "chunk-001", "response": {"status_code": 200, "body": {"choices": [{"message": {"content": "{\"entities\": [...], \"relationships\": [...]}"}}]}}}
+{"id": "response-def", "custom_id": "chunk-002", "response": {"status_code": 200, "body": {"choices": [{"message": {"content": "{\"entities\": [...], \"relationships\": [...]}"}}]}}}
+</code></pre>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A single result from the batch output file.
+#[derive(Debug, Deserialize)]
+struct BatchOutputLine {
+    custom_id: String,
+    response: BatchResponse,
+}
+
+#[derive(Debug, Deserialize)]
+struct BatchResponse {
+    status_code: u16,
+    body: Option&lt;BatchResponseBody&gt;,
+}
+
+#[derive(Debug, Deserialize)]
+struct BatchResponseBody {
+    choices: Vec&lt;Choice&gt;,
+}
+
+#[derive(Debug, Deserialize)]
+struct Choice {
+    message: ChoiceMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChoiceMessage {
+    content: String,
+}
+
+/// Download and parse batch results into ExtractionResults.
+pub async fn download_batch_results(
+    job: &amp;BatchJob,
+    manifest: &amp;BatchManifest,
+) -&gt; Result&lt;Vec&lt;ExtractionResult&gt;&gt; {
+    let output_file_id = job.output_file_id.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("completed job has no output file"))?;
+
+    // Download the output file content.
+    let content = download_file(output_file_id).await?;
+
+    let mut results = Vec::new();
+    let mut failures = 0;
+
+    for line in content.lines() {
+        let output: BatchOutputLine = serde_json::from_str(line)?;
+
+        if output.response.status_code != 200 {
+            tracing::warn!(
+                chunk_id = %output.custom_id,
+                status = output.response.status_code,
+                "batch request failed"
+            );
+            failures += 1;
+            continue;
+        }
+
+        if let Some(body) = output.response.body {
+            if let Some(choice) = body.choices.first() {
+                // Parse the structured extraction response.
+                match serde_json::from_str::&lt;ExtractionOutput&gt;(&amp;choice.message.content) {
+                    Ok(extraction) =&gt; {
+                        results.push(ExtractionResult {
+                            chunk_id: output.custom_id,
+                            entities: extraction.entities,
+                            relationships: extraction.relationships,
+                        });
+                    }
+                    Err(e) =&gt; {
+                        tracing::warn!(
+                            chunk_id = %output.custom_id,
+                            error = %e,
+                            "failed to parse extraction output"
+                        );
+                        failures += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    tracing::info!(
+        successful = results.len(),
+        failed = failures,
+        total = manifest.entries.len(),
+        "batch results processed"
+    );
+
+    // Also download and log the error file if it exists.
+    if let Some(error_file_id) = &amp;job.error_file_id {
+        let errors = download_file(error_file_id).await?;
+        if !errors.is_empty() {
+            tracing::warn!(
+                errors = errors.lines().count(),
+                "batch job had errors (see error file)"
+            );
+        }
+    }
+
+    Ok(results)
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="cost-savings-breakdown"><a class="header" href="#cost-savings-breakdown">Cost Savings Breakdown</a></h3>
+<p>The economic case for the Batch API is straightforward:</p>
+<div class="table-wrapper"><table><thead><tr><th>Model</th><th>Real-Time Input</th><th>Real-Time Output</th><th>Batch Input</th><th>Batch Output</th></tr></thead><tbody>
+<tr><td>GPT-4o</td><td>$2.50/1M tokens</td><td>$10.00/1M tokens</td><td>$1.25/1M tokens</td><td>$5.00/1M tokens</td></tr>
+<tr><td>GPT-4o-mini</td><td>$0.15/1M tokens</td><td>$0.60/1M tokens</td><td>$0.075/1M tokens</td><td>$0.30/1M tokens</td></tr>
+</tbody></table>
+</div>
+<p>For a concrete example, consider ingesting 10,000 documents:</p>
+<pre><code class="language-text">Average document: 2,000 tokens input, 500 tokens output
+Total: 20M input tokens + 5M output tokens
+
+Real-Time (GPT-4o):
+  Input:  20M * $2.50/1M  = $50.00
+  Output:  5M * $10.00/1M = $50.00
+  Total: $100.00
+
+Batch API (GPT-4o):
+  Input:  20M * $1.25/1M  = $25.00
+  Output:  5M * $5.00/1M  = $25.00
+  Total: $50.00
+
+Savings: $50.00 (50%)
+</code></pre>
+<p>At scale (100,000+ documents), this savings compounds to thousands of dollars
+per ingestion run.</p>
+<h3 id="handling-partial-failures"><a class="header" href="#handling-partial-failures">Handling Partial Failures</a></h3>
+<p>Not every request in a batch will succeed. The Batch API provides both an
+output file (successful results) and an error file (failed requests). Your
+pipeline must handle partial failures gracefully:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Handle partial batch failures by identifying which chunks need retry.
+pub fn identify_failed_chunks(
+    manifest: &amp;BatchManifest,
+    results: &amp;[ExtractionResult],
+) -&gt; Vec&lt;String&gt; {
+    let successful_ids: std::collections::HashSet&lt;&amp;str&gt; =
+        results.iter().map(|r| r.chunk_id.as_str()).collect();
+
+    manifest
+        .entries
+        .iter()
+        .filter(|entry| !successful_ids.contains(entry.chunk_id.as_str()))
+        .map(|entry| entry.chunk_id.clone())
+        .collect()
+}
+
+/// Retry failed chunks using the real-time API (more expensive but immediate).
+///
+/// This is appropriate when only a small percentage of chunks failed
+/// and you do not want to re-submit an entire batch.
+pub async fn retry_failed_chunks(
+    failed_ids: &amp;[String],
+    manifest: &amp;BatchManifest,
+    config: &amp;BatchConfig,
+) -&gt; Result&lt;Vec&lt;ExtractionResult&gt;&gt; {
+    tracing::info!(
+        count = failed_ids.len(),
+        "retrying failed chunks via real-time API"
+    );
+
+    let mut results = Vec::new();
+    let failed_set: std::collections::HashSet&lt;&amp;str&gt; =
+        failed_ids.iter().map(|s| s.as_str()).collect();
+
+    for entry in manifest.entries.iter().filter(|e| failed_set.contains(e.chunk_id.as_str())) {
+        match extract_single_chunk(entry, config).await {
+            Ok(result) =&gt; results.push(result),
+            Err(e) =&gt; {
+                tracing::error!(
+                    chunk_id = %entry.chunk_id,
+                    error = %e,
+                    "retry also failed, skipping chunk"
+                );
+            }
+        }
+    }
+
+    Ok(results)
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="batch-api-limits-and-best-practices"><a class="header" href="#batch-api-limits-and-best-practices">Batch API Limits and Best Practices</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Constraint</th><th>Limit</th><th>EdgeQuake Handling</th></tr></thead><tbody>
+<tr><td>Max file size</td><td>100 MB</td><td>Split into multiple batch jobs</td></tr>
+<tr><td>Max requests per batch</td><td>50,000</td><td>Split manifest into sub-batches</td></tr>
+<tr><td>Completion window</td><td>24 hours</td><td>Monitor and retry if expired</td></tr>
+<tr><td>Concurrent batches</td><td>Varies by tier</td><td>Queue management in state table</td></tr>
+<tr><td>Enqueued tokens</td><td>Varies by tier</td><td>Token counting before submission</td></tr>
+</tbody></table>
+</div>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Split a manifest into sub-batches if it exceeds API limits.
+pub fn split_manifest(manifest: &amp;BatchManifest, max_per_batch: usize) -&gt; Vec&lt;Vec&lt;&amp;ManifestEntry&gt;&gt; {
+    manifest.entries.chunks(max_per_batch).map(|c| c.to_vec()).collect()
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>The OpenAI Batch API provides a 50% cost reduction for workloads that
+tolerate higher latency -- ideal for knowledge base ingestion.</li>
+<li>The batch file is a JSONL format where each line is a complete API request
+with a <code>custom_id</code> for result matching.</li>
+<li>Always handle partial failures -- some requests in a batch may fail while
+others succeed.</li>
+<li>Use exponential backoff when polling for completion to avoid rate limiting.</li>
+<li>For very large datasets, split the manifest into sub-batches that fit within
+API limits.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch12-03-dynamodb-state.html">12.3 DynamoDB State Management</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part4-enterprise/ch12-01-four-phases.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part4-enterprise/ch12-03-dynamodb-state.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part4-enterprise/ch12-01-four-phases.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part4-enterprise/ch12-03-dynamodb-state.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

@@ -87,7 +87,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("⚙️  Configuration:");
     println!("   - Query timeout: {}s", config.query_timeout_secs);
     println!("   - Poll interval: {}s", config.poll_interval_secs);
-    println!("   - Result cache: {}", if config.enable_result_cache { "Enabled" } else { "Disabled" });
+    println!(
+        "   - Result cache: {}",
+        if config.enable_result_cache {
+            "Enabled"
+        } else {
+            "Disabled"
+        }
+    );
     println!("   - Workgroup: {}", config.workgroup);
     println!();
 
@@ -147,7 +154,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let number = row.get("number").unwrap_or_default();
                 let message = row.get("message").unwrap_or_default();
                 let success = row.get("success").unwrap_or_default();
-                println!("   - number: {}, message: {}, success: {}", number, message, success);
+                println!(
+                    "   - number: {}, message: {}, success: {}",
+                    number, message, success
+                );
             }
             println!();
         }
@@ -174,7 +184,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("     - Data scanned: {} bytes", stats.data_scanned_bytes);
                     println!("     - Execution time: {} ms", stats.execution_time_ms);
                     println!("     - Queue time: {} ms", stats.queue_time_ms);
-                    println!("     - Engine execution time: {} ms", stats.engine_execution_time_ms);
+                    println!(
+                        "     - Engine execution time: {} ms",
+                        stats.engine_execution_time_ms
+                    );
                     println!("     - Estimated cost: ${:.6}", stats.estimated_cost_usd());
 
                     // Get results
@@ -207,10 +220,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let queries = vec![
         ("List documents", builder.list_documents("ws-123", 10)),
-        ("Search by status", builder.search_by_status("ws-123", "completed")),
+        (
+            "Search by status",
+            builder.search_by_status("ws-123", "completed"),
+        ),
         ("Count documents", builder.count_documents("ws-123")),
         ("Workspace stats", builder.workspace_stats()),
-        ("Search vectors", builder.search_vectors("test-namespace", None)),
+        (
+            "Search vectors",
+            builder.search_vectors("test-namespace", None),
+        ),
     ];
 
     println!("   Built queries:");

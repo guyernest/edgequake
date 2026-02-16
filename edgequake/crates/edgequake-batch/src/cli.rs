@@ -23,7 +23,11 @@ pub struct Cli {
     pub model: String,
 
     /// OpenAI model for embeddings (default: text-embedding-3-small)
-    #[arg(long, default_value = "text-embedding-3-small", env = "BATCH_EMBEDDING_MODEL")]
+    #[arg(
+        long,
+        default_value = "text-embedding-3-small",
+        env = "BATCH_EMBEDDING_MODEL"
+    )]
     pub embedding_model: String,
 
     /// DynamoDB table name for state management
@@ -57,6 +61,10 @@ pub struct Cli {
     /// IAM role ARN for Neptune S3 bulk load (Neptune assumes this to read S3)
     #[arg(long, env = "NEPTUNE_ROLE_ARN")]
     pub neptune_role_arn: Option<String>,
+
+    /// Path to domain configuration TOML file
+    #[arg(long, env = "EDGEQUAKE_DOMAIN_CONFIG")]
+    pub domain_config: Option<PathBuf>,
 
     /// Storage namespace (workspace ID)
     #[arg(long, default_value = "epstein-batch", env = "BATCH_NAMESPACE")]

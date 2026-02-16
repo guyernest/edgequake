@@ -1,0 +1,737 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Performance Optimization - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="133-performance-optimization"><a class="header" href="#133-performance-optimization">13.3 Performance Optimization</a></h2>
+<p>A knowledge base's perceived quality depends as much on response time as on
+answer accuracy. A query that returns a perfect answer in 10 seconds feels
+broken, while a good answer in 500 milliseconds feels magical. In this section,
+we cover the concrete optimization techniques that bring EdgeQuake's query
+latency from seconds to sub-second.</p>
+<p>The optimizations fall into four categories: <strong>batch database operations</strong>,
+<strong>connection pooling</strong>, <strong>caching</strong>, and <strong>profiling</strong>. Each targets a
+different layer of the system, and together they compound for dramatic
+improvements.</p>
+<h3 id="where-time-goes-the-query-latency-budget"><a class="header" href="#where-time-goes-the-query-latency-budget">Where Time Goes: The Query Latency Budget</a></h3>
+<p>Before optimizing, you need to understand where time is spent. A typical
+EdgeQuake hybrid query flows through these stages:</p>
+<pre class="mermaid">pie title &quot;Unoptimized Query Latency (2,400ms)&quot;
+    &quot;Keyword Extraction (LLM)&quot; : 800
+    &quot;Graph Traversal&quot; : 200
+    &quot;Vector Search&quot; : 300
+    &quot;Context Assembly&quot; : 100
+    &quot;Answer Synthesis (LLM)&quot; : 900
+    &quot;Database Overhead&quot; : 100
+</pre>
+<p>The LLM calls (extraction + synthesis) dominate, but they have a fixed minimum
+latency that you cannot easily reduce. The retrieval stages (graph + vector +
+database) are where optimization has the most impact.</p>
+<h3 id="batch-database-operations"><a class="header" href="#batch-database-operations">Batch Database Operations</a></h3>
+<p>Instead of executing one SQL query per entity or relationship, batch them
+into a single round-trip. The difference between 100 individual queries and
+one batched query is enormous -- not because of row processing time, but
+because of network round-trip elimination.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// SLOW: One query per entity -- 100 entities = 100 round trips.
+async fn get_entities_naive(
+    pool: &amp;PgPool,
+    workspace_id: &amp;str,
+    names: &amp;[String],
+) -&gt; Result&lt;Vec&lt;Entity&gt;&gt; {
+    let mut entities = Vec::new();
+    for name in names {
+        let entity = sqlx::query_as::&lt;_, EntityRow&gt;(
+            "SELECT * FROM entities WHERE workspace_id = $1 AND name = $2"
+        )
+        .bind(workspace_id)
+        .bind(name)
+        .fetch_optional(pool)
+        .await?;
+
+        if let Some(e) = entity {
+            entities.push(e.into());
+        }
+    }
+    Ok(entities)
+}
+
+/// FAST: One query for all entities -- 100 entities = 1 round trip.
+async fn get_entities_batched(
+    pool: &amp;PgPool,
+    workspace_id: &amp;str,
+    names: &amp;[String],
+) -&gt; Result&lt;Vec&lt;Entity&gt;&gt; {
+    let entities = sqlx::query_as::&lt;_, EntityRow&gt;(
+        r#"
+        SELECT * FROM entities
+        WHERE workspace_id = $1
+          AND name = ANY($2)
+        "#,
+    )
+    .bind(workspace_id)
+    .bind(names)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(entities.into_iter().map(Into::into).collect())
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The same principle applies to upserts during ingestion:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Batch upsert entities using unnest for multi-row insert.
+async fn upsert_entities_batch(
+    pool: &amp;PgPool,
+    workspace_id: &amp;str,
+    entities: &amp;[Entity],
+) -&gt; Result&lt;()&gt; {
+    let names: Vec&lt;&amp;str&gt; = entities.iter().map(|e| e.name.as_str()).collect();
+    let types: Vec&lt;&amp;str&gt; = entities.iter().map(|e| e.entity_type.as_str()).collect();
+    let descriptions: Vec&lt;&amp;str&gt; = entities.iter().map(|e| e.description.as_str()).collect();
+
+    sqlx::query(
+        r#"
+        INSERT INTO entities (workspace_id, name, entity_type, description)
+        SELECT $1, unnest($2::text[]), unnest($3::text[]), unnest($4::text[])
+        ON CONFLICT (workspace_id, name)
+        DO UPDATE SET
+            entity_type = EXCLUDED.entity_type,
+            description = EXCLUDED.description,
+            updated_at = NOW()
+        "#,
+    )
+    .bind(workspace_id)
+    .bind(&amp;names)
+    .bind(&amp;types)
+    .bind(&amp;descriptions)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="connection-pooling"><a class="header" href="#connection-pooling">Connection Pooling</a></h3>
+<p>Creating a new database connection for every request is prohibitively
+expensive -- TCP handshake, TLS negotiation, and authentication add hundreds
+of milliseconds per connection. Connection pooling maintains a set of
+pre-established connections that are reused across requests.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use sqlx::postgres::PgPoolOptions;
+
+/// Create a connection pool with production-tuned settings.
+pub async fn create_pool(config: &amp;DatabaseConfig) -&gt; Result&lt;PgPool&gt; {
+    let pool = PgPoolOptions::new()
+        // Maximum number of connections in the pool.
+        // Rule of thumb: 2-4x the number of CPU cores.
+        .max_connections(config.max_connections.unwrap_or(20))
+
+        // Minimum number of idle connections to maintain.
+        // Prevents cold-start latency spikes.
+        .min_connections(config.min_connections.unwrap_or(5))
+
+        // Maximum time to wait for a connection from the pool.
+        .acquire_timeout(Duration::from_secs(5))
+
+        // Maximum lifetime of a connection before it is closed and replaced.
+        // Prevents issues with stale connections and load balancer timeouts.
+        .max_lifetime(Duration::from_secs(1800))
+
+        // Time after which an idle connection is closed.
+        .idle_timeout(Duration::from_secs(600))
+
+        // Test the connection before handing it to a caller.
+        .test_before_acquire(true)
+
+        .connect(&amp;config.database_url)
+        .await?;
+
+    tracing::info!(
+        max_connections = config.max_connections.unwrap_or(20),
+        min_connections = config.min_connections.unwrap_or(5),
+        "connection pool created"
+    );
+
+    Ok(pool)
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Monitor pool health to detect connection exhaustion:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Periodically log connection pool statistics.
+pub async fn monitor_pool(pool: PgPool) {
+    loop {
+        tokio::time::sleep(Duration::from_secs(60)).await;
+
+        tracing::info!(
+            size = pool.size(),
+            idle = pool.num_idle(),
+            "connection pool stats"
+        );
+
+        // Alert if the pool is nearly exhausted.
+        if pool.num_idle() == 0 {
+            tracing::warn!("connection pool has no idle connections -- consider increasing max_connections");
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="embedding-cache"><a class="header" href="#embedding-cache">Embedding Cache</a></h3>
+<p>Embedding generation is both slow (API call) and expensive (per-token
+billing). Caching embeddings for frequently queried terms avoids redundant
+API calls. A simple LRU (Least Recently Used) cache is effective because
+query patterns tend to cluster around popular topics:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::collections::HashMap;
+use std::sync::RwLock;
+use std::time::{Duration, Instant};
+
+/// LRU-like cache for embedding vectors.
+///
+/// Entries expire after `ttl` to ensure embeddings stay fresh
+/// if the embedding model is updated.
+pub struct EmbeddingCache {
+    entries: RwLock&lt;HashMap&lt;String, CacheEntry&gt;&gt;,
+    max_entries: usize,
+    ttl: Duration,
+}
+
+struct CacheEntry {
+    embedding: Vec&lt;f32&gt;,
+    created_at: Instant,
+    last_accessed: Instant,
+}
+
+impl EmbeddingCache {
+    pub fn new(max_entries: usize, ttl: Duration) -&gt; Self {
+        Self {
+            entries: RwLock::new(HashMap::new()),
+            max_entries,
+            ttl,
+        }
+    }
+
+    /// Get a cached embedding, if it exists and has not expired.
+    pub fn get(&amp;self, text: &amp;str) -&gt; Option&lt;Vec&lt;f32&gt;&gt; {
+        let mut entries = self.entries.write().unwrap();
+
+        if let Some(entry) = entries.get_mut(text) {
+            if entry.created_at.elapsed() &lt; self.ttl {
+                entry.last_accessed = Instant::now();
+                tracing::debug!(text_len = text.len(), "embedding cache hit");
+                return Some(entry.embedding.clone());
+            } else {
+                // Expired -- remove it.
+                entries.remove(text);
+            }
+        }
+
+        tracing::debug!(text_len = text.len(), "embedding cache miss");
+        None
+    }
+
+    /// Insert an embedding into the cache.
+    pub fn insert(&amp;self, text: String, embedding: Vec&lt;f32&gt;) {
+        let mut entries = self.entries.write().unwrap();
+
+        // Evict the least recently accessed entry if at capacity.
+        if entries.len() &gt;= self.max_entries {
+            if let Some(lru_key) = entries
+                .iter()
+                .min_by_key(|(_, v)| v.last_accessed)
+                .map(|(k, _)| k.clone())
+            {
+                entries.remove(&amp;lru_key);
+            }
+        }
+
+        let now = Instant::now();
+        entries.insert(text, CacheEntry {
+            embedding,
+            created_at: now,
+            last_accessed: now,
+        });
+    }
+
+    /// Return cache statistics for monitoring.
+    pub fn stats(&amp;self) -&gt; CacheStats {
+        let entries = self.entries.read().unwrap();
+        CacheStats {
+            size: entries.len(),
+            capacity: self.max_entries,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CacheStats {
+    pub size: usize,
+    pub capacity: usize,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Use the cache in the embedding service:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct EmbeddingService {
+    client: OpenAIClient,
+    cache: EmbeddingCache,
+}
+
+impl EmbeddingService {
+    /// Generate an embedding, using the cache when possible.
+    pub async fn embed(&amp;self, text: &amp;str) -&gt; Result&lt;Vec&lt;f32&gt;&gt; {
+        // Check cache first.
+        if let Some(cached) = self.cache.get(text) {
+            return Ok(cached);
+        }
+
+        // Cache miss -- call the API.
+        let embedding = self.client.create_embedding(text).await?;
+
+        // Cache the result for future queries.
+        self.cache.insert(text.to_string(), embedding.clone());
+
+        Ok(embedding)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="query-result-caching"><a class="header" href="#query-result-caching">Query Result Caching</a></h3>
+<p>For repeated queries (common in dashboard-style applications), caching the
+entire query result avoids all retrieval and LLM overhead:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::hash::{Hash, Hasher};
+
+/// Cache key for a query, combining the query text and workspace.
+#[derive(Clone, Eq, PartialEq, Hash)]
+struct QueryCacheKey {
+    workspace_id: String,
+    query_text: String,
+    query_mode: String,
+}
+
+/// Query result cache with tenant-aware keys.
+///
+/// Caching is tenant-scoped: a cached result for workspace "acme"
+/// will never be returned for workspace "globex".
+pub struct QueryCache {
+    entries: RwLock&lt;HashMap&lt;QueryCacheKey, QueryCacheEntry&gt;&gt;,
+    max_entries: usize,
+    ttl: Duration,
+}
+
+struct QueryCacheEntry {
+    response: QueryResponse,
+    created_at: Instant,
+}
+
+impl QueryCache {
+    /// Attempt to serve a query from cache.
+    pub fn get(
+        &amp;self,
+        workspace_id: &amp;str,
+        query_text: &amp;str,
+        query_mode: &amp;str,
+    ) -&gt; Option&lt;QueryResponse&gt; {
+        let key = QueryCacheKey {
+            workspace_id: workspace_id.to_string(),
+            query_text: query_text.to_string(),
+            query_mode: query_mode.to_string(),
+        };
+
+        let entries = self.entries.read().unwrap();
+        entries.get(&amp;key).and_then(|entry| {
+            if entry.created_at.elapsed() &lt; self.ttl {
+                tracing::info!("query cache hit");
+                Some(entry.response.clone())
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Invalidate all cached results for a workspace.
+    ///
+    /// Called after ingestion to ensure queries reflect new data.
+    pub fn invalidate_workspace(&amp;self, workspace_id: &amp;str) {
+        let mut entries = self.entries.write().unwrap();
+        entries.retain(|k, _| k.workspace_id != workspace_id);
+        tracing::info!(workspace = %workspace_id, "query cache invalidated for workspace");
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="profiling-with-tokio-console"><a class="header" href="#profiling-with-tokio-console">Profiling with tokio-console</a></h3>
+<p>When you cannot identify the bottleneck from logs alone, <code>tokio-console</code>
+provides a real-time dashboard for async Rust applications. It shows:</p>
+<ul>
+<li>Active tasks and their state (idle, running, scheduled)</li>
+<li>Task poll durations (how long each <code>.await</code> point blocks the executor)</li>
+<li>Resource contention (mutexes, semaphores)</li>
+</ul>
+<p>Add the console subscriber to your application:</p>
+<pre><code class="language-toml">[dependencies]
+console-subscriber = "0.4"
+tokio = { version = "1", features = ["full", "tracing"] }
+</code></pre>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Initialize tracing with tokio-console support.
+///
+/// Run with: RUSTFLAGS="--cfg tokio_unstable" cargo run
+/// Then connect: tokio-console http://127.0.0.1:6669
+pub fn init_tracing_with_console() {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let console_layer = console_subscriber::spawn();
+
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .json()
+        .with_target(true);
+
+    let env_filter = tracing_subscriber::EnvFilter::new(
+        "warn,edgequake=info,tokio=trace,runtime=trace"
+    );
+
+    tracing_subscriber::registry()
+        .with(console_layer)
+        .with(env_filter)
+        .with(fmt_layer)
+        .init();
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Run the application with the <code>tokio_unstable</code> cfg flag:</p>
+<pre><code class="language-bash">RUSTFLAGS="--cfg tokio_unstable" cargo run --release
+</code></pre>
+<p>Then connect with the console tool:</p>
+<pre><code class="language-bash">tokio-console http://127.0.0.1:6669
+</code></pre>
+<p>The dashboard shows you exactly which tasks are spending time waiting vs
+executing, helping you identify:</p>
+<ul>
+<li><strong>Slow futures</strong> -- tasks that poll for a long time (blocking the executor)</li>
+<li><strong>Starved tasks</strong> -- tasks that are rarely scheduled despite being ready</li>
+<li><strong>Lock contention</strong> -- tasks waiting to acquire a mutex or semaphore</li>
+</ul>
+<h3 id="optimization-checklist"><a class="header" href="#optimization-checklist">Optimization Checklist</a></h3>
+<p>Use this checklist to systematically optimize a slow EdgeQuake deployment:</p>
+<div class="table-wrapper"><table><thead><tr><th>Check</th><th>What to Look For</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Database queries</td><td>N+1 patterns (one query per entity)</td><td>Batch with <code>ANY($1)</code> or <code>unnest</code></td></tr>
+<tr><td>Connection pool</td><td>Pool exhaustion (0 idle connections)</td><td>Increase <code>max_connections</code></td></tr>
+<tr><td>Embedding calls</td><td>Redundant embeddings for same text</td><td>Add <code>EmbeddingCache</code></td></tr>
+<tr><td>Query results</td><td>Same query repeated by multiple users</td><td>Add <code>QueryCache</code></td></tr>
+<tr><td>LLM latency</td><td>Model too large for the task</td><td>Use GPT-4o-mini for keyword extraction</td></tr>
+<tr><td>Graph traversal</td><td>Full scan without indexes</td><td>Add composite indexes on <code>workspace_id</code></td></tr>
+<tr><td>Vector search</td><td>Searching all vectors</td><td>Use namespace-scoped vector indexes</td></tr>
+<tr><td>Serialization</td><td>Large JSON parsing in hot paths</td><td>Pre-parse and cache parsed structures</td></tr>
+<tr><td>Async tasks</td><td>Blocking code on the Tokio runtime</td><td>Move blocking work to <code>spawn_blocking</code></td></tr>
+</tbody></table>
+</div>
+<h3 id="measuring-the-impact"><a class="header" href="#measuring-the-impact">Measuring the Impact</a></h3>
+<p>After applying optimizations, measure the before/after with structured logging:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Wrap any async operation to measure and log its duration.
+async fn timed&lt;F, T&gt;(name: &amp;str, future: F) -&gt; T
+where
+    F: std::future::Future&lt;Output = T&gt;,
+{
+    let start = Instant::now();
+    let result = future.await;
+    let duration = start.elapsed();
+
+    tracing::info!(
+        operation = %name,
+        duration_ms = %duration.as_millis(),
+        "operation completed"
+    );
+
+    result
+}
+
+// Usage:
+let entities = timed("graph_query", storage.get_entities(&amp;query)).await?;
+let embeddings = timed("vector_search", vector_storage.search(&amp;query_embedding, 10)).await?;
+<span class="boring">}</span></code></pre></pre>
+<p>A well-optimized EdgeQuake deployment should achieve the following latency
+budget for a hybrid query:</p>
+<pre><code class="language-text">Optimized Query Latency (~1,200ms)
+  Keyword extraction (LLM):    400ms  (using GPT-4o-mini)
+  Graph traversal:               50ms  (batched, indexed)
+  Vector search:                 80ms  (S3 Vectors, cached index)
+  Context assembly:              20ms  (in-memory)
+  Answer synthesis (LLM):       600ms  (streaming to client)
+  Overhead:                      50ms  (middleware, serialization)
+</code></pre>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>Batch database operations eliminate per-entity round trips, often providing
+10-100x speedup for multi-entity queries.</li>
+<li>Connection pooling avoids per-request connection overhead. Size the pool at
+2-4x your CPU core count.</li>
+<li>Embedding caching prevents redundant API calls for repeated query terms.
+An LRU cache with a reasonable TTL is effective and simple.</li>
+<li>Query result caching is the most impactful optimization for repeated
+queries but must be invalidated after ingestion.</li>
+<li><code>tokio-console</code> provides real-time visibility into async task behavior
+when logs alone are insufficient for diagnosis.</li>
+</ul>
+<hr />
+<p><em>Back to: <a href="ch13-observability.html">Chapter 13: Observability and Operations</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part4-enterprise/ch13-02-middleware-stack.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../exercises/ch13/logging-middleware.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part4-enterprise/ch13-02-middleware-stack.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../exercises/ch13/logging-middleware.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

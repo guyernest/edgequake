@@ -283,11 +283,7 @@ impl OpenAIBatchClient {
     /// Create a batch job from an uploaded file.
     ///
     /// Returns the batch job with initial status.
-    pub async fn create_batch(
-        &self,
-        file_id: &str,
-        model: &str,
-    ) -> Result<BatchJob> {
+    pub async fn create_batch(&self, file_id: &str, model: &str) -> Result<BatchJob> {
         info!(file_id = %file_id, model = %model, "Creating batch job");
 
         let body = serde_json::json!({
@@ -444,10 +440,7 @@ impl OpenAIBatchClient {
 
         let resp = self
             .client
-            .post(format!(
-                "{}/v1/batches/{}/cancel",
-                self.base_url, batch_id
-            ))
+            .post(format!("{}/v1/batches/{}/cancel", self.base_url, batch_id))
             .bearer_auth(&self.api_key)
             .send()
             .await?;

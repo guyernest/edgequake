@@ -1,0 +1,546 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Core Architecture - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="71-core-architecture"><a class="header" href="#71-core-architecture">7.1 Core Architecture</a></h2>
+<p>The <code>edgequake-core</code> crate contains the orchestrator -- the central
+struct that wires together storage backends, LLM providers, the
+ingestion pipeline, and the query engine into a single cohesive system.</p>
+<h3 id="the-architecture"><a class="header" href="#the-architecture">The Architecture</a></h3>
+<pre><code class="language-text">┌─────────────────────────────────────────────────────────────┐
+│                       EdgeQuake                              │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                    Orchestrator                          │ │
+│  │  - config: EdgeQuakeConfig                              │ │
+│  │  - storage: KV + Vector + Graph                         │ │
+│  │  - providers: LLM + Embedding                           │ │
+│  └────────────────────────┬────────────────────────────────┘ │
+│                           │                                  │
+│     ┌─────────────────────┼─────────────────────┐           │
+│     │                     │                     │           │
+│     v                     v                     v           │
+│  ┌──────────┐       ┌──────────┐         ┌──────────┐       │
+│  │ insert() │       │  query() │         │ delete() │       │
+│  └────┬─────┘       └────┬─────┘         └────┬─────┘       │
+│       │                  │                    │             │
+│       v                  v                    v             │
+│  ┌──────────┐       ┌──────────┐         ┌──────────┐       │
+│  │ Pipeline │       │  Query   │         │ Cascade  │       │
+│  │ (chunk+  │       │  Engine  │         │  Delete  │       │
+│  │ extract) │       │ (6 modes)│         │ (source  │       │
+│  └──────────┘       └──────────┘         │ tracking)│       │
+│                                          └──────────┘       │
+└─────────────────────────────────────────────────────────────┘
+
+Storage Layer:
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│ KVStorage│    │VectorStor│    │GraphStor │
+│ (docs,   │    │(pgvector)│    │(AGE/mem) │
+│  chunks) │    │          │    │          │
+└──────────┘    └──────────┘    └──────────┘
+</code></pre>
+<h3 id="dependencies-as-trait-objects"><a class="header" href="#dependencies-as-trait-objects">Dependencies as Trait Objects</a></h3>
+<p>The orchestrator holds its dependencies as trait objects behind <code>Arc</code>,
+enabling runtime polymorphism across storage backends:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::sync::Arc;
+use edgequake_storage::{GraphStorage, VectorStorage, KVStorage};
+use edgequake_llm::traits::{LLMProvider, EmbeddingProvider};
+
+pub struct EdgeQuake {
+    /// Configuration for the orchestrator.
+    config: EdgeQuakeConfig,
+
+    /// Graph storage (knowledge graph nodes and edges).
+    graph_storage: Arc&lt;dyn GraphStorage&gt;,
+
+    /// Vector storage (embeddings for similarity search).
+    vector_storage: Arc&lt;dyn VectorStorage&gt;,
+
+    /// Key-value storage (chunks, documents, metadata).
+    kv_storage: Arc&lt;dyn KVStorage&gt;,
+
+    /// LLM provider (for extraction and generation).
+    llm_provider: Arc&lt;dyn LLMProvider&gt;,
+
+    /// Embedding provider (for vector generation).
+    embedding_provider: Arc&lt;dyn EmbeddingProvider&gt;,
+
+    /// The SOTA query engine.
+    query_engine: SOTAQueryEngine,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Using <code>Arc&lt;dyn Trait&gt;</code> means the orchestrator does not know (or care)
+whether it is talking to in-memory storage or PostgreSQL, to OpenAI or
+Ollama. This is the key design principle: <strong>the orchestrator depends on
+traits, not implementations</strong>.</p>
+<h3 id="edgequakeconfig"><a class="header" href="#edgequakeconfig">EdgeQuakeConfig</a></h3>
+<p>The configuration struct controls global behavior:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct EdgeQuakeConfig {
+    /// Pipeline configuration (chunking, extraction, embedding).
+    pub pipeline: PipelineConfig,
+
+    /// Query engine configuration (default mode, token budget).
+    pub query: SOTAQueryConfig,
+
+    /// Namespace for tenant isolation.
+    pub namespace: String,
+
+    /// Default workspace ID.
+    pub workspace_id: Option&lt;uuid::Uuid&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="initialization-flow"><a class="header" href="#initialization-flow">Initialization Flow</a></h3>
+<p>Creating an <code>EdgeQuake</code> instance requires assembling all dependencies:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use edgequake_core::EdgeQuake;
+use edgequake_storage::adapters::memory::*;
+use std::sync::Arc;
+
+// 1. Create storage backends
+let graph: Arc&lt;dyn GraphStorage&gt; = Arc::new(
+    MemoryGraphStorage::new("default")
+);
+let vector: Arc&lt;dyn VectorStorage&gt; = Arc::new(
+    MemoryVectorStorage::new("default")
+);
+let kv: Arc&lt;dyn KVStorage&gt; = Arc::new(
+    MemoryKVStorage::new("default")
+);
+
+// 2. Create LLM and embedding providers
+let llm: Arc&lt;dyn LLMProvider&gt; = Arc::new(
+    OpenAIProvider::new(api_key, "gpt-4o")
+);
+let embedding: Arc&lt;dyn EmbeddingProvider&gt; = Arc::new(
+    OpenAIEmbeddingProvider::new(api_key, "text-embedding-3-small")
+);
+
+// 3. Initialize storage (create tables/indexes)
+graph.initialize().await?;
+vector.initialize().await?;
+
+// 4. Assemble the orchestrator
+let eq = EdgeQuake::new(
+    EdgeQuakeConfig::default(),
+    graph,
+    vector,
+    kv,
+    llm,
+    embedding,
+);
+<span class="boring">}</span></code></pre></pre>
+<p>In production, the API layer handles this assembly using environment
+variables and configuration files (Chapter 9).</p>
+<h3 id="core-operations"><a class="header" href="#core-operations">Core Operations</a></h3>
+<p>The orchestrator exposes three primary operations:</p>
+<h4 id="insert----document-ingestion"><a class="header" href="#insert----document-ingestion">insert() -- Document Ingestion</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl EdgeQuake {
+    /// Ingest a document into the knowledge base.
+    ///
+    /// Runs the full pipeline: chunk -&gt; extract -&gt; normalize -&gt; embed -&gt; store.
+    pub async fn insert(
+        &amp;self,
+        content: &amp;str,
+        document_id: Option&lt;&amp;str&gt;,
+    ) -&gt; Result&lt;ProcessingResult&gt; {
+        // 1. Chunk the document
+        let chunks = self.chunker.chunk(content);
+
+        // 2. Extract entities and relationships from each chunk
+        let extractions = self.extractor
+            .extract_batch(&amp;chunks)
+            .await?;
+
+        // 3. Normalize entity names
+        let normalized = self.normalize(extractions);
+
+        // 4. Generate embeddings
+        let embedded = self.embed(normalized).await?;
+
+        // 5. Store in graph + vector + KV
+        self.store(embedded).await?;
+
+        Ok(ProcessingResult { /* stats */ })
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="query----knowledge-base-query"><a class="header" href="#query----knowledge-base-query">query() -- Knowledge Base Query</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl EdgeQuake {
+    /// Query the knowledge base.
+    ///
+    /// Uses the SOTA query engine with mode-specific retrieval.
+    pub async fn query(
+        &amp;self,
+        query: &amp;str,
+        params: Option&lt;QueryParams&gt;,
+    ) -&gt; Result&lt;QueryResponse&gt; {
+        let params = params.unwrap_or_default();
+
+        // Delegate to the SOTA query engine
+        let context = self.query_engine.execute(
+            query,
+            &amp;params.mode,
+            &amp;self.graph_storage,
+            &amp;self.vector_storage,
+            &amp;self.kv_storage,
+            &amp;self.llm_provider,
+            &amp;self.embedding_provider,
+        ).await?;
+
+        Ok(context)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="delete----document-removal"><a class="header" href="#delete----document-removal">delete() -- Document Removal</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl EdgeQuake {
+    /// Delete a document and cascade-remove its entities.
+    ///
+    /// Uses source_id tracking to identify affected entities.
+    pub async fn delete(&amp;self, document_id: &amp;str) -&gt; Result&lt;DeleteResult&gt; {
+        // 1. Find all chunks from this document
+        let chunks = self.kv_storage.get_by_prefix(document_id).await?;
+
+        // 2. Find all entities sourced from these chunks
+        // 3. Remove entities that have no other source documents
+        // 4. Update entities that have other sources (remove this source_id)
+        // 5. Remove chunks from KV and vector storage
+
+        Ok(DeleteResult { /* stats */ })
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Cascade delete is possible because every entity and relationship
+tracks its <code>source_id</code> -- the pipe-separated list of document IDs
+that contributed to it (Chapter 5).</p>
+<h3 id="the-trait-based-architecture"><a class="header" href="#the-trait-based-architecture">The Trait-Based Architecture</a></h3>
+<p>The orchestrator's trait-based design enables several powerful patterns:</p>
+<h4 id="testing-with-in-memory-storage"><a class="header" href="#testing-with-in-memory-storage">Testing with In-Memory Storage</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[tokio::test]
+async fn test_insert_and_query() {
+    // All in-memory -- no database, no LLM API
+    let eq = EdgeQuake::new(
+        config,
+        Arc::new(MemoryGraphStorage::new("test")),
+        Arc::new(MemoryVectorStorage::new("test")),
+        Arc::new(MemoryKVStorage::new("test")),
+        Arc::new(MockLLMProvider::new()),
+        Arc::new(MockEmbeddingProvider::new()),
+    );
+
+    eq.insert("John works at Acme Corp.", None).await.unwrap();
+    let result = eq.query("Who works at Acme?", None).await.unwrap();
+    assert!(!result.response.is_empty());
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="swapping-backends-at-runtime"><a class="header" href="#swapping-backends-at-runtime">Swapping Backends at Runtime</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Development: PostgreSQL locally
+let graph = create_postgres_graph(&amp;local_config).await?;
+
+// Production: Amazon Neptune
+let graph = create_neptune_graph(&amp;aws_config).await?;
+
+// Same orchestrator code, different backend
+let eq = EdgeQuake::new(config, graph, vector, kv, llm, embedding);
+<span class="boring">}</span></code></pre></pre>
+<h4 id="multi-tenant-isolation"><a class="header" href="#multi-tenant-isolation">Multi-Tenant Isolation</a></h4>
+<p>Each tenant gets its own orchestrator instance with namespace-scoped
+storage:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn create_tenant_orchestrator(tenant_id: &amp;str) -&gt; EdgeQuake {
+    let graph = Arc::new(MemoryGraphStorage::new(tenant_id));
+    let vector = Arc::new(MemoryVectorStorage::new(tenant_id));
+    let kv = Arc::new(MemoryKVStorage::new(tenant_id));
+
+    EdgeQuake::new(
+        EdgeQuakeConfig { namespace: tenant_id.into(), ..Default::default() },
+        graph, vector, kv, llm, embedding,
+    )
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>The <code>EdgeQuake</code> orchestrator coordinates all system components through
+trait objects (<code>Arc&lt;dyn Trait&gt;</code>).</li>
+<li>Three primary operations: <code>insert</code> (ingest), <code>query</code> (retrieve +
+generate), and <code>delete</code> (cascade remove).</li>
+<li>Trait-based design enables testing with mocks, swapping backends at
+runtime, and multi-tenant isolation.</li>
+<li>Configuration flows from <code>EdgeQuakeConfig</code> to the pipeline and query
+engine sub-configs.</li>
+<li>The orchestrator does not contain business logic itself -- it delegates
+to the pipeline (Chapter 5) and query engine (Chapter 6).</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch07-02-axum-api.html">7.2 The Axum API Layer</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part2-graph/ch07-orchestrator.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part2-graph/ch07-02-axum-api.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part2-graph/ch07-orchestrator.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part2-graph/ch07-02-axum-api.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

@@ -1,10 +1,11 @@
 //! Phase 1: Prepare - Parse parquet, chunk documents, build JSONL files.
 
 use crate::config::BatchConfig;
+use crate::domain_config::DomainConfig;
+use crate::domain_prompts::DomainExtractionPrompts;
 use crate::jsonl::{build_jsonl_files, make_custom_id, JsonlBuildResult, PreparedChunk};
 use crate::parquet_reader::{read_parquet_documents, ReconstructedDocument};
 use crate::progress::BatchProgress;
-use crate::prompts::EpsteinExtractionPrompts;
 use crate::state::{DocumentState, DocumentStatus, JobState, Phase, StateManager};
 use edgequake_pipeline::chunker::{Chunker, ChunkerConfig, TextChunk};
 use tracing::{info, warn};
@@ -31,6 +32,7 @@ pub struct PrepareResult {
 /// 5. Save document states to DynamoDB
 pub async fn run_prepare(
     config: &BatchConfig,
+    domain_config: &DomainConfig,
     state_mgr: &StateManager,
     job: &mut JobState,
     progress: &BatchProgress,
@@ -169,7 +171,7 @@ pub async fn run_prepare(
 
     // Step 3: Build JSONL files
     let spinner = progress.spinner("Building JSONL files...");
-    let prompts = EpsteinExtractionPrompts::new();
+    let prompts = DomainExtractionPrompts::new(domain_config.clone());
     let system_prompt = prompts.system_prompt();
 
     let jsonl_result = build_jsonl_files(

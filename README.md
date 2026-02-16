@@ -25,6 +25,8 @@ Traditional RAG systems retrieve document chunks using vector similarity alone. 
 - **Knowledge Graphs**: LLM-powered entity extraction and relationship mapping create a structured understanding of your documents — not just keyword matching
 - **6 Query Modes**: From fast naive vector search to graph-traversing hybrid queries, each mode optimizes for different question types
 - **Rust Performance**: Async-first Tokio architecture with zero-copy operations — handles thousands of concurrent requests
+- **Dual Storage Tiers**: Local development with PostgreSQL (Docker) **or** production-scale AWS managed services (Neptune, S3 Vectors, DynamoDB) — same trait-based API, swap backends without code changes
+- **Batch Ingestion at Scale**: Process 100K+ documents via OpenAI Batch API with 50% cost savings, domain-configurable extraction prompts, and DynamoDB-backed checkpointing for resumable pipelines
 - **Planned Advanced PDF Processing ⚠️ Available Soon**: Table detection, multi-column layout, OCR with quality-based mode fallback
 - **Production Ready**: OpenAPI 3.0 REST API, SSE streaming, health checks, multi-tenant workspace isolation
 - **Modern Frontend**: React 19 with interactive Sigma.js graph visualizations
@@ -50,7 +52,7 @@ Traditional RAG systems retrieve document chunks using vector similarity alone. 
 - **Async-First**: Tokio-based runtime for maximum concurrency
 - **Zero-Copy**: Efficient memory management with Rust ownership
 - **Parallel Processing**: Multi-threaded entity extraction and embeddings
-- **Fast Storage**: PostgreSQL AGE for graph + pgvector for embeddings
+- **Pluggable Storage**: PostgreSQL (AGE + pgvector) for local dev, AWS managed services for production scale
 
 ### Knowledge Graph
 
@@ -90,6 +92,44 @@ Traditional RAG systems retrieve document chunks using vector similarity alone. 
 - **Graph Visualization**: Interactive network graph with zoom/pan
 - **Document Upload**: Drag-and-drop with progress tracking
 - **Configuration UI**: Visual PDF processing config builder
+
+### 🗄️ Storage Backends
+
+EdgeQuake implements a trait-based storage abstraction (`GraphStorage`, `VectorStorage`, `KVStorage`) so you can swap backends without changing application code.
+
+| Layer | Local (Docker) | AWS Managed (Production) |
+| --- | --- | --- |
+| **Graph** | PostgreSQL + Apache AGE | Amazon Neptune (Gremlin, IAM SigV4 auth) |
+| **Vector** | pgvector (HNSW) | Amazon S3 Vectors (native cosine search, pay-per-request) |
+| **Key-Value** | PostgreSQL | Amazon DynamoDB (single-digit ms latency, on-demand billing) |
+| **Analytics** | — | Amazon Athena (serverless SQL over S3, $5/TB scanned) |
+| **Dev/Test** | In-memory adapters | — |
+
+The AWS backends in `edgequake-storage-aws` are designed for production scale:
+- **Neptune** — Fully managed graph database with automatic replication, point-in-time recovery, and read replicas for high-throughput graph traversal
+- **S3 Vectors** — Serverless vector search with automatic indexing and no capacity planning; scales with your data
+- **DynamoDB** — On-demand billing with zero idle costs, batch operations, and point-in-time recovery for state management and metadata
+- **Athena** — Serverless SQL analytics over Parquet/JSON data in S3 for ad-hoc queries without provisioning infrastructure
+
+### 📦 Batch Ingestion Pipeline
+
+The `edgequake-batch` CLI processes large document datasets (100K+ documents) using the OpenAI Batch API for 50% cost savings on entity extraction.
+
+- **4-Phase Pipeline**: Prepare (parse + chunk) → Extract (OpenAI Batch API) → Embed (generate vectors) → Store (Neptune + S3 Vectors + DynamoDB)
+- **Domain-Configurable**: Extraction prompts, entity types, aliases, and few-shot examples are defined in a `domain.toml` file — switch domains without code changes
+- **Resumable**: DynamoDB-backed state management with per-phase checkpointing; resume from any phase after interruption
+- **Cost-Optimized**: Batch API (50% off) + prompt caching (50% off cached tokens) = ~75% savings on system prompt costs
+
+```bash
+# Full pipeline
+make batch-run
+
+# Or run individual phases
+make batch-prepare    # Phase 1: Parse parquet, chunk, build JSONL
+make batch-extract    # Phase 2: Submit to OpenAI Batch API
+make batch-embed      # Phase 3: Generate embeddings
+make batch-store      # Phase 4: Write to Neptune/S3/DynamoDB
+```
 
 ---
 
@@ -204,11 +244,13 @@ curl -X POST http://localhost:8080/api/v1/query \
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  Backend (Rust - 11 Crates)                                                 │
+│  Backend (Rust - 13 Crates)                                                 │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │  edgequake-core          │  Orchestration & Pipeline                 │   │
 │  │  edgequake-llm           │  OpenAI, Ollama, LM Studio, Mock          │   │
 │  │  edgequake-storage       │  PostgreSQL AGE, Memory adapters          │   │
+│  │  edgequake-storage-aws   │  Neptune, S3 Vectors, DynamoDB, Athena    │   │
+│  │  edgequake-batch         │  Batch ingestion CLI (100K+ docs)         │   │
 │  │  edgequake-api           │  REST API server                          │   │
 │  │  edgequake-pipeline      │  Document ingestion pipeline              │   │
 │  │  edgequake-query         │  Query engine (6 modes)                   │   │
@@ -223,11 +265,16 @@ curl -X POST http://localhost:8080/api/v1/query \
 │                    ▼                               ▼                        │
 │  ┌─────────────────────────────┐   ┌──────────────────────────────────┐     │
 │  │   LLM Providers             │   │   Storage Backends               │     │
-│  │  • OpenAI (gpt-4.1-nano)    │   │  • PostgreSQL 15+ (AGE + vector) │     │
-│  │  • Ollama (gemma3:12b)      │   │  • In-Memory (dev/testing)       │     │
-│  │  • LM Studio (local models) │   │  • Graph: Property graph model   │     │
-│  │  • Mock (testing, free)     │   │  • Vector: pgvector embeddings   │     │
+│  │  • OpenAI (gpt-4.1-nano)    │   │                                  │     │
+│  │  • Ollama (gemma3:12b)      │   │  Local:                          │     │
+│  │  • LM Studio (local models) │   │  • PostgreSQL 15+ (AGE + vector) │     │
+│  │  • Mock (testing, free)     │   │  • In-Memory (dev/testing)       │     │
 │  │  Auto-detection via env     │   │                                  │     │
+│  │                             │   │  AWS Managed:                    │     │
+│  │                             │   │  • Neptune (graph)               │     │
+│  │                             │   │  • S3 Vectors (vector search)    │     │
+│  │                             │   │  • DynamoDB (key-value)          │     │
+│  │                             │   │  • Athena (analytics)            │     │
 │  └─────────────────────────────┘   └──────────────────────────────────┘     │
 └─────────────────────────────────────────────────────────────────────────────┘
 
@@ -245,7 +292,7 @@ EdgeQuake implements the [LightRAG algorithm](https://arxiv.org/abs/2410.05779) 
 3. **Glean** — Optional second pass catches missed entities (improves recall by ~18%)
 4. **Normalize** — Deduplicate entities via case normalization and description merging (reduces duplicates by ~36-40%)
 5. **Embed** — Generate vector embeddings for chunks and entities
-6. **Store** — Write to PostgreSQL: chunks to pgvector, entities/relationships to Apache AGE graph
+6. **Store** — Write to storage backends: chunks to pgvector or S3 Vectors, entities/relationships to Apache AGE or Neptune graph, metadata to PostgreSQL or DynamoDB
 
 **Query Flow** (6 modes):
 - **Naive** — Vector similarity on chunks only (fast, no graph)
@@ -301,7 +348,7 @@ See the [CHANGELOG.md](CHANGELOG.md) for SDK and core updates.
 | -------------------------------------------- | ------------------------------------- |
 | [Overview](docs/architecture/overview.md)    | System design and components          |
 | [Data Flow](docs/architecture/data-flow.md)  | How documents flow through the system |
-| [Crate Reference](docs/architecture/crates/) | 11 Rust crates explained              |
+| [Crate Reference](docs/architecture/crates/) | 13 Rust crates explained              |
 
 ### 💡 Core Concepts (Theory)
 
@@ -422,6 +469,16 @@ make frontend-build   # Build frontend for production
 make db-start         # Start PostgreSQL container
 make db-stop          # Stop PostgreSQL container
 make db-wait          # Wait for database to be ready
+
+# Batch ingestion (AWS-scale pipeline)
+make batch-build      # Build batch ingestion CLI
+make batch-run        # Run full pipeline (prepare+extract+embed+store)
+make batch-prepare    # Phase 1: Parse, chunk, build JSONL
+make batch-extract    # Phase 2: OpenAI Batch API extraction
+make batch-embed      # Phase 3: Generate embeddings
+make batch-store      # Phase 4: Write to Neptune/S3/DynamoDB
+make batch-status     # Show job progress
+make batch-resume     # Resume from checkpoint
 
 # Quality checks
 make test             # Run all tests

@@ -21,9 +21,9 @@ mod intent;
 mod llm_extractor;
 mod mock_extractor;
 
-pub use cache::{InMemoryKeywordCache, KeywordCache};
 #[cfg(feature = "postgres")]
 pub use cache::PostgresKeywordCache;
+pub use cache::{InMemoryKeywordCache, KeywordCache};
 pub use extractor::{ExtractedKeywords, KeywordExtractor, Keywords};
 pub use intent::QueryIntent;
 pub use llm_extractor::{CachedKeywordExtractor, LLMKeywordExtractor};

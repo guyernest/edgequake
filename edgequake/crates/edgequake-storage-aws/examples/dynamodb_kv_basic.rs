@@ -58,13 +58,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create configuration
     let config = DynamoKVConfig::new(table_name, "example-workspace")
-        .with_on_demand(true)  // Pay-per-request pricing
-        .with_pitr(true);      // Point-in-time recovery
+        .with_on_demand(true) // Pay-per-request pricing
+        .with_pitr(true); // Point-in-time recovery
 
     println!("⚙️  Configuration:");
     println!("   - Namespace: {}", config.namespace);
-    println!("   - Billing: {}", if config.on_demand { "On-Demand" } else { "Provisioned" });
-    println!("   - PITR: {}", if config.enable_pitr { "Enabled" } else { "Disabled" });
+    println!(
+        "   - Billing: {}",
+        if config.on_demand {
+            "On-Demand"
+        } else {
+            "Provisioned"
+        }
+    );
+    println!(
+        "   - PITR: {}",
+        if config.enable_pitr {
+            "Enabled"
+        } else {
+            "Disabled"
+        }
+    );
     println!();
 
     // Create storage
@@ -203,19 +217,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let success = storage
         .transition_if_status("task-001", "pending", "processing")
         .await?;
-    println!("   Transition pending -> processing: {}", if success { "✅ Success" } else { "❌ Failed" });
+    println!(
+        "   Transition pending -> processing: {}",
+        if success { "✅ Success" } else { "❌ Failed" }
+    );
 
     // Try invalid transition: pending -> completed (should fail)
     let success = storage
         .transition_if_status("task-001", "pending", "completed")
         .await?;
-    println!("   Transition pending -> completed: {}", if success { "✅ Success" } else { "❌ Failed (expected)" });
+    println!(
+        "   Transition pending -> completed: {}",
+        if success {
+            "✅ Success"
+        } else {
+            "❌ Failed (expected)"
+        }
+    );
 
     // Transition: processing -> completed
     let success = storage
         .transition_if_status("task-001", "processing", "completed")
         .await?;
-    println!("   Transition processing -> completed: {}", if success { "✅ Success" } else { "❌ Failed" });
+    println!(
+        "   Transition processing -> completed: {}",
+        if success { "✅ Success" } else { "❌ Failed" }
+    );
 
     // Example 5: List all keys
     println!("\n📋 Example 5: List All Keys\n");

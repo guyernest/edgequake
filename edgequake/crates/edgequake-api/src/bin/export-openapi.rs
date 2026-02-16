@@ -25,18 +25,15 @@ fn main() {
     // Check for formatting option
     let pretty = args.contains(&"--pretty".to_string());
     let json = if pretty {
-        serde_json::to_string_pretty(&openapi)
-            .expect("Failed to serialize OpenAPI spec")
+        serde_json::to_string_pretty(&openapi).expect("Failed to serialize OpenAPI spec")
     } else {
-        serde_json::to_string(&openapi)
-            .expect("Failed to serialize OpenAPI spec")
+        serde_json::to_string(&openapi).expect("Failed to serialize OpenAPI spec")
     };
 
     // Check for output file
     if let Some(output_idx) = args.iter().position(|arg| arg == "--output") {
         if let Some(output_path) = args.get(output_idx + 1) {
-            fs::write(output_path, &json)
-                .expect("Failed to write OpenAPI spec to file");
+            fs::write(output_path, &json).expect("Failed to write OpenAPI spec to file");
             eprintln!("✅ OpenAPI schema exported to: {}", output_path);
             eprintln!("📊 Total endpoints: {}", count_endpoints(&openapi));
             eprintln!("📦 Total schemas: {}", count_schemas(&openapi));

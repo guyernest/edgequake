@@ -265,10 +265,7 @@ fn api_v1_routes() -> Router<AppState> {
         )
         // Document by ID - comes last because {document_id} matches any path segment
         .route("/documents/{document_id}", get(handlers::get_document))
-        .route(
-            "/documents/{document_id}",
-            put(handlers::update_document),
-        )
+        .route("/documents/{document_id}", put(handlers::update_document))
         .route(
             "/documents/{document_id}",
             delete(handlers::delete_document),

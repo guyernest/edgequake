@@ -1,0 +1,1603 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Exercise: File-Based KVStorage - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../../src/custom.css">
+        <link rel="stylesheet" href="../../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="exercise-file-based-kvstorage"><a class="header" href="#exercise-file-based-kvstorage">Exercise: File-Based KVStorage</a></h1>
+<div class="exercise-container">
+<article class="exercise" data-exercise-id="ch08-file-kv-storage" data-difficulty="intermediate">
+<header class="exercise-header">
+  <h2 id="exercise-file-based-kvstorage-1" class="exercise-title"><a class="header" href="#exercise-file-based-kvstorage-1">Exercise: File-Based KVStorage</a></h2>
+  <code class=\"exercise-id\">ch08-file-kv-storage</code>
+  <div class="exercise-meta">
+    <span class="badge difficulty intermediate">⭐⭐ intermediate</span>
+    <span class="badge time">⏱️ 30 min</span>
+  </div>
+</header>
+<nav class="exercise-nav" aria-label="Exercise sections"><ul><li><a href="#ch08-file-kv-storage-description" data-section="description">📖 Overview</a></li><li><a href="#ch08-file-kv-storage-objectives" data-section="objectives">🎯 Objectives</a></li><li><a href="#ch08-file-kv-storage-starter" data-section="starter">💻 Code</a></li><li><a href="#ch08-file-kv-storage-hints" data-section="hints">💡 Hints</a></li><li><a href="#ch08-file-kv-storage-solution" data-section="solution">✅ Solution</a></li><li><a href="#ch08-file-kv-storage-tests" data-section="tests">🧪 Tests</a></li><li><a href="#ch08-file-kv-storage-reflection" data-section="reflection">🤔 Reflect</a></li></ul></nav>
+<section class="exercise-description" id="ch08-file-kv-storage-description">
+<p>In chapter 8 you learned that EdgeQuake uses trait-based storage abstraction to
+decouple business logic from storage backends. The <code>KVStorage</code> trait defines
+operations like <code>get_by_id</code>, <code>upsert</code>, and <code>delete</code> -- and any struct that
+implements the trait can be plugged into the system.</p>
+<p>In this exercise you will build a <strong>file-system-backed KVStorage adapter</strong> that
+stores each key-value pair as a JSON file on disk. This is useful for local
+development, debugging, and scenarios where you want human-readable storage
+without running a database.</p>
+</section>
+<section class="exercise-objectives" id="ch08-file-kv-storage-objectives">
+  <h3 id="-learning-objectives"><a class="header" href="#-learning-objectives">🎯 Learning Objectives</a></h3>
+  <div class="objectives-grid">
+    <div class="objectives-thinking">
+      <h4 id="thinking"><a class="header" href="#thinking">Thinking</a></h4>
+      <ul>
+        <li><input type="checkbox" id="ch08-file-kv-storage-thinking-0" class="objective-checkbox"><label for="ch08-file-kv-storage-thinking-0">Understand how the adapter pattern maps abstract trait methods to concrete I/O operations</label></li>
+        <li><input type="checkbox" id="ch08-file-kv-storage-thinking-1" class="objective-checkbox"><label for="ch08-file-kv-storage-thinking-1">Recognize the trade-offs of file-based storage vs in-memory and database backends</label></li>
+        <li><input type="checkbox" id="ch08-file-kv-storage-thinking-2" class="objective-checkbox"><label for="ch08-file-kv-storage-thinking-2">Consider concurrency and atomicity limitations of filesystem operations</label></li>
+      </ul>
+    </div>
+    <div class="objectives-doing">
+      <h4 id="doing"><a class="header" href="#doing">Doing</a></h4>
+      <ul>
+        <li><input type="checkbox" id="ch08-file-kv-storage-doing-0" class="objective-checkbox"><label for="ch08-file-kv-storage-doing-0">Implement the full KVStorage trait for a file-based backend</label></li>
+        <li><input type="checkbox" id="ch08-file-kv-storage-doing-1" class="objective-checkbox"><label for="ch08-file-kv-storage-doing-1">Use tokio::fs for non-blocking file operations</label></li>
+        <li><input type="checkbox" id="ch08-file-kv-storage-doing-2" class="objective-checkbox"><label for="ch08-file-kv-storage-doing-2">Map I/O errors to StorageError variants correctly</label></li>
+        <li><input type="checkbox" id="ch08-file-kv-storage-doing-3" class="objective-checkbox"><label for="ch08-file-kv-storage-doing-3">Write a working transition_if_status with read-modify-write semantics</label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+<section class="exercise-discussion">
+  <h3 id="-discussion"><a class="header" href="#-discussion">💬 Discussion</a></h3>
+  <ul>
+    <li>Why does EdgeQuake define `KVStorage` as a trait rather than using a concrete type?</li>
+    <li>When would a file-based backend be preferable to the in-memory implementation?</li>
+    <li>What are the atomicity limitations of filesystem writes, and how could you mitigate them?</li>
+  </ul>
+</section>
+<section class="exercise-starter" id="ch08-file-kv-storage-starter">
+  <div class="code-header">
+    <span class="filename">src/main.rs</span>
+    <div class="code-actions">
+      <button class="btn btn-copy" data-target="code-ch08-file-kv-storage" title="Copy code">📋 Copy</button>
+      <button class="btn btn-reset" data-target="code-ch08-file-kv-storage" title="Reset to original">↺ Reset</button>
+    </div>
+  </div>
+  <textarea class="code-editor" id="code-ch08-file-kv-storage" data-language="rust" data-original="use async_trait::async_trait;&#10;use serde_json::Value;&#10;use std::collections::HashSet;&#10;use std::path::PathBuf;&#10;&#10;// --- Error types (simplified from edgequake-storage) ---&#10;&#10;#[derive(Debug, thiserror::Error)]&#10;pub enum StorageError {&#10;    #[error(&quot;I/O error: {0}&quot;)]&#10;    Io(#[from] std::io::Error),&#10;&#10;    #[error(&quot;Serialization error: {0}&quot;)]&#10;    Serialization(String),&#10;&#10;    #[error(&quot;Database error: {0}&quot;)]&#10;    Database(String),&#10;&#10;    #[error(&quot;Storage not initialized&quot;)]&#10;    NotInitialized,&#10;}&#10;&#10;impl From&lt;serde_json::Error&gt; for StorageError {&#10;    fn from(err: serde_json::Error) -&gt; Self {&#10;        StorageError::Serialization(err.to_string())&#10;    }&#10;}&#10;&#10;pub type Result&lt;T&gt; = std::result::Result&lt;T, StorageError&gt;;&#10;&#10;// --- KVStorage trait (simplified from edgequake-storage) ---&#10;&#10;#[async_trait]&#10;pub trait KVStorage: Send + Sync {&#10;    fn namespace(&amp;self) -&gt; &amp;str;&#10;    async fn initialize(&amp;self) -&gt; Result&lt;()&gt;;&#10;    async fn finalize(&amp;self) -&gt; Result&lt;()&gt;;&#10;    async fn get_by_id(&amp;self, id: &amp;str) -&gt; Result&lt;Option&lt;Value&gt;&gt;;&#10;    async fn get_by_ids(&amp;self, ids: &amp;[String]) -&gt; Result&lt;Vec&lt;Value&gt;&gt;;&#10;    async fn filter_keys(&amp;self, keys: HashSet&lt;String&gt;) -&gt; Result&lt;HashSet&lt;String&gt;&gt;;&#10;    async fn upsert(&amp;self, data: &amp;[(String, Value)]) -&gt; Result&lt;()&gt;;&#10;    async fn delete(&amp;self, ids: &amp;[String]) -&gt; Result&lt;()&gt;;&#10;    async fn is_empty(&amp;self) -&gt; Result&lt;bool&gt;;&#10;    async fn count(&amp;self) -&gt; Result&lt;usize&gt;;&#10;    async fn keys(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;&gt;;&#10;    async fn clear(&amp;self) -&gt; Result&lt;()&gt;;&#10;    async fn transition_if_status(&#10;        &amp;self,&#10;        key: &amp;str,&#10;        expected_status: &amp;str,&#10;        new_status: &amp;str,&#10;    ) -&gt; Result&lt;bool&gt;;&#10;}&#10;&#10;// --- Your implementation ---&#10;&#10;/// File-based key-value storage.&#10;///&#10;/// Stores each record as a JSON file at:&#10;///   {base_path}/{namespace}/{key}.json&#10;pub struct FileKVStorage {&#10;    base_path: PathBuf,&#10;    namespace: String,&#10;}&#10;&#10;impl FileKVStorage {&#10;    pub fn new(base_path: impl Into&lt;PathBuf&gt;, namespace: impl Into&lt;String&gt;) -&gt; Self {&#10;        Self {&#10;            base_path: base_path.into(),&#10;            namespace: namespace.into(),&#10;        }&#10;    }&#10;&#10;    /// Return the directory path for this namespace.&#10;    fn namespace_dir(&amp;self) -&gt; PathBuf {&#10;        self.base_path.join(&amp;self.namespace)&#10;    }&#10;&#10;    /// Return the file path for a given key.&#10;    fn key_path(&amp;self, key: &amp;str) -&gt; PathBuf {&#10;        // TODO: Build the path: namespace_dir / {key}.json&#10;        // Be careful with keys that contain path separators -- for this&#10;        // exercise, assume keys are simple alphanumeric strings with&#10;        // hyphens and underscores.&#10;        todo!(&quot;Return the full path for this key&quot;)&#10;    }&#10;}&#10;&#10;#[async_trait]&#10;impl KVStorage for FileKVStorage {&#10;    fn namespace(&amp;self) -&gt; &amp;str {&#10;        &amp;self.namespace&#10;    }&#10;&#10;    async fn initialize(&amp;self) -&gt; Result&lt;()&gt; {&#10;        // TODO: Create the namespace directory if it does not exist.&#10;        // Use tokio::fs::create_dir_all for async directory creation.&#10;        todo!(&quot;Create the namespace directory&quot;)&#10;    }&#10;&#10;    async fn finalize(&amp;self) -&gt; Result&lt;()&gt; {&#10;        // No-op for file storage -- writes are immediate.&#10;        Ok(())&#10;    }&#10;&#10;    async fn get_by_id(&amp;self, id: &amp;str) -&gt; Result&lt;Option&lt;Value&gt;&gt; {&#10;        // TODO: Read the JSON file at key_path(id).&#10;        // - If the file does not exist, return Ok(None).&#10;        // - If the file exists, read and deserialize it.&#10;        // - Use tokio::fs::read_to_string for async reads.&#10;        // Hint: match on io::ErrorKind::NotFound to distinguish&#10;        // &quot;file missing&quot; from real I/O errors.&#10;        todo!(&quot;Read and deserialize the JSON file&quot;)&#10;    }&#10;&#10;    async fn get_by_ids(&amp;self, ids: &amp;[String]) -&gt; Result&lt;Vec&lt;Value&gt;&gt; {&#10;        // TODO: Call get_by_id for each id and collect the Some values.&#10;        todo!(&quot;Batch get by calling get_by_id in a loop&quot;)&#10;    }&#10;&#10;    async fn filter_keys(&amp;self, keys: HashSet&lt;String&gt;) -&gt; Result&lt;HashSet&lt;String&gt;&gt; {&#10;        // TODO: Return the subset of keys that do NOT have a corresponding file.&#10;        // Hint: use tokio::fs::try_exists or key_path(k).exists() to check.&#10;        todo!(&quot;Filter keys to find missing ones&quot;)&#10;    }&#10;&#10;    async fn upsert(&amp;self, data: &amp;[(String, Value)]) -&gt; Result&lt;()&gt; {&#10;        // TODO: For each (key, value):&#10;        // 1. Serialize value to pretty JSON.&#10;        // 2. Write to key_path(key) using tokio::fs::write.&#10;        // Ensure the namespace directory exists first.&#10;        todo!(&quot;Write each key-value pair as a JSON file&quot;)&#10;    }&#10;&#10;    async fn delete(&amp;self, ids: &amp;[String]) -&gt; Result&lt;()&gt; {&#10;        // TODO: Remove the JSON file for each id.&#10;        // Silently ignore NotFound errors (the key was already absent).&#10;        todo!(&quot;Delete JSON files for the given keys&quot;)&#10;    }&#10;&#10;    async fn is_empty(&amp;self) -&gt; Result&lt;bool&gt; {&#10;        // TODO: Check if the namespace directory is empty or does not exist.&#10;        todo!(&quot;Check if storage is empty&quot;)&#10;    }&#10;&#10;    async fn count(&amp;self) -&gt; Result&lt;usize&gt; {&#10;        // TODO: Count .json files in the namespace directory.&#10;        todo!(&quot;Count JSON files in the namespace directory&quot;)&#10;    }&#10;&#10;    async fn keys(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;&gt; {&#10;        // TODO: List .json files in the namespace directory and return&#10;        // the filenames without the .json extension as keys.&#10;        todo!(&quot;List all keys from filenames&quot;)&#10;    }&#10;&#10;    async fn clear(&amp;self) -&gt; Result&lt;()&gt; {&#10;        // TODO: Remove all .json files in the namespace directory.&#10;        // Do not remove the directory itself.&#10;        todo!(&quot;Remove all JSON files&quot;)&#10;    }&#10;&#10;    async fn transition_if_status(&#10;        &amp;self,&#10;        key: &amp;str,&#10;        expected_status: &amp;str,&#10;        new_status: &amp;str,&#10;    ) -&gt; Result&lt;bool&gt; {&#10;        // TODO: Read the value for key, check if its &quot;status&quot; field matches&#10;        // expected_status, and if so, update it to new_status and write back.&#10;        // Return Ok(true) if the transition succeeded, Ok(false) otherwise.&#10;        //&#10;        // Note: This is NOT truly atomic on a filesystem. In production,&#10;        // use a database with compare-and-swap semantics.&#10;        todo!(&quot;Read-modify-write status transition&quot;)&#10;    }&#10;}&#10;&#10;#[tokio::main]&#10;async fn main() -&gt; std::result::Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {&#10;    let dir = tempfile::tempdir()?;&#10;    let storage = FileKVStorage::new(dir.path(), &quot;documents&quot;);&#10;    storage.initialize().await?;&#10;&#10;    // Quick smoke test&#10;    storage&#10;        .upsert(&amp;[(&quot;doc-1&quot;.to_string(), serde_json::json!({&quot;title&quot;: &quot;Hello&quot;}))])&#10;        .await?;&#10;&#10;    let val = storage.get_by_id(&quot;doc-1&quot;).await?;&#10;    println!(&quot;Retrieved: {:?}&quot;, val);&#10;&#10;    println!(&quot;All tests in main passed!&quot;);&#10;    Ok(())&#10;}" spellcheck="false"></textarea>
+</section>
+<section class="exercise-hints" id="ch08-file-kv-storage-hints">
+  <h3 id="-hints"><a class="header" href="#-hints">💡 Hints</a></h3>
+  <details class="hint" data-level="1">
+    <summary>Hint 1: Structuring key_path</summary>
+    <div class="hint-content">
+<p>The file path should be <code>self.namespace_dir().join(format!("{}.json", key))</code>.
+Keep it simple -- for this exercise, keys are safe filename strings.</p>
+    </div>
+  </details>
+  <details class="hint" data-level="2">
+    <summary>Hint 2: Handling missing files in get_by_id</summary>
+    <div class="hint-content">
+<p>Use a <code>match</code> on the error kind:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>match tokio::fs::read_to_string(path).await {
+    Ok(contents) =&gt; {
+        let value: Value = serde_json::from_str(&amp;contents)?;
+        Ok(Some(value))
+    }
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound =&gt; Ok(None),
+    Err(e) =&gt; Err(StorageError::Io(e)),
+}
+<span class="boring">}</span></code></pre></pre>
+    </div>
+  </details>
+  <details class="hint" data-level="3">
+    <summary>Hint 3: Listing keys from the directory</summary>
+    <div class="hint-content">
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut keys = Vec::new();
+let mut entries = tokio::fs::read_dir(self.namespace_dir()).await?;
+while let Some(entry) = entries.next_entry().await? {
+    if let Some(name) = entry.file_name().to_str() {
+        if let Some(key) = name.strip_suffix(".json") {
+            keys.push(key.to_string());
+        }
+    }
+}
+Ok(keys)
+<span class="boring">}</span></code></pre></pre>
+    </div>
+  </details>
+</section>
+<section class="exercise-solution" id="ch08-file-kv-storage-solution">
+  <details class="solution">
+    <summary><span class="solution-warning">⚠️ Try the exercise first!</span><span class="solution-toggle">Show Solution</span></summary>
+    <div class="solution-content">
+      <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use async_trait::async_trait;
+use serde_json::Value;
+use std::collections::HashSet;
+use std::path::PathBuf;
+<p>#[derive(Debug, thiserror::Error)]
+pub enum StorageError {
+#[error("I/O error: {0}")]
+Io(#[from] std::io::Error),
+#[error("Serialization error: {0}")]
+Serialization(String),
+#[error("Database error: {0}")]
+Database(String),
+#[error("Storage not initialized")]
+NotInitialized,
+}</p>
+<p>impl From&lt;serde_json::Error&gt; for StorageError {
+fn from(err: serde_json::Error) -&gt; Self {
+StorageError::Serialization(err.to_string())
+}
+}</p>
+<p>pub type Result&lt;T&gt; = std::result::Result&lt;T, StorageError&gt;;</p>
+<p>#[async_trait]
+pub trait KVStorage: Send + Sync {
+fn namespace(&amp;self) -&gt; &amp;str;
+async fn initialize(&amp;self) -&gt; Result&lt;()&gt;;
+async fn finalize(&amp;self) -&gt; Result&lt;()&gt;;
+async fn get_by_id(&amp;self, id: &amp;str) -&gt; Result&lt;Option&lt;Value&gt;&gt;;
+async fn get_by_ids(&amp;self, ids: &amp;[String]) -&gt; Result&lt;Vec&lt;Value&gt;&gt;;
+async fn filter_keys(&amp;self, keys: HashSet&lt;String&gt;) -&gt; Result&lt;HashSet&lt;String&gt;&gt;;
+async fn upsert(&amp;self, data: &amp;[(String, Value)]) -&gt; Result&lt;()&gt;;
+async fn delete(&amp;self, ids: &amp;[String]) -&gt; Result&lt;()&gt;;
+async fn is_empty(&amp;self) -&gt; Result&lt;bool&gt;;
+async fn count(&amp;self) -&gt; Result&lt;usize&gt;;
+async fn keys(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;&gt;;
+async fn clear(&amp;self) -&gt; Result&lt;()&gt;;
+async fn transition_if_status(
+&amp;self,
+key: &amp;str,
+expected_status: &amp;str,
+new_status: &amp;str,
+) -&gt; Result&lt;bool&gt;;
+}</p>
+<p>pub struct FileKVStorage {
+base_path: PathBuf,
+namespace: String,
+}</p>
+<p>impl FileKVStorage {
+pub fn new(base_path: impl Into&lt;PathBuf&gt;, namespace: impl Into&lt;String&gt;) -&gt; Self {
+Self {
+base_path: base_path.into(),
+namespace: namespace.into(),
+}
+}</p>
+<pre><code>fn namespace_dir(&amp;amp;self) -&amp;gt; PathBuf {
+    self.base_path.join(&amp;amp;self.namespace)
+}
+
+fn key_path(&amp;amp;self, key: &amp;amp;str) -&amp;gt; PathBuf {
+    self.namespace_dir().join(format!(&amp;quot;{}.json&amp;quot;, key))
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</p>
+<p>#[async_trait]
+impl KVStorage for FileKVStorage {
+fn namespace(&amp;self) -&gt; &amp;str {
+&amp;self.namespace
+}</p>
+<pre><code>async fn initialize(&amp;amp;self) -&amp;gt; Result&amp;lt;()&amp;gt; {
+    tokio::fs::create_dir_all(self.namespace_dir()).await?;
+    Ok(())
+}
+
+async fn finalize(&amp;amp;self) -&amp;gt; Result&amp;lt;()&amp;gt; {
+    Ok(())
+}
+
+async fn get_by_id(&amp;amp;self, id: &amp;amp;str) -&amp;gt; Result&amp;lt;Option&amp;lt;Value&amp;gt;&amp;gt; {
+    let path = self.key_path(id);
+    match tokio::fs::read_to_string(&amp;amp;path).await {
+        Ok(contents) =&amp;gt; {
+            let value: Value = serde_json::from_str(&amp;amp;contents)?;
+            Ok(Some(value))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound =&amp;gt; Ok(None),
+        Err(e) =&amp;gt; Err(StorageError::Io(e)),
+    }
+}
+
+async fn get_by_ids(&amp;amp;self, ids: &amp;amp;[String]) -&amp;gt; Result&amp;lt;Vec&amp;lt;Value&amp;gt;&amp;gt; {
+    let mut results = Vec::new();
+    for id in ids {
+        if let Some(value) = self.get_by_id(id).await? {
+            results.push(value);
+        }
+    }
+    Ok(results)
+}
+
+async fn filter_keys(&amp;amp;self, keys: HashSet&amp;lt;String&amp;gt;) -&amp;gt; Result&amp;lt;HashSet&amp;lt;String&amp;gt;&amp;gt; {
+    let mut missing = HashSet::new();
+    for key in keys {
+        let path = self.key_path(&amp;amp;key);
+        if !path.exists() {
+            missing.insert(key);
+        }
+    }
+    Ok(missing)
+}
+
+async fn upsert(&amp;amp;self, data: &amp;amp;[(String, Value)]) -&amp;gt; Result&amp;lt;()&amp;gt; {
+    // Ensure directory exists
+    tokio::fs::create_dir_all(self.namespace_dir()).await?;
+
+    for (key, value) in data {
+        let path = self.key_path(key);
+        let json = serde_json::to_string_pretty(value)?;
+        tokio::fs::write(&amp;amp;path, json).await?;
+    }
+    Ok(())
+}
+
+async fn delete(&amp;amp;self, ids: &amp;amp;[String]) -&amp;gt; Result&amp;lt;()&amp;gt; {
+    for id in ids {
+        let path = self.key_path(id);
+        match tokio::fs::remove_file(&amp;amp;path).await {
+            Ok(()) =&amp;gt; {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound =&amp;gt; {}
+            Err(e) =&amp;gt; return Err(StorageError::Io(e)),
+        }
+    }
+    Ok(())
+}
+
+async fn is_empty(&amp;amp;self) -&amp;gt; Result&amp;lt;bool&amp;gt; {
+    let dir = self.namespace_dir();
+    if !dir.exists() {
+        return Ok(true);
+    }
+    let mut entries = tokio::fs::read_dir(&amp;amp;dir).await?;
+    Ok(entries.next_entry().await?.is_none())
+}
+
+async fn count(&amp;amp;self) -&amp;gt; Result&amp;lt;usize&amp;gt; {
+    let dir = self.namespace_dir();
+    if !dir.exists() {
+        return Ok(0);
+    }
+    let mut count = 0;
+    let mut entries = tokio::fs::read_dir(&amp;amp;dir).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        if let Some(name) = entry.file_name().to_str() {
+            if name.ends_with(&amp;quot;.json&amp;quot;) {
+                count += 1;
+            }
+        }
+    }
+    Ok(count)
+}
+
+async fn keys(&amp;amp;self) -&amp;gt; Result&amp;lt;Vec&amp;lt;String&amp;gt;&amp;gt; {
+    let dir = self.namespace_dir();
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut keys = Vec::new();
+    let mut entries = tokio::fs::read_dir(&amp;amp;dir).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        if let Some(name) = entry.file_name().to_str() {
+            if let Some(key) = name.strip_suffix(&amp;quot;.json&amp;quot;) {
+                keys.push(key.to_string());
+            }
+        }
+    }
+    Ok(keys)
+}
+
+async fn clear(&amp;amp;self) -&amp;gt; Result&amp;lt;()&amp;gt; {
+    let dir = self.namespace_dir();
+    if !dir.exists() {
+        return Ok(());
+    }
+    let mut entries = tokio::fs::read_dir(&amp;amp;dir).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        if let Some(name) = entry.file_name().to_str() {
+            if name.ends_with(&amp;quot;.json&amp;quot;) {
+                tokio::fs::remove_file(entry.path()).await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn transition_if_status(
+    &amp;amp;self,
+    key: &amp;amp;str,
+    expected_status: &amp;amp;str,
+    new_status: &amp;amp;str,
+) -&amp;gt; Result&amp;lt;bool&amp;gt; {
+    // Read current value
+    let value = match self.get_by_id(key).await? {
+        Some(v) =&amp;gt; v,
+        None =&amp;gt; return Ok(false),
+    };
+
+    // Check current status
+    let current_status = value.get(&amp;quot;status&amp;quot;).and_then(|v| v.as_str());
+    if current_status != Some(expected_status) {
+        return Ok(false);
+    }
+
+    // Update status and write back
+    let mut obj = value;
+    if let Some(map) = obj.as_object_mut() {
+        map.insert(&amp;quot;status&amp;quot;.to_string(), serde_json::json!(new_status));
+    }
+
+    let path = self.key_path(key);
+    let json = serde_json::to_string_pretty(&amp;amp;obj)?;
+    tokio::fs::write(&amp;amp;path, json).await?;
+
+    Ok(true)
+}
+</code></pre>
+<p>}</p>
+<p>#[tokio::main]
+async fn main() -&gt; std::result::Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+let dir = tempfile::tempdir()?;
+let storage = FileKVStorage::new(dir.path(), "documents");
+storage.initialize().await?;</p>
+<pre><code>storage
+    .upsert(&amp;amp;[(&amp;quot;doc-1&amp;quot;.to_string(), serde_json::json!({&amp;quot;title&amp;quot;: &amp;quot;Hello&amp;quot;}))])
+    .await?;
+
+let val = storage.get_by_id(&amp;quot;doc-1&amp;quot;).await?;
+println!(&amp;quot;Retrieved: {:?}&amp;quot;, val);
+
+println!(&amp;quot;All tests in main passed!&amp;quot;);
+Ok(())
+</code></pre>
+<p>}</code></pre>
+<div class="solution-explanation"><h4 id="explanation"><a class="header" href="#explanation">Explanation</a></h4><p>The <code>FileKVStorage</code> maps each KVStorage operation to filesystem calls:</p></p>
+<ul>
+<li><strong>key_path</strong>: Each key becomes <code>{base_path}/{namespace}/{key}.json</code>.</li>
+<li><strong>get_by_id</strong>: Reads the file and deserializes JSON. Returns <code>Ok(None)</code> for missing
+files instead of propagating a <code>NotFound</code> error.</li>
+<li><strong>upsert</strong>: Serializes to pretty JSON and writes the file. Uses <code>create_dir_all</code>
+defensively.</li>
+<li><strong>delete</strong>: Removes the file, ignoring <code>NotFound</code> errors for idempotency.</li>
+<li><strong>count/keys/clear</strong>: Use <code>read_dir</code> to iterate <code>.json</code> files in the namespace directory.</li>
+<li><strong>transition_if_status</strong>: Performs a read-modify-write cycle. This is NOT atomic --
+in production, use a database with compare-and-swap semantics (like DynamoDB
+conditional writes or PostgreSQL's <code>UPDATE ... WHERE status = $expected</code>).</li>
+</ul>
+</div>
+    </div>
+  </details>
+</section>
+<section class="exercise-tests" id="ch08-file-kv-storage-tests" data-mode="local">
+  <h3 id="-tests"><a class="header" href="#-tests">🧪 Tests</a></h3>
+  <div class="test-actions">
+    <div class="local-test-info"><p>Run these tests locally with:</p><pre><code>cargo test</code></pre></div>
+  </div>
+  <div class="test-results" id="results-ch08-file-kv-storage" hidden></div>
+  <details class="tests-code"><summary>View Test Code</summary>
+    <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+<pre><code>async fn setup() -&amp;gt; (tempfile::TempDir, FileKVStorage) {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = FileKVStorage::new(dir.path(), &amp;quot;test&amp;quot;);
+    storage.initialize().await.unwrap();
+    (dir, storage)
+}
+
+#[tokio::test]
+async fn test_upsert_and_get() {
+    let (_dir, storage) = setup().await;
+
+    let value = json!({&amp;quot;title&amp;quot;: &amp;quot;Test Document&amp;quot;, &amp;quot;version&amp;quot;: 1});
+    storage
+        .upsert(&amp;amp;[(&amp;quot;doc-1&amp;quot;.to_string(), value.clone())])
+        .await
+        .unwrap();
+
+    let retrieved = storage.get_by_id(&amp;quot;doc-1&amp;quot;).await.unwrap();
+    assert_eq!(retrieved, Some(value));
+}
+
+#[tokio::test]
+async fn test_get_missing_returns_none() {
+    let (_dir, storage) = setup().await;
+
+    let result = storage.get_by_id(&amp;quot;nonexistent&amp;quot;).await.unwrap();
+    assert!(result.is_none());
+}
+
+#[tokio::test]
+async fn test_get_by_ids() {
+    let (_dir, storage) = setup().await;
+
+    storage
+        .upsert(&amp;amp;[
+            (&amp;quot;a&amp;quot;.to_string(), json!(1)),
+            (&amp;quot;b&amp;quot;.to_string(), json!(2)),
+            (&amp;quot;c&amp;quot;.to_string(), json!(3)),
+        ])
+        .await
+        .unwrap();
+
+    let ids = vec![&amp;quot;a&amp;quot;.to_string(), &amp;quot;c&amp;quot;.to_string(), &amp;quot;missing&amp;quot;.to_string()];
+    let results = storage.get_by_ids(&amp;amp;ids).await.unwrap();
+    assert_eq!(results.len(), 2);
+}
+
+#[tokio::test]
+async fn test_delete() {
+    let (_dir, storage) = setup().await;
+
+    storage
+        .upsert(&amp;amp;[(&amp;quot;doc-1&amp;quot;.to_string(), json!({&amp;quot;x&amp;quot;: 1}))])
+        .await
+        .unwrap();
+    assert_eq!(storage.count().await.unwrap(), 1);
+
+    storage.delete(&amp;amp;[&amp;quot;doc-1&amp;quot;.to_string()]).await.unwrap();
+    assert_eq!(storage.count().await.unwrap(), 0);
+    assert!(storage.get_by_id(&amp;quot;doc-1&amp;quot;).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn test_delete_nonexistent_is_ok() {
+    let (_dir, storage) = setup().await;
+    // Should not error
+    storage.delete(&amp;amp;[&amp;quot;ghost&amp;quot;.to_string()]).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_count_and_keys() {
+    let (_dir, storage) = setup().await;
+
+    assert_eq!(storage.count().await.unwrap(), 0);
+    assert!(storage.is_empty().await.unwrap());
+
+    storage
+        .upsert(&amp;amp;[
+            (&amp;quot;alpha&amp;quot;.to_string(), json!(1)),
+            (&amp;quot;beta&amp;quot;.to_string(), json!(2)),
+        ])
+        .await
+        .unwrap();
+
+    assert_eq!(storage.count().await.unwrap(), 2);
+    assert!(!storage.is_empty().await.unwrap());
+
+    let mut keys = storage.keys().await.unwrap();
+    keys.sort();
+    assert_eq!(keys, vec![&amp;quot;alpha&amp;quot;, &amp;quot;beta&amp;quot;]);
+}
+
+#[tokio::test]
+async fn test_filter_keys() {
+    let (_dir, storage) = setup().await;
+
+    storage
+        .upsert(&amp;amp;[(&amp;quot;a&amp;quot;.to_string(), json!(1)), (&amp;quot;b&amp;quot;.to_string(), json!(2))])
+        .await
+        .unwrap();
+
+    let to_check: HashSet&amp;lt;String&amp;gt; =
+        [&amp;quot;a&amp;quot;, &amp;quot;b&amp;quot;, &amp;quot;c&amp;quot;, &amp;quot;d&amp;quot;].iter().map(|s| s.to_string()).collect();
+    let missing = storage.filter_keys(to_check).await.unwrap();
+
+    assert_eq!(missing.len(), 2);
+    assert!(missing.contains(&amp;quot;c&amp;quot;));
+    assert!(missing.contains(&amp;quot;d&amp;quot;));
+}
+
+#[tokio::test]
+async fn test_clear() {
+    let (_dir, storage) = setup().await;
+
+    storage
+        .upsert(&amp;amp;[
+            (&amp;quot;x&amp;quot;.to_string(), json!(1)),
+            (&amp;quot;y&amp;quot;.to_string(), json!(2)),
+        ])
+        .await
+        .unwrap();
+    assert_eq!(storage.count().await.unwrap(), 2);
+
+    storage.clear().await.unwrap();
+    assert_eq!(storage.count().await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn test_upsert_overwrites() {
+    let (_dir, storage) = setup().await;
+
+    storage
+        .upsert(&amp;amp;[(&amp;quot;doc-1&amp;quot;.to_string(), json!({&amp;quot;version&amp;quot;: 1}))])
+        .await
+        .unwrap();
+    storage
+        .upsert(&amp;amp;[(&amp;quot;doc-1&amp;quot;.to_string(), json!({&amp;quot;version&amp;quot;: 2}))])
+        .await
+        .unwrap();
+
+    let val = storage.get_by_id(&amp;quot;doc-1&amp;quot;).await.unwrap().unwrap();
+    assert_eq!(val[&amp;quot;version&amp;quot;], 2);
+}
+
+#[tokio::test]
+async fn test_transition_if_status_success() {
+    let (_dir, storage) = setup().await;
+
+    let doc = json!({&amp;quot;id&amp;quot;: &amp;quot;doc-1&amp;quot;, &amp;quot;status&amp;quot;: &amp;quot;failed&amp;quot;, &amp;quot;title&amp;quot;: &amp;quot;Test&amp;quot;});
+    storage
+        .upsert(&amp;amp;[(&amp;quot;doc-1&amp;quot;.to_string(), doc)])
+        .await
+        .unwrap();
+
+    let result = storage
+        .transition_if_status(&amp;quot;doc-1&amp;quot;, &amp;quot;failed&amp;quot;, &amp;quot;deleting&amp;quot;)
+        .await
+        .unwrap();
+    assert!(result);
+
+    let updated = storage.get_by_id(&amp;quot;doc-1&amp;quot;).await.unwrap().unwrap();
+    assert_eq!(updated[&amp;quot;status&amp;quot;], &amp;quot;deleting&amp;quot;);
+}
+
+#[tokio::test]
+async fn test_transition_if_status_wrong_status() {
+    let (_dir, storage) = setup().await;
+
+    let doc = json!({&amp;quot;id&amp;quot;: &amp;quot;doc-1&amp;quot;, &amp;quot;status&amp;quot;: &amp;quot;processing&amp;quot;});
+    storage
+        .upsert(&amp;amp;[(&amp;quot;doc-1&amp;quot;.to_string(), doc)])
+        .await
+        .unwrap();
+
+    let result = storage
+        .transition_if_status(&amp;quot;doc-1&amp;quot;, &amp;quot;failed&amp;quot;, &amp;quot;deleting&amp;quot;)
+        .await
+        .unwrap();
+    assert!(!result);
+
+    let unchanged = storage.get_by_id(&amp;quot;doc-1&amp;quot;).await.unwrap().unwrap();
+    assert_eq!(unchanged[&amp;quot;status&amp;quot;], &amp;quot;processing&amp;quot;);
+}
+
+#[tokio::test]
+async fn test_transition_if_status_missing_key() {
+    let (_dir, storage) = setup().await;
+
+    let result = storage
+        .transition_if_status(&amp;quot;nonexistent&amp;quot;, &amp;quot;failed&amp;quot;, &amp;quot;deleting&amp;quot;)
+        .await
+        .unwrap();
+    assert!(!result);
+}
+
+#[tokio::test]
+async fn test_namespace() {
+    let (_dir, storage) = setup().await;
+    assert_eq!(storage.namespace(), &amp;quot;test&amp;quot;);
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</code></pre></p>
+  </details>
+</section>
+<section class="exercise-reflection" id="ch08-file-kv-storage-reflection">
+  <h3 id="-reflection"><a class="header" href="#-reflection">🤔 Reflection</a></h3>
+  <ul>
+    <li>How does the file-per-key approach compare to storing all keys in a single file?</li>
+    <li>The `transition_if_status` method is not truly atomic on a filesystem. What could</li>
+    <li>If you needed to support keys containing `/` or other path-unsafe characters,</li>
+  </ul>
+</section>
+<footer class="exercise-footer">
+  <button class="btn btn-complete" data-exercise-id="ch08-file-kv-storage">✓ Mark Complete</button>
+</footer>
+</article>
+</div>
+<p>In chapter 8 you learned that EdgeQuake uses trait-based storage abstraction to
+decouple business logic from storage backends. The <code>KVStorage</code> trait defines
+operations like <code>get_by_id</code>, <code>upsert</code>, and <code>delete</code> -- and any struct that
+implements the trait can be plugged into the system.</p>
+<p>In this exercise you will build a <strong>file-system-backed KVStorage adapter</strong> that
+stores each key-value pair as a JSON file on disk. This is useful for local
+development, debugging, and scenarios where you want human-readable storage
+without running a database.</p>
+<p>::: objectives
+thinking:</p>
+<ul>
+<li>Understand how the adapter pattern maps abstract trait methods to concrete I/O operations</li>
+<li>Recognize the trade-offs of file-based storage vs in-memory and database backends</li>
+<li>Consider concurrency and atomicity limitations of filesystem operations
+doing:</li>
+<li>Implement the full KVStorage trait for a file-based backend</li>
+<li>Use tokio::fs for non-blocking file operations</li>
+<li>Map I/O errors to StorageError variants correctly</li>
+<li>Write a working transition_if_status with read-modify-write semantics
+:::</li>
+</ul>
+<p>::: discussion</p>
+<ul>
+<li>Why does EdgeQuake define <code>KVStorage</code> as a trait rather than using a concrete type?</li>
+<li>When would a file-based backend be preferable to the in-memory implementation?</li>
+<li>What are the atomicity limitations of filesystem writes, and how could you mitigate them?
+:::</li>
+</ul>
+<p>::: starter file="src/main.rs"</p>
+<pre><pre class="playground"><code class="language-rust">use async_trait::async_trait;
+use serde_json::Value;
+use std::collections::HashSet;
+use std::path::PathBuf;
+
+// --- Error types (simplified from edgequake-storage) ---
+
+#[derive(Debug, thiserror::Error)]
+pub enum StorageError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+
+    #[error("Database error: {0}")]
+    Database(String),
+
+    #[error("Storage not initialized")]
+    NotInitialized,
+}
+
+impl From&lt;serde_json::Error&gt; for StorageError {
+    fn from(err: serde_json::Error) -&gt; Self {
+        StorageError::Serialization(err.to_string())
+    }
+}
+
+pub type Result&lt;T&gt; = std::result::Result&lt;T, StorageError&gt;;
+
+// --- KVStorage trait (simplified from edgequake-storage) ---
+
+#[async_trait]
+pub trait KVStorage: Send + Sync {
+    fn namespace(&amp;self) -&gt; &amp;str;
+    async fn initialize(&amp;self) -&gt; Result&lt;()&gt;;
+    async fn finalize(&amp;self) -&gt; Result&lt;()&gt;;
+    async fn get_by_id(&amp;self, id: &amp;str) -&gt; Result&lt;Option&lt;Value&gt;&gt;;
+    async fn get_by_ids(&amp;self, ids: &amp;[String]) -&gt; Result&lt;Vec&lt;Value&gt;&gt;;
+    async fn filter_keys(&amp;self, keys: HashSet&lt;String&gt;) -&gt; Result&lt;HashSet&lt;String&gt;&gt;;
+    async fn upsert(&amp;self, data: &amp;[(String, Value)]) -&gt; Result&lt;()&gt;;
+    async fn delete(&amp;self, ids: &amp;[String]) -&gt; Result&lt;()&gt;;
+    async fn is_empty(&amp;self) -&gt; Result&lt;bool&gt;;
+    async fn count(&amp;self) -&gt; Result&lt;usize&gt;;
+    async fn keys(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;&gt;;
+    async fn clear(&amp;self) -&gt; Result&lt;()&gt;;
+    async fn transition_if_status(
+        &amp;self,
+        key: &amp;str,
+        expected_status: &amp;str,
+        new_status: &amp;str,
+    ) -&gt; Result&lt;bool&gt;;
+}
+
+// --- Your implementation ---
+
+/// File-based key-value storage.
+///
+/// Stores each record as a JSON file at:
+///   {base_path}/{namespace}/{key}.json
+pub struct FileKVStorage {
+    base_path: PathBuf,
+    namespace: String,
+}
+
+impl FileKVStorage {
+    pub fn new(base_path: impl Into&lt;PathBuf&gt;, namespace: impl Into&lt;String&gt;) -&gt; Self {
+        Self {
+            base_path: base_path.into(),
+            namespace: namespace.into(),
+        }
+    }
+
+    /// Return the directory path for this namespace.
+    fn namespace_dir(&amp;self) -&gt; PathBuf {
+        self.base_path.join(&amp;self.namespace)
+    }
+
+    /// Return the file path for a given key.
+    fn key_path(&amp;self, key: &amp;str) -&gt; PathBuf {
+        // TODO: Build the path: namespace_dir / {key}.json
+        // Be careful with keys that contain path separators -- for this
+        // exercise, assume keys are simple alphanumeric strings with
+        // hyphens and underscores.
+        todo!("Return the full path for this key")
+    }
+}
+
+#[async_trait]
+impl KVStorage for FileKVStorage {
+    fn namespace(&amp;self) -&gt; &amp;str {
+        &amp;self.namespace
+    }
+
+    async fn initialize(&amp;self) -&gt; Result&lt;()&gt; {
+        // TODO: Create the namespace directory if it does not exist.
+        // Use tokio::fs::create_dir_all for async directory creation.
+        todo!("Create the namespace directory")
+    }
+
+    async fn finalize(&amp;self) -&gt; Result&lt;()&gt; {
+        // No-op for file storage -- writes are immediate.
+        Ok(())
+    }
+
+    async fn get_by_id(&amp;self, id: &amp;str) -&gt; Result&lt;Option&lt;Value&gt;&gt; {
+        // TODO: Read the JSON file at key_path(id).
+        // - If the file does not exist, return Ok(None).
+        // - If the file exists, read and deserialize it.
+        // - Use tokio::fs::read_to_string for async reads.
+        // Hint: match on io::ErrorKind::NotFound to distinguish
+        // "file missing" from real I/O errors.
+        todo!("Read and deserialize the JSON file")
+    }
+
+    async fn get_by_ids(&amp;self, ids: &amp;[String]) -&gt; Result&lt;Vec&lt;Value&gt;&gt; {
+        // TODO: Call get_by_id for each id and collect the Some values.
+        todo!("Batch get by calling get_by_id in a loop")
+    }
+
+    async fn filter_keys(&amp;self, keys: HashSet&lt;String&gt;) -&gt; Result&lt;HashSet&lt;String&gt;&gt; {
+        // TODO: Return the subset of keys that do NOT have a corresponding file.
+        // Hint: use tokio::fs::try_exists or key_path(k).exists() to check.
+        todo!("Filter keys to find missing ones")
+    }
+
+    async fn upsert(&amp;self, data: &amp;[(String, Value)]) -&gt; Result&lt;()&gt; {
+        // TODO: For each (key, value):
+        // 1. Serialize value to pretty JSON.
+        // 2. Write to key_path(key) using tokio::fs::write.
+        // Ensure the namespace directory exists first.
+        todo!("Write each key-value pair as a JSON file")
+    }
+
+    async fn delete(&amp;self, ids: &amp;[String]) -&gt; Result&lt;()&gt; {
+        // TODO: Remove the JSON file for each id.
+        // Silently ignore NotFound errors (the key was already absent).
+        todo!("Delete JSON files for the given keys")
+    }
+
+    async fn is_empty(&amp;self) -&gt; Result&lt;bool&gt; {
+        // TODO: Check if the namespace directory is empty or does not exist.
+        todo!("Check if storage is empty")
+    }
+
+    async fn count(&amp;self) -&gt; Result&lt;usize&gt; {
+        // TODO: Count .json files in the namespace directory.
+        todo!("Count JSON files in the namespace directory")
+    }
+
+    async fn keys(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;&gt; {
+        // TODO: List .json files in the namespace directory and return
+        // the filenames without the .json extension as keys.
+        todo!("List all keys from filenames")
+    }
+
+    async fn clear(&amp;self) -&gt; Result&lt;()&gt; {
+        // TODO: Remove all .json files in the namespace directory.
+        // Do not remove the directory itself.
+        todo!("Remove all JSON files")
+    }
+
+    async fn transition_if_status(
+        &amp;self,
+        key: &amp;str,
+        expected_status: &amp;str,
+        new_status: &amp;str,
+    ) -&gt; Result&lt;bool&gt; {
+        // TODO: Read the value for key, check if its "status" field matches
+        // expected_status, and if so, update it to new_status and write back.
+        // Return Ok(true) if the transition succeeded, Ok(false) otherwise.
+        //
+        // Note: This is NOT truly atomic on a filesystem. In production,
+        // use a database with compare-and-swap semantics.
+        todo!("Read-modify-write status transition")
+    }
+}
+
+#[tokio::main]
+async fn main() -&gt; std::result::Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let dir = tempfile::tempdir()?;
+    let storage = FileKVStorage::new(dir.path(), "documents");
+    storage.initialize().await?;
+
+    // Quick smoke test
+    storage
+        .upsert(&amp;[("doc-1".to_string(), serde_json::json!({"title": "Hello"}))])
+        .await?;
+
+    let val = storage.get_by_id("doc-1").await?;
+    println!("Retrieved: {:?}", val);
+
+    println!("All tests in main passed!");
+    Ok(())
+}</code></pre></pre>
+<p>:::</p>
+<p>::: hint level=1 title="Structuring key_path"
+The file path should be <code>self.namespace_dir().join(format!("{}.json", key))</code>.
+Keep it simple -- for this exercise, keys are safe filename strings.
+:::</p>
+<p>::: hint level=2 title="Handling missing files in get_by_id"
+Use a <code>match</code> on the error kind:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>match tokio::fs::read_to_string(path).await {
+    Ok(contents) =&gt; {
+        let value: Value = serde_json::from_str(&amp;contents)?;
+        Ok(Some(value))
+    }
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound =&gt; Ok(None),
+    Err(e) =&gt; Err(StorageError::Io(e)),
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: hint level=3 title="Listing keys from the directory"</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut keys = Vec::new();
+let mut entries = tokio::fs::read_dir(self.namespace_dir()).await?;
+while let Some(entry) = entries.next_entry().await? {
+    if let Some(name) = entry.file_name().to_str() {
+        if let Some(key) = name.strip_suffix(".json") {
+            keys.push(key.to_string());
+        }
+    }
+}
+Ok(keys)
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: solution</p>
+<pre><pre class="playground"><code class="language-rust">use async_trait::async_trait;
+use serde_json::Value;
+use std::collections::HashSet;
+use std::path::PathBuf;
+
+#[derive(Debug, thiserror::Error)]
+pub enum StorageError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+    #[error("Database error: {0}")]
+    Database(String),
+    #[error("Storage not initialized")]
+    NotInitialized,
+}
+
+impl From&lt;serde_json::Error&gt; for StorageError {
+    fn from(err: serde_json::Error) -&gt; Self {
+        StorageError::Serialization(err.to_string())
+    }
+}
+
+pub type Result&lt;T&gt; = std::result::Result&lt;T, StorageError&gt;;
+
+#[async_trait]
+pub trait KVStorage: Send + Sync {
+    fn namespace(&amp;self) -&gt; &amp;str;
+    async fn initialize(&amp;self) -&gt; Result&lt;()&gt;;
+    async fn finalize(&amp;self) -&gt; Result&lt;()&gt;;
+    async fn get_by_id(&amp;self, id: &amp;str) -&gt; Result&lt;Option&lt;Value&gt;&gt;;
+    async fn get_by_ids(&amp;self, ids: &amp;[String]) -&gt; Result&lt;Vec&lt;Value&gt;&gt;;
+    async fn filter_keys(&amp;self, keys: HashSet&lt;String&gt;) -&gt; Result&lt;HashSet&lt;String&gt;&gt;;
+    async fn upsert(&amp;self, data: &amp;[(String, Value)]) -&gt; Result&lt;()&gt;;
+    async fn delete(&amp;self, ids: &amp;[String]) -&gt; Result&lt;()&gt;;
+    async fn is_empty(&amp;self) -&gt; Result&lt;bool&gt;;
+    async fn count(&amp;self) -&gt; Result&lt;usize&gt;;
+    async fn keys(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;&gt;;
+    async fn clear(&amp;self) -&gt; Result&lt;()&gt;;
+    async fn transition_if_status(
+        &amp;self,
+        key: &amp;str,
+        expected_status: &amp;str,
+        new_status: &amp;str,
+    ) -&gt; Result&lt;bool&gt;;
+}
+
+pub struct FileKVStorage {
+    base_path: PathBuf,
+    namespace: String,
+}
+
+impl FileKVStorage {
+    pub fn new(base_path: impl Into&lt;PathBuf&gt;, namespace: impl Into&lt;String&gt;) -&gt; Self {
+        Self {
+            base_path: base_path.into(),
+            namespace: namespace.into(),
+        }
+    }
+
+    fn namespace_dir(&amp;self) -&gt; PathBuf {
+        self.base_path.join(&amp;self.namespace)
+    }
+
+    fn key_path(&amp;self, key: &amp;str) -&gt; PathBuf {
+        self.namespace_dir().join(format!("{}.json", key))
+    }
+}
+
+#[async_trait]
+impl KVStorage for FileKVStorage {
+    fn namespace(&amp;self) -&gt; &amp;str {
+        &amp;self.namespace
+    }
+
+    async fn initialize(&amp;self) -&gt; Result&lt;()&gt; {
+        tokio::fs::create_dir_all(self.namespace_dir()).await?;
+        Ok(())
+    }
+
+    async fn finalize(&amp;self) -&gt; Result&lt;()&gt; {
+        Ok(())
+    }
+
+    async fn get_by_id(&amp;self, id: &amp;str) -&gt; Result&lt;Option&lt;Value&gt;&gt; {
+        let path = self.key_path(id);
+        match tokio::fs::read_to_string(&amp;path).await {
+            Ok(contents) =&gt; {
+                let value: Value = serde_json::from_str(&amp;contents)?;
+                Ok(Some(value))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound =&gt; Ok(None),
+            Err(e) =&gt; Err(StorageError::Io(e)),
+        }
+    }
+
+    async fn get_by_ids(&amp;self, ids: &amp;[String]) -&gt; Result&lt;Vec&lt;Value&gt;&gt; {
+        let mut results = Vec::new();
+        for id in ids {
+            if let Some(value) = self.get_by_id(id).await? {
+                results.push(value);
+            }
+        }
+        Ok(results)
+    }
+
+    async fn filter_keys(&amp;self, keys: HashSet&lt;String&gt;) -&gt; Result&lt;HashSet&lt;String&gt;&gt; {
+        let mut missing = HashSet::new();
+        for key in keys {
+            let path = self.key_path(&amp;key);
+            if !path.exists() {
+                missing.insert(key);
+            }
+        }
+        Ok(missing)
+    }
+
+    async fn upsert(&amp;self, data: &amp;[(String, Value)]) -&gt; Result&lt;()&gt; {
+        // Ensure directory exists
+        tokio::fs::create_dir_all(self.namespace_dir()).await?;
+
+        for (key, value) in data {
+            let path = self.key_path(key);
+            let json = serde_json::to_string_pretty(value)?;
+            tokio::fs::write(&amp;path, json).await?;
+        }
+        Ok(())
+    }
+
+    async fn delete(&amp;self, ids: &amp;[String]) -&gt; Result&lt;()&gt; {
+        for id in ids {
+            let path = self.key_path(id);
+            match tokio::fs::remove_file(&amp;path).await {
+                Ok(()) =&gt; {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound =&gt; {}
+                Err(e) =&gt; return Err(StorageError::Io(e)),
+            }
+        }
+        Ok(())
+    }
+
+    async fn is_empty(&amp;self) -&gt; Result&lt;bool&gt; {
+        let dir = self.namespace_dir();
+        if !dir.exists() {
+            return Ok(true);
+        }
+        let mut entries = tokio::fs::read_dir(&amp;dir).await?;
+        Ok(entries.next_entry().await?.is_none())
+    }
+
+    async fn count(&amp;self) -&gt; Result&lt;usize&gt; {
+        let dir = self.namespace_dir();
+        if !dir.exists() {
+            return Ok(0);
+        }
+        let mut count = 0;
+        let mut entries = tokio::fs::read_dir(&amp;dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            if let Some(name) = entry.file_name().to_str() {
+                if name.ends_with(".json") {
+                    count += 1;
+                }
+            }
+        }
+        Ok(count)
+    }
+
+    async fn keys(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;&gt; {
+        let dir = self.namespace_dir();
+        if !dir.exists() {
+            return Ok(Vec::new());
+        }
+        let mut keys = Vec::new();
+        let mut entries = tokio::fs::read_dir(&amp;dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            if let Some(name) = entry.file_name().to_str() {
+                if let Some(key) = name.strip_suffix(".json") {
+                    keys.push(key.to_string());
+                }
+            }
+        }
+        Ok(keys)
+    }
+
+    async fn clear(&amp;self) -&gt; Result&lt;()&gt; {
+        let dir = self.namespace_dir();
+        if !dir.exists() {
+            return Ok(());
+        }
+        let mut entries = tokio::fs::read_dir(&amp;dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            if let Some(name) = entry.file_name().to_str() {
+                if name.ends_with(".json") {
+                    tokio::fs::remove_file(entry.path()).await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn transition_if_status(
+        &amp;self,
+        key: &amp;str,
+        expected_status: &amp;str,
+        new_status: &amp;str,
+    ) -&gt; Result&lt;bool&gt; {
+        // Read current value
+        let value = match self.get_by_id(key).await? {
+            Some(v) =&gt; v,
+            None =&gt; return Ok(false),
+        };
+
+        // Check current status
+        let current_status = value.get("status").and_then(|v| v.as_str());
+        if current_status != Some(expected_status) {
+            return Ok(false);
+        }
+
+        // Update status and write back
+        let mut obj = value;
+        if let Some(map) = obj.as_object_mut() {
+            map.insert("status".to_string(), serde_json::json!(new_status));
+        }
+
+        let path = self.key_path(key);
+        let json = serde_json::to_string_pretty(&amp;obj)?;
+        tokio::fs::write(&amp;path, json).await?;
+
+        Ok(true)
+    }
+}
+
+#[tokio::main]
+async fn main() -&gt; std::result::Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let dir = tempfile::tempdir()?;
+    let storage = FileKVStorage::new(dir.path(), "documents");
+    storage.initialize().await?;
+
+    storage
+        .upsert(&amp;[("doc-1".to_string(), serde_json::json!({"title": "Hello"}))])
+        .await?;
+
+    let val = storage.get_by_id("doc-1").await?;
+    println!("Retrieved: {:?}", val);
+
+    println!("All tests in main passed!");
+    Ok(())
+}</code></pre></pre>
+<h3 id="explanation-1"><a class="header" href="#explanation-1">Explanation</a></h3>
+<p>The <code>FileKVStorage</code> maps each KVStorage operation to filesystem calls:</p>
+<ul>
+<li><strong>key_path</strong>: Each key becomes <code>{base_path}/{namespace}/{key}.json</code>.</li>
+<li><strong>get_by_id</strong>: Reads the file and deserializes JSON. Returns <code>Ok(None)</code> for missing
+files instead of propagating a <code>NotFound</code> error.</li>
+<li><strong>upsert</strong>: Serializes to pretty JSON and writes the file. Uses <code>create_dir_all</code>
+defensively.</li>
+<li><strong>delete</strong>: Removes the file, ignoring <code>NotFound</code> errors for idempotency.</li>
+<li><strong>count/keys/clear</strong>: Use <code>read_dir</code> to iterate <code>.json</code> files in the namespace directory.</li>
+<li><strong>transition_if_status</strong>: Performs a read-modify-write cycle. This is NOT atomic --
+in production, use a database with compare-and-swap semantics (like DynamoDB
+conditional writes or PostgreSQL's <code>UPDATE ... WHERE status = $expected</code>).
+:::</li>
+</ul>
+<p>::: tests mode=local</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    async fn setup() -&gt; (tempfile::TempDir, FileKVStorage) {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = FileKVStorage::new(dir.path(), "test");
+        storage.initialize().await.unwrap();
+        (dir, storage)
+    }
+
+    #[tokio::test]
+    async fn test_upsert_and_get() {
+        let (_dir, storage) = setup().await;
+
+        let value = json!({"title": "Test Document", "version": 1});
+        storage
+            .upsert(&amp;[("doc-1".to_string(), value.clone())])
+            .await
+            .unwrap();
+
+        let retrieved = storage.get_by_id("doc-1").await.unwrap();
+        assert_eq!(retrieved, Some(value));
+    }
+
+    #[tokio::test]
+    async fn test_get_missing_returns_none() {
+        let (_dir, storage) = setup().await;
+
+        let result = storage.get_by_id("nonexistent").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_by_ids() {
+        let (_dir, storage) = setup().await;
+
+        storage
+            .upsert(&amp;[
+                ("a".to_string(), json!(1)),
+                ("b".to_string(), json!(2)),
+                ("c".to_string(), json!(3)),
+            ])
+            .await
+            .unwrap();
+
+        let ids = vec!["a".to_string(), "c".to_string(), "missing".to_string()];
+        let results = storage.get_by_ids(&amp;ids).await.unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_delete() {
+        let (_dir, storage) = setup().await;
+
+        storage
+            .upsert(&amp;[("doc-1".to_string(), json!({"x": 1}))])
+            .await
+            .unwrap();
+        assert_eq!(storage.count().await.unwrap(), 1);
+
+        storage.delete(&amp;["doc-1".to_string()]).await.unwrap();
+        assert_eq!(storage.count().await.unwrap(), 0);
+        assert!(storage.get_by_id("doc-1").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_delete_nonexistent_is_ok() {
+        let (_dir, storage) = setup().await;
+        // Should not error
+        storage.delete(&amp;["ghost".to_string()]).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_count_and_keys() {
+        let (_dir, storage) = setup().await;
+
+        assert_eq!(storage.count().await.unwrap(), 0);
+        assert!(storage.is_empty().await.unwrap());
+
+        storage
+            .upsert(&amp;[
+                ("alpha".to_string(), json!(1)),
+                ("beta".to_string(), json!(2)),
+            ])
+            .await
+            .unwrap();
+
+        assert_eq!(storage.count().await.unwrap(), 2);
+        assert!(!storage.is_empty().await.unwrap());
+
+        let mut keys = storage.keys().await.unwrap();
+        keys.sort();
+        assert_eq!(keys, vec!["alpha", "beta"]);
+    }
+
+    #[tokio::test]
+    async fn test_filter_keys() {
+        let (_dir, storage) = setup().await;
+
+        storage
+            .upsert(&amp;[("a".to_string(), json!(1)), ("b".to_string(), json!(2))])
+            .await
+            .unwrap();
+
+        let to_check: HashSet&lt;String&gt; =
+            ["a", "b", "c", "d"].iter().map(|s| s.to_string()).collect();
+        let missing = storage.filter_keys(to_check).await.unwrap();
+
+        assert_eq!(missing.len(), 2);
+        assert!(missing.contains("c"));
+        assert!(missing.contains("d"));
+    }
+
+    #[tokio::test]
+    async fn test_clear() {
+        let (_dir, storage) = setup().await;
+
+        storage
+            .upsert(&amp;[
+                ("x".to_string(), json!(1)),
+                ("y".to_string(), json!(2)),
+            ])
+            .await
+            .unwrap();
+        assert_eq!(storage.count().await.unwrap(), 2);
+
+        storage.clear().await.unwrap();
+        assert_eq!(storage.count().await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_upsert_overwrites() {
+        let (_dir, storage) = setup().await;
+
+        storage
+            .upsert(&amp;[("doc-1".to_string(), json!({"version": 1}))])
+            .await
+            .unwrap();
+        storage
+            .upsert(&amp;[("doc-1".to_string(), json!({"version": 2}))])
+            .await
+            .unwrap();
+
+        let val = storage.get_by_id("doc-1").await.unwrap().unwrap();
+        assert_eq!(val["version"], 2);
+    }
+
+    #[tokio::test]
+    async fn test_transition_if_status_success() {
+        let (_dir, storage) = setup().await;
+
+        let doc = json!({"id": "doc-1", "status": "failed", "title": "Test"});
+        storage
+            .upsert(&amp;[("doc-1".to_string(), doc)])
+            .await
+            .unwrap();
+
+        let result = storage
+            .transition_if_status("doc-1", "failed", "deleting")
+            .await
+            .unwrap();
+        assert!(result);
+
+        let updated = storage.get_by_id("doc-1").await.unwrap().unwrap();
+        assert_eq!(updated["status"], "deleting");
+    }
+
+    #[tokio::test]
+    async fn test_transition_if_status_wrong_status() {
+        let (_dir, storage) = setup().await;
+
+        let doc = json!({"id": "doc-1", "status": "processing"});
+        storage
+            .upsert(&amp;[("doc-1".to_string(), doc)])
+            .await
+            .unwrap();
+
+        let result = storage
+            .transition_if_status("doc-1", "failed", "deleting")
+            .await
+            .unwrap();
+        assert!(!result);
+
+        let unchanged = storage.get_by_id("doc-1").await.unwrap().unwrap();
+        assert_eq!(unchanged["status"], "processing");
+    }
+
+    #[tokio::test]
+    async fn test_transition_if_status_missing_key() {
+        let (_dir, storage) = setup().await;
+
+        let result = storage
+            .transition_if_status("nonexistent", "failed", "deleting")
+            .await
+            .unwrap();
+        assert!(!result);
+    }
+
+    #[tokio::test]
+    async fn test_namespace() {
+        let (_dir, storage) = setup().await;
+        assert_eq!(storage.namespace(), "test");
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: reflection</p>
+<ul>
+<li>How does the file-per-key approach compare to storing all keys in a single file?
+What are the trade-offs for concurrent access?</li>
+<li>The <code>transition_if_status</code> method is not truly atomic on a filesystem. What could
+go wrong in a multi-process scenario? How would you fix it?</li>
+<li>If you needed to support keys containing <code>/</code> or other path-unsafe characters,
+what encoding scheme would you use?
+:::</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../part3-production/ch08-03-aws-adapters.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../part3-production/ch09-local-dev.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../part3-production/ch08-03-aws-adapters.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../part3-production/ch09-local-dev.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../../ace.js"></script>
+        <script src="../../mode-rust.js"></script>
+        <script src="../../editor.js"></script>
+        <script src="../../theme-dawn.js"></script>
+        <script src="../../theme-tomorrow_night.js"></script>
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

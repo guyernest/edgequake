@@ -23,9 +23,9 @@
 //!
 //! Based on LightRAG's tenant management: `lightrag/tenant_rag_manager.py`
 
-use crate::error::Result;
 #[cfg(feature = "pipeline")]
 use crate::error::Error;
+use crate::error::Result;
 #[cfg(feature = "pipeline")]
 use crate::orchestrator::{EdgeQuake, EdgeQuakeConfig};
 use async_trait::async_trait;

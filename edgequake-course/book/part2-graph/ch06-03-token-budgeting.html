@@ -1,0 +1,552 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Token Budgeting - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="63-token-budgeting"><a class="header" href="#63-token-budgeting">6.3 Token Budgeting</a></h2>
+<p>After retrieval, the query engine holds a collection of entities,
+relationships, and chunks. This context must be assembled into a prompt
+for the LLM -- but LLMs have fixed context windows. GPT-4 Turbo accepts
+128K tokens; Claude supports 200K. Exceeding the limit causes API errors
+or silent truncation. Even staying within the limit, stuffing too much
+context degrades answer quality because the LLM's attention is diluted.</p>
+<p>Token budgeting is the process of <strong>fitting the most relevant context
+into a fixed token budget</strong> while preserving information priority.</p>
+<h3 id="the-truncationconfig"><a class="header" href="#the-truncationconfig">The TruncationConfig</a></h3>
+<p>EdgeQuake's token budget is controlled by <code>TruncationConfig</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct TruncationConfig {
+    /// Maximum tokens for entity descriptions.
+    pub max_entity_tokens: usize,
+    /// Maximum tokens for relationship descriptions.
+    pub max_relation_tokens: usize,
+    /// Maximum total tokens for all context.
+    pub max_total_tokens: usize,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The default allocation follows the LightRAG paper's strategy:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl Default for TruncationConfig {
+    fn default() -&gt; Self {
+        Self {
+            max_entity_tokens: 10_000,   // 33% for entities
+            max_relation_tokens: 10_000, // 33% for relationships
+            max_total_tokens: 30_000,    // Total budget
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This gives equal weight to entities, relationships, and chunks (the
+chunk budget is the remainder: <code>total - entities - relationships</code>).</p>
+<h3 id="why-30000-tokens"><a class="header" href="#why-30000-tokens">Why 30,000 Tokens?</a></h3>
+<p>The default of 30,000 tokens is chosen based on the LightRAG paper's
+findings:</p>
+<pre><code class="language-text">Total LLM context: 128,000 tokens (GPT-4 Turbo)
+├── System prompt:       ~500 tokens
+├── Conversation history: ~2,000 tokens
+├── Retrieved context:    30,000 tokens   &lt;-- our budget
+├── Query:               ~200 tokens
+└── Reserved for output:  ~4,000 tokens
+                         ──────────
+                         ~36,700 tokens used
+                         ~91,300 tokens spare
+</code></pre>
+<p>Using 30,000 tokens for context leaves substantial headroom. Filling the
+full context window often degrades quality because the LLM must attend to
+too much information (the "lost in the middle" phenomenon).</p>
+<h3 id="the-budget-allocation-strategy"><a class="header" href="#the-budget-allocation-strategy">The Budget Allocation Strategy</a></h3>
+<p>Context is allocated in priority order:</p>
+<pre><code class="language-text">Token Budget: 30,000 tokens
+├── Entities:      10,000 tokens (33%)  -- Graph context (priority)
+│   Entity: SARAH_CHEN (PERSON)
+│   Lead quantum computing researcher at MIT...
+│   ──────
+│   Entity: MIT (ORGANIZATION)
+│   Massachusetts Institute of Technology...
+│
+├── Relationships: 10,000 tokens (33%)  -- Graph context (priority)
+│   SARAH_CHEN -&gt; MIT (WORKS_AT)
+│   Sarah Chen has been a researcher at MIT since...
+│   ──────
+│   DARPA -&gt; SARAH_CHEN (FUNDS)
+│   DARPA has funded Sarah Chen's research...
+│
+└── Chunks:        10,000 tokens (33%)  -- Primary evidence
+    Chunk from doc-001:
+    "Dr. Sarah Chen's groundbreaking work on quantum error
+     correction has attracted significant funding..."
+</code></pre>
+<p>Why entities and relationships get priority over chunks (per <strong>BR0102</strong>):</p>
+<ol>
+<li><strong>Pre-summarized</strong>: Entity descriptions are already concise summaries,
+making them token-efficient.</li>
+<li><strong>Deduplicated</strong>: Graph nodes aggregate information from multiple
+documents, eliminating redundancy.</li>
+<li><strong>Structured</strong>: Relationships encode explicit connections that chunks
+can only imply.</li>
+</ol>
+<h3 id="truncation-functions"><a class="header" href="#truncation-functions">Truncation Functions</a></h3>
+<p>Three functions handle truncation for each context type:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Truncate entities to fit within token limit.
+pub fn truncate_entities(
+    entities: Vec&lt;RetrievedEntity&gt;,
+    max_tokens: usize,
+    tokenizer: &amp;dyn Tokenizer,
+) -&gt; Vec&lt;RetrievedEntity&gt; {
+    let mut result = Vec::new();
+    let mut total_tokens = 0;
+
+    for entity in entities {
+        let formatted = format!(
+            "Entity: {} ({})\n{}\n",
+            entity.name, entity.entity_type, entity.description
+        );
+        let entity_tokens = tokenizer.count_tokens(&amp;formatted);
+
+        if total_tokens + entity_tokens &lt;= max_tokens {
+            result.push(entity);
+            total_tokens += entity_tokens;
+        } else {
+            break; // Budget exhausted
+        }
+    }
+
+    result
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The same pattern applies to <code>truncate_relationships</code> and
+<code>truncate_chunks</code>. Entities are assumed to be <strong>pre-sorted by
+relevance</strong> (score from vector search, or degree from graph), so
+truncation always preserves the most relevant items.</p>
+<h3 id="the-balance_context-function"><a class="header" href="#the-balance_context-function">The balance_context Function</a></h3>
+<p>The master function applies individual limits, then checks the total:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub fn balance_context(
+    entities: Vec&lt;RetrievedEntity&gt;,
+    relationships: Vec&lt;RetrievedRelationship&gt;,
+    chunks: Vec&lt;RetrievedChunk&gt;,
+    config: &amp;TruncationConfig,
+    tokenizer: &amp;dyn Tokenizer,
+) -&gt; (Vec&lt;RetrievedEntity&gt;, Vec&lt;RetrievedRelationship&gt;, Vec&lt;RetrievedChunk&gt;) {
+    // Step 1: Apply individual limits
+    let entities = truncate_entities(entities, config.max_entity_tokens, tokenizer);
+    let relationships = truncate_relationships(
+        relationships, config.max_relation_tokens, tokenizer
+    );
+    let chunk_budget = config.max_total_tokens
+        .saturating_sub(config.max_entity_tokens)
+        .saturating_sub(config.max_relation_tokens);
+    let chunks = truncate_chunks(chunks, chunk_budget, tokenizer);
+
+    // Step 2: Check total
+    let total = count_tokens(&amp;entities, &amp;relationships, &amp;chunks, tokenizer);
+
+    if total &lt;= config.max_total_tokens {
+        return (entities, relationships, chunks);
+    }
+
+    // Step 3: Proportional reduction if still over budget
+    let ratio = config.max_total_tokens as f32 / total as f32;
+    let new_entity_count = (entities.len() as f32 * ratio).ceil() as usize;
+    let new_rel_count = (relationships.len() as f32 * ratio).ceil() as usize;
+    let new_chunk_count = (chunks.len() as f32 * ratio).ceil() as usize;
+
+    // Truncate proportionally, keeping at least 1 entity
+    (
+        entities[..new_entity_count.max(1)].to_vec(),
+        relationships[..new_rel_count].to_vec(),
+        chunks[..new_chunk_count].to_vec(),
+    )
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The two-step approach (individual limits then proportional reduction)
+handles the case where individual limits are generous but the total
+still exceeds the budget.</p>
+<h3 id="the-tokenizer-trait"><a class="header" href="#the-tokenizer-trait">The Tokenizer Trait</a></h3>
+<p>Token counting requires a tokenizer. EdgeQuake defines a simple trait:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait Tokenizer: Send + Sync {
+    fn count_tokens(&amp;self, text: &amp;str) -&gt; usize;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>With two implementations:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Simple word-based tokenizer (fast, approximate).
+pub struct SimpleTokenizer;
+
+impl Tokenizer for SimpleTokenizer {
+    fn count_tokens(&amp;self, text: &amp;str) -&gt; usize {
+        // Approximate: 1 token per 4 characters (English average)
+        text.len() / 4
+    }
+}
+
+/// Mock tokenizer for testing with configurable rate.
+pub struct MockTokenizer {
+    chars_per_token: f32,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>For production use, the <code>SimpleTokenizer</code>'s 4-characters-per-token
+approximation is sufficient. The exact count does not need to be
+precise -- a 5-10% margin of error is acceptable because the budget
+already includes headroom.</p>
+<h3 id="configuring-token-budgets"><a class="header" href="#configuring-token-budgets">Configuring Token Budgets</a></h3>
+<p>Different deployments may need different budgets:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Default: 30K total, balanced allocation
+let default = TruncationConfig::default();
+
+// For smaller models (e.g., 8K context window)
+let small_model = TruncationConfig {
+    max_entity_tokens: 2_000,
+    max_relation_tokens: 2_000,
+    max_total_tokens: 6_000,
+};
+
+// For graph-heavy workloads (prioritize graph context)
+let graph_heavy = TruncationConfig {
+    max_entity_tokens: 15_000,
+    max_relation_tokens: 10_000,
+    max_total_tokens: 30_000,
+    // Leaves only 5K for chunks
+};
+
+// For naive-heavy workloads (prioritize raw chunks)
+let chunk_heavy = TruncationConfig {
+    max_entity_tokens: 5_000,
+    max_relation_tokens: 5_000,
+    max_total_tokens: 30_000,
+    // Leaves 20K for chunks
+};
+<span class="boring">}</span></code></pre></pre>
+<h3 id="mode-specific-token-allocation"><a class="header" href="#mode-specific-token-allocation">Mode-Specific Token Allocation</a></h3>
+<p>Different query modes produce different context mixes:</p>
+<div class="table-wrapper"><table><thead><tr><th>Mode</th><th>Entities</th><th>Relationships</th><th>Chunks</th></tr></thead><tbody>
+<tr><td><strong>Naive</strong></td><td>0</td><td>0</td><td>100% of budget</td></tr>
+<tr><td><strong>Local</strong></td><td>High</td><td>Medium</td><td>Low</td></tr>
+<tr><td><strong>Global</strong></td><td>Medium</td><td>High</td><td>Low</td></tr>
+<tr><td><strong>Hybrid</strong></td><td>High</td><td>High</td><td>Medium</td></tr>
+<tr><td><strong>Mix</strong></td><td>Configurable</td><td>Configurable</td><td>Configurable</td></tr>
+</tbody></table>
+</div>
+<p>In Naive mode, the entire budget goes to chunks because there is no
+graph context. In Hybrid mode, the budget is split across all three
+types.</p>
+<h3 id="the-lost-in-the-middle-problem"><a class="header" href="#the-lost-in-the-middle-problem">The Lost-in-the-Middle Problem</a></h3>
+<p>Research has shown that LLMs attend most strongly to context at the
+<strong>beginning</strong> and <strong>end</strong> of the prompt, with attention dropping in the
+middle. This is called the "lost-in-the-middle" effect.</p>
+<p>EdgeQuake mitigates this by:</p>
+<ol>
+<li><strong>Sorting by relevance</strong>: Most relevant entities, relationships, and
+chunks come first.</li>
+<li><strong>Limiting total context</strong>: The 30K default prevents attention
+dilution.</li>
+<li><strong>Prioritizing graph context</strong>: Pre-summarized entity descriptions are
+more information-dense than raw chunks, so the same token budget
+carries more useful information.</li>
+</ol>
+<h3 id="practical-example"><a class="header" href="#practical-example">Practical Example</a></h3>
+<p>Here is how token budgeting works end-to-end:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use edgequake_query::truncation::{balance_context, TruncationConfig};
+use edgequake_query::tokenizer::SimpleTokenizer;
+
+let config = TruncationConfig::default();
+let tokenizer = SimpleTokenizer;
+
+// After retrieval: 15 entities, 20 relationships, 8 chunks
+let (entities, relationships, chunks) = balance_context(
+    retrieved_entities,      // 15 items
+    retrieved_relationships, // 20 items
+    retrieved_chunks,        // 8 items
+    &amp;config,
+    &amp;tokenizer,
+);
+
+// After budgeting: maybe 10 entities, 12 relationships, 5 chunks
+// Total fits within 30,000 tokens
+println!("Context: {} entities, {} rels, {} chunks",
+    entities.len(), relationships.len(), chunks.len());
+<span class="boring">}</span></code></pre></pre>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>Token budgeting ensures retrieved context fits within the LLM's
+context window.</li>
+<li>The default budget of 30,000 tokens is split equally across entities,
+relationships, and chunks.</li>
+<li>Graph context (entities + relationships) is prioritized over raw
+chunks because it is more information-dense.</li>
+<li>Truncation preserves the most relevant items by respecting the
+pre-sorted order from retrieval.</li>
+<li>The <code>balance_context</code> function applies individual limits first, then
+proportional reduction if the total still exceeds the budget.</li>
+<li>Different query modes and model sizes call for different budget
+configurations.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch07-orchestrator.html">Chapter 7: The EdgeQuake Orchestrator</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part2-graph/ch06-02-query-modes.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../exercises/ch06/query-mode-selector.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part2-graph/ch06-02-query-modes.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../exercises/ch06/query-mode-selector.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

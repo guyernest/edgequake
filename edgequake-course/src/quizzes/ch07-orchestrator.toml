@@ -1,0 +1,93 @@
+# Quiz: The Orchestrator
+
+id = "ch07-orchestrator"
+title = "The Orchestrator"
+lesson_id = "ch07"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What is the primary role of the orchestrator in EdgeQuake's architecture?"
+prompt.distractors = [
+    "It manages the database connections and connection pooling for all storage backends",
+    "It trains and fine-tunes the LLM models used for extraction and generation",
+    "It handles user authentication and authorization for multi-tenant access"
+]
+answer.answer = "It coordinates the end-to-end flow by wiring together storage backends, the ingestion pipeline, and the query engine behind an API"
+context = """
+The orchestrator is the top-level component that ties everything together. It
+initializes and configures storage backends (graph, vector, key-value), constructs
+the ingestion pipeline and query engine with those backends, and exposes the
+functionality through API endpoints. It is the single entry point that transforms
+the collection of library crates into a running, deployable service.
+"""
+id = "b7c8d9e0-7777-4a00-b700-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Which web framework does EdgeQuake use for its HTTP API, and why is it a natural fit for the project?"
+prompt.distractors = [
+    "Rocket, because it provides automatic OpenAPI documentation generation",
+    "Warp, because it uses filter composition for type-safe routing",
+    "Actix-web, because it uses an actor model for maximum concurrency"
+]
+answer.answer = "Axum, because it integrates natively with the Tokio async runtime that EdgeQuake already uses for async storage operations"
+context = """
+Axum is built on top of Tokio and Tower, the same async ecosystem that EdgeQuake's
+storage traits and pipeline use. This means no runtime conflicts, natural integration
+with async/await patterns throughout the codebase, and access to Tower middleware
+for cross-cutting concerns like logging, timeouts, and rate limiting. Axum's
+extractor-based design also makes request parsing ergonomic and type-safe.
+"""
+id = "b7c8d9e0-7777-4a00-b700-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What are the main API endpoint categories exposed by the EdgeQuake orchestrator?"
+prompt.distractors = [
+    "Authentication endpoints, billing endpoints, and admin dashboard endpoints",
+    "Model training endpoints, fine-tuning endpoints, and evaluation endpoints",
+    "Database migration endpoints, backup endpoints, and restore endpoints"
+]
+answer.answer = "Document ingestion endpoints (upload and process documents), query endpoints (ask questions), and health/status endpoints"
+context = """
+The orchestrator exposes three main endpoint categories: ingestion endpoints accept
+documents and trigger the prepare-extract-embed-store pipeline; query endpoints
+accept natural language questions and run the retrieval-generation flow; and
+health/status endpoints provide operational visibility into the system state,
+storage backend connectivity, and pipeline progress. These cover the two core
+user workflows: putting data in and getting answers out.
+"""
+id = "b7c8d9e0-7777-4a00-b700-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "How does EdgeQuake implement streaming responses for query endpoints?"
+prompt.distractors = [
+    "It uses WebSocket connections that the client must upgrade to before querying",
+    "It buffers the complete response and sends it in fixed-size TCP packets",
+    "It uses HTTP long polling where the client repeatedly checks for new response chunks"
+]
+answer.answer = "It uses Server-Sent Events (SSE) to stream LLM-generated tokens to the client as they are produced"
+context = """
+EdgeQuake uses Server-Sent Events (SSE) for streaming query responses. As the LLM
+generates tokens, each token or chunk is sent to the client immediately via the SSE
+stream. This provides a responsive user experience where answers appear incrementally
+rather than after a long wait. SSE works over standard HTTP, requires no special
+client libraries, and is natively supported by browsers and most HTTP clients.
+"""
+id = "b7c8d9e0-7777-4a00-b700-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What Axum/Tower concept does EdgeQuake use for cross-cutting concerns like request logging, CORS, and timeouts?"
+answer.answer = "middleware"
+context = """
+Axum is built on Tower's Service and Layer abstractions, which enable middleware
+composition. EdgeQuake uses Tower middleware layers for cross-cutting concerns:
+request/response logging, CORS headers for browser clients, request timeouts to
+prevent runaway queries, and potentially rate limiting. Middleware wraps the
+application handlers, processing requests before they reach the handler and
+responses before they reach the client, without polluting business logic.
+"""
+id = "b7c8d9e0-7777-4a00-b700-000000000005"

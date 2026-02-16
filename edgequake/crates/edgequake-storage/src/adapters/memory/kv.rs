@@ -139,6 +139,14 @@ impl KVStorage for MemoryKVStorage {
         Ok(data.len())
     }
 
+    async fn count_by_prefix(&self, prefix: &str) -> Result<usize> {
+        let data = self
+            .data
+            .read()
+            .map_err(|e| StorageError::Database(format!("Lock error: {}", e)))?;
+        Ok(data.keys().filter(|k| k.starts_with(prefix)).count())
+    }
+
     async fn keys(&self) -> Result<Vec<String>> {
         let data = self
             .data

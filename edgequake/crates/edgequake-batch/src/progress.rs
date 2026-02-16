@@ -46,9 +46,7 @@ impl BatchProgress {
         let bar = self.multi.add(ProgressBar::new(batch_count));
         bar.set_style(
             ProgressStyle::default_bar()
-                .template(
-                    "{spinner:.green} Batch jobs [{bar:40.cyan/blue}] {pos}/{len} completed",
-                )
+                .template("{spinner:.green} Batch jobs [{bar:40.cyan/blue}] {pos}/{len} completed")
                 .unwrap()
                 .progress_chars("#>-"),
         );

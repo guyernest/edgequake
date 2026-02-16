@@ -1,0 +1,86 @@
+# Quiz: Local Development Environment
+
+id = "ch09-local-dev"
+title = "Local Development Environment"
+lesson_id = "ch09"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What role does Docker Compose play in EdgeQuake's local development workflow?"
+prompt.distractors = [
+    "It compiles the Rust codebase inside isolated containers for reproducible builds",
+    "It deploys the application to a local Kubernetes cluster for production-like testing",
+    "It replaces the need for the Makefile by orchestrating build and test commands"
+]
+answer.answer = "It orchestrates dependent services like PostgreSQL with pgvector and AGE extensions so developers can run the full stack locally"
+context = """
+Docker Compose defines and runs the external services that EdgeQuake depends on — primarily PostgreSQL with \
+the pgvector and Apache AGE extensions pre-installed. This gives developers a one-command setup to spin up \
+a local environment that mirrors the storage capabilities needed for development and integration testing, \
+without manually installing database extensions or managing service lifecycle.
+"""
+id = "b2c3d4e5-2001-4b1f-c001-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Why is the pgvector extension installed in the local PostgreSQL container?"
+prompt.distractors = [
+    "To enable full-text search indexing on document content",
+    "To provide JSON document storage capabilities for unstructured data",
+    "To add row-level security policies for multi-tenant isolation"
+]
+answer.answer = "To enable storage and similarity search of high-dimensional embedding vectors directly in PostgreSQL"
+context = """
+The pgvector extension adds a vector column type and similarity search operators (cosine, L2, inner product) \
+to PostgreSQL. This allows EdgeQuake's PostgreSQL-based VectorStorage implementation to store embedding vectors \
+generated during the ingestion pipeline and perform nearest-neighbor queries for retrieval-augmented generation. \
+Without pgvector, PostgreSQL has no native capability to handle vector operations.
+"""
+id = "b2c3d4e5-2001-4b1f-c001-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What does the Apache AGE extension add to PostgreSQL in EdgeQuake's local setup?"
+prompt.distractors = [
+    "Time-series data storage for tracking ingestion pipeline metrics over time",
+    "Automatic data aging and expiration policies for old graph data",
+    "Foreign data wrapper support for connecting to remote graph databases"
+]
+answer.answer = "OpenCypher-compatible graph query capabilities for traversing entity-relationship data"
+context = """
+Apache AGE (A Graph Extension) transforms PostgreSQL into a graph database by adding support for openCypher \
+graph queries. This allows the PostgreSQL-backed GraphStorage implementation to create nodes, edges, and \
+perform graph traversals — the same operations that Neptune handles in AWS. The name AGE stands for Apache \
+Graph Extension, not data aging or expiration.
+"""
+id = "b2c3d4e5-2001-4b1f-c001-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "How does EdgeQuake support switching between different LLM providers (e.g., OpenAI, Anthropic) during local development?"
+prompt.distractors = [
+    "By recompiling the application with a different Cargo feature flag for each provider",
+    "By editing a hardcoded provider selection in the source code and rebuilding",
+    "By deploying separate instances of the application, one per provider"
+]
+answer.answer = "Through environment variables that configure the LLM provider and API key at runtime without code changes"
+context = """
+EdgeQuake uses environment variables to select the LLM provider and supply credentials at runtime. This means \
+a developer can switch from OpenAI to Anthropic (or another supported provider) simply by changing environment \
+variables — no recompilation or code changes needed. This runtime configuration approach is a standard twelve-factor \
+app practice that keeps secrets out of code and enables flexible deployment.
+"""
+id = "b2c3d4e5-2001-4b1f-c001-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What environment variable must be set to 'true' when building EdgeQuake without a running PostgreSQL instance, enabling SQLx to use cached query metadata?"
+answer.answer = "SQLX_OFFLINE"
+context = """
+SQLx performs compile-time query verification by connecting to a live database during cargo build. When no \
+PostgreSQL instance is available (such as in CI/CD pipelines or fresh development setups), setting \
+SQLX_OFFLINE=true tells SQLx to use pre-cached query metadata from .sqlx/ files instead. Without this, \
+the build will fail trying to connect to a database that does not exist.
+"""
+id = "b2c3d4e5-2001-4b1f-c001-000000000005"

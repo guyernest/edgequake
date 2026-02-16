@@ -1,0 +1,351 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Observability and Operations - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="chapter-13-observability-and-operations"><a class="header" href="#chapter-13-observability-and-operations">Chapter 13: Observability and Operations</a></h1>
+<blockquote>
+<p><strong>"You cannot improve what you cannot measure, and you cannot debug what you cannot see."</strong></p>
+</blockquote>
+<p>A production knowledge base is a complex system with many moving parts --
+LLM API calls, embedding generation, graph traversals, vector similarity
+searches, and database writes. When a query takes 5 seconds instead of 500
+milliseconds, you need to know which component is the bottleneck. When an
+ingestion pipeline fails at 3 AM, the on-call engineer needs structured logs
+that pinpoint the failure, not a stack trace buried in megabytes of
+unformatted text.</p>
+<p>Observability is not just logging. It is the combination of <strong>structured
+logging</strong>, <strong>request tracing</strong>, and <strong>performance metrics</strong> that lets you
+understand what your system is doing at any moment. In this chapter, we build
+the observability stack that makes EdgeQuake operable in production.</p>
+<pre class="mermaid">flowchart TD
+    subgraph &quot;Observability Stack&quot;
+        A[Structured Logging&lt;br/&gt;tracing crate] --&gt; D[Log Aggregation&lt;br/&gt;CloudWatch / Datadog]
+        B[Request Tracing&lt;br/&gt;Span hierarchies] --&gt; D
+        C[Performance Metrics&lt;br/&gt;Latency, throughput] --&gt; E[Dashboards &amp; Alerts]
+    end
+
+    subgraph &quot;Middleware Stack&quot;
+        F[Auth Middleware] --&gt; G[Logging Middleware]
+        G --&gt; H[Rate Limiting]
+        H --&gt; I[Handler]
+    end
+
+    G --&gt; A
+    G --&gt; B
+    I --&gt; C
+</pre>
+<p>This chapter covers three areas:</p>
+<ol>
+<li><strong>Structured logging</strong> with the <code>tracing</code> crate -- hierarchical spans,
+key-value fields, and request correlation.</li>
+<li><strong>The middleware stack</strong> -- how Axum's Tower-based middleware layer
+provides auth, logging, and rate limiting in the correct order.</li>
+<li><strong>Performance optimization</strong> -- connection pooling, caching, batch
+operations, and profiling with <code>tokio-console</code>.</li>
+</ol>
+<h2 id="learning-objectives"><a class="header" href="#learning-objectives">Learning Objectives</a></h2>
+<p>After completing this chapter you will be able to:</p>
+<ol>
+<li><strong>Configure structured logging</strong> with the <code>tracing</code> crate, including span
+hierarchies and request-scoped context.</li>
+<li><strong>Design an Axum middleware stack</strong> with correct ordering for auth,
+logging, and rate limiting.</li>
+<li><strong>Implement performance optimizations</strong> including batch database
+operations, connection pooling, and caching.</li>
+<li><strong>Profile async Rust applications</strong> using <code>tokio-console</code> to identify
+bottlenecks.</li>
+</ol>
+<h2 id="chapter-outline"><a class="header" href="#chapter-outline">Chapter Outline</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Section</th><th>Topic</th></tr></thead><tbody>
+<tr><td><a href="ch13-01-structured-logging.html">13.1 Structured Logging</a></td><td>tracing crate, spans, fields, request correlation</td></tr>
+<tr><td><a href="ch13-02-middleware-stack.html">13.2 Middleware Stack</a></td><td>Axum/Tower middleware ordering, audit logging</td></tr>
+<tr><td><a href="ch13-03-performance.html">13.3 Performance Optimization</a></td><td>Caching, pooling, batching, profiling</td></tr>
+</tbody></table>
+</div>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<ul>
+<li>Familiarity with Axum request handling (Chapter 7)</li>
+<li>Understanding of async Rust and Tokio basics</li>
+<li>Experience reading log output (any format)</li>
+</ul>
+<h2 id="key-terminology"><a class="header" href="#key-terminology">Key Terminology</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+<tr><td><strong>Span</strong></td><td>A period of time during which a program was executing in a particular context</td></tr>
+<tr><td><strong>Structured logging</strong></td><td>Log entries with machine-parseable key-value fields, not just freeform text</td></tr>
+<tr><td><strong>Correlation ID</strong></td><td>A unique identifier that ties all log entries for a single request together</td></tr>
+<tr><td><strong>Middleware</strong></td><td>A function that wraps a handler, processing the request before and/or after</td></tr>
+<tr><td><strong>Tower layer</strong></td><td>Axum's middleware abstraction, based on the Tower service pattern</td></tr>
+<tr><td><strong>Connection pool</strong></td><td>A cache of reusable database connections to avoid per-request connection overhead</td></tr>
+</tbody></table>
+</div>
+<h2 id="why-observability-matters-for-knowledge-bases"><a class="header" href="#why-observability-matters-for-knowledge-bases">Why Observability Matters for Knowledge Bases</a></h2>
+<p>Knowledge bases have unique observability challenges compared to typical web
+services:</p>
+<div class="table-wrapper"><table><thead><tr><th>Challenge</th><th>Why It Matters</th></tr></thead><tbody>
+<tr><td>LLM latency variance</td><td>GPT-4 response times range from 1s to 30s -- you need percentile tracking</td></tr>
+<tr><td>Multi-step queries</td><td>A single user query triggers keyword extraction, graph traversal, vector search, and LLM synthesis</td></tr>
+<tr><td>Embedding costs</td><td>Without monitoring, embedding API costs can spike unexpectedly</td></tr>
+<tr><td>Storage diversity</td><td>Queries hit PostgreSQL, S3 Vectors, and DynamoDB -- each has different failure modes</td></tr>
+<tr><td>Batch pipelines</td><td>Long-running jobs need phase-level progress tracking</td></tr>
+</tbody></table>
+</div>
+<p>The observability stack we build in this chapter addresses all of these.</p>
+<hr />
+<p><em>Next: <a href="ch13-01-structured-logging.html">13.1 Structured Logging</a></em></p>
+<div class="quiz-placeholder" data-quiz-name="&quot;ch13-observability&quot;" data-quiz-questions="{&quot;id&quot;:&quot;ch13-observability&quot;,&quot;lesson_id&quot;:&quot;ch13&quot;,&quot;pass_threshold&quot;:0.7,&quot;title&quot;:&quot;Observability and Performance&quot;,&quot;questions&quot;:[{&quot;context&quot;:&quot;The 'tracing' crate goes beyond traditional logging by introducing spans — named, timed regions of code that carry structured context. When an async task yields and resumes across different threads, tracing maintains the span context, so you can correlate all log events belonging to a single request even if they execute on different threads. The 'log' crate only supports individual, unstructured log messages without this request-scoped context propagation.\n&quot;,&quot;id&quot;:&quot;f6a7b8c9-6001-4f5d-a001-000000000001&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;The 'tracing' crate provides structured, span-based instrumentation that tracks context across async operations, not just individual log lines&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;The 'tracing' crate is faster because it writes logs directly to disk without buffering&quot;,&quot;The 'log' crate has been deprecated by the Rust community in favor of 'tracing'&quot;,&quot;The 'tracing' crate is the only logging library compatible with the tokio async runtime&quot;],&quot;prompt&quot;:&quot;Why does EdgeQuake use the 'tracing' crate instead of a simple logging library like 'log'?&quot;}},{&quot;context&quot;:&quot;Structured logging outputs log events as key-value pairs (often in JSON format) rather than free-form text. This means a log analysis tool can filter by specific fields (e.g., workspace_id=123, latency_ms&gt;500) without parsing arbitrary text with regex. In production, this enables powerful queries like \&quot;show all requests for workspace X that took longer than 500ms\&quot; — something that is fragile or impossible with unstructured text logs.\n&quot;,&quot;id&quot;:&quot;f6a7b8c9-6001-4f5d-a001-000000000002&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;Structured logs emit key-value fields that can be filtered, aggregated, and queried programmatically by log analysis tools&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;Structured logs are smaller in size, reducing storage costs for log retention&quot;,&quot;Structured logs are human-readable by default, making them easier to read in a terminal&quot;,&quot;Structured logs automatically redact sensitive information like passwords and API keys&quot;],&quot;prompt&quot;:&quot;What is the advantage of structured logging over plain text log messages in a production system?&quot;}},{&quot;context&quot;:&quot;Middleware layers form an onion-like stack around the request handler. The outermost layer runs first on the request and last on the response. Tracing middleware should be outermost so it captures timing for the entire request including all other middleware. Authentication must run before authorization (you need to know who the user is before checking what they can do). Incorrect ordering can lead to security bypasses (e.g., checking permissions before verifying identity) or incomplete observability data.\n&quot;,&quot;id&quot;:&quot;f6a7b8c9-6001-4f5d-a001-000000000003&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;Middleware executes in a defined order for each request, so authentication must run before authorization, and tracing should wrap everything to capture the full request lifecycle&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;Middleware layers are executed in parallel, and ordering determines thread priority&quot;,&quot;Only the first middleware layer runs; subsequent layers are fallbacks for error cases&quot;,&quot;Middleware ordering only affects compile time, not runtime behavior&quot;],&quot;prompt&quot;:&quot;Why does the ordering of middleware layers matter in EdgeQuake's HTTP server stack?&quot;}},{&quot;context&quot;:&quot;Each individual storage operation incurs network latency (round-trip to the database), connection overhead, and per-operation processing costs. Batch operations combine many operations (e.g., inserting 100 entities) into a single request, amortizing the network round-trip cost across all items. Databases can also optimize bulk inserts internally (e.g., fewer index updates, reduced transaction overhead). This is especially impactful when storing results from the batch ingestion pipeline, where thousands of entities and relationships need to be persisted.\n&quot;,&quot;id&quot;:&quot;f6a7b8c9-6001-4f5d-a001-000000000004&quot;,&quot;type&quot;:&quot;MultipleChoice&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;By combining multiple storage operations into a single round-trip, reducing network overhead and enabling database-level bulk optimizations&quot;},&quot;prompt&quot;:{&quot;distractors&quot;:[&quot;By compressing multiple records into a single binary blob to reduce data size&quot;,&quot;By running each operation in a separate thread to maximize CPU utilization&quot;,&quot;By skipping validation checks that are normally applied to individual operations&quot;],&quot;prompt&quot;:&quot;How do batch operations improve performance in EdgeQuake's storage layer?&quot;}},{&quot;context&quot;:&quot;Audit logging is a specialized form of logging focused on recording security-relevant events: who performed an action, what the action was, when it occurred, and what data was affected. Unlike general application logging (which aids debugging), audit logs serve compliance and forensic purposes. They answer questions like \&quot;who accessed tenant X's data last Tuesday?\&quot; and are typically stored with tamper-evident protections and longer retention periods than regular application logs.\n&quot;,&quot;id&quot;:&quot;f6a7b8c9-6001-4f5d-a001-000000000005&quot;,&quot;type&quot;:&quot;ShortAnswer&quot;,&quot;answer&quot;:{&quot;answer&quot;:&quot;audit logging&quot;},&quot;prompt&quot;:{&quot;prompt&quot;:&quot;What type of logging records security-relevant events such as who accessed what data and when, providing a forensic trail for compliance?&quot;}}]}" data-quiz-fullscreen="true" data-quiz-cache-answers="true"></div>
+<script type="text/javascript" src="../quiz/quiz-embed.iife.js"></script><link rel="stylesheet" type="text/css" href="../quiz/style.css">
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../exercises/ch12/batch-state-machine.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part4-enterprise/ch13-01-structured-logging.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../exercises/ch12/batch-state-machine.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part4-enterprise/ch13-01-structured-logging.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

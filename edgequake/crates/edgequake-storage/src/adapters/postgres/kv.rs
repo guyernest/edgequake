@@ -234,6 +234,24 @@ impl KVStorage for PostgresKVStorage {
         Ok(row.0 as usize)
     }
 
+    async fn count_by_prefix(&self, prefix: &str) -> Result<usize> {
+        let pool = self.pool.get().await?;
+
+        let sql = format!(
+            "SELECT COUNT(*) as count FROM {} WHERE key LIKE $1",
+            self.table_name
+        );
+
+        let pattern = format!("{}%", prefix);
+        let row: (i64,) = sqlx::query_as(&sql)
+            .bind(&pattern)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| StorageError::Database(format!("KV count_by_prefix failed: {}", e)))?;
+
+        Ok(row.0 as usize)
+    }
+
     async fn keys(&self) -> Result<Vec<String>> {
         let pool = self.pool.get().await?;
 

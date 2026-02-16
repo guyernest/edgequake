@@ -1,0 +1,87 @@
+# Quiz: AWS Deployment Architecture
+
+id = "ch10-aws-deployment"
+title = "AWS Deployment Architecture"
+lesson_id = "ch10"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What is S3 Vectors and why does EdgeQuake use it as the production vector storage backend on AWS?"
+prompt.distractors = [
+    "A versioned S3 bucket that stores raw embedding files as JSON objects for batch retrieval",
+    "An S3 feature that automatically generates vector embeddings from stored documents",
+    "A Lambda function layer that converts S3 object metadata into searchable vector indices"
+]
+answer.answer = "A native AWS service for storing and querying vector embeddings with built-in similarity search, managed through the aws-sdk-s3vectors SDK"
+context = """
+S3 Vectors is a purpose-built AWS service for vector storage and similarity search. Unlike storing vectors \
+as raw files in S3, S3 Vectors provides native vector operations including cosine similarity search. EdgeQuake \
+uses it via the aws-sdk-s3vectors SDK crate, with configuration through S3VectorsConfig specifying the vector \
+bucket name, index name, and embedding dimension. It replaces the need for self-managed vector databases in \
+production.
+"""
+id = "c3d4e5f6-3001-4c2a-d001-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "When S3 Vectors returns a cosine distance value for a vector query, how does EdgeQuake convert it to a similarity score?"
+prompt.distractors = [
+    "It divides the distance by the maximum possible distance to normalize it between 0 and 1",
+    "It takes the absolute value of the distance since cosine distance can be negative",
+    "It applies a sigmoid function to transform the distance into a probability score"
+]
+answer.answer = "It subtracts the distance from 1.0 (score = 1.0 - distance), converting distance to similarity"
+context = """
+Cosine distance and cosine similarity are complementary: similarity = 1.0 - distance. A cosine distance of 0 \
+means identical vectors (similarity = 1.0), and a distance of 1.0 means orthogonal vectors (similarity = 0.0). \
+S3 Vectors returns distance values, but EdgeQuake's VectorStorage trait works with similarity scores, so the \
+conversion formula score = 1.0 - distance is applied to every result.
+"""
+id = "c3d4e5f6-3001-4c2a-d001-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "Which AWS service does EdgeQuake use for graph storage in production, and what query language does it use?"
+prompt.distractors = [
+    "Amazon Athena with SQL queries over graph data stored in S3 Parquet files",
+    "Amazon DocumentDB with MongoDB-compatible queries for entity-relationship documents",
+    "Amazon Redshift with custom graph UDFs for traversal operations"
+]
+answer.answer = "Amazon Neptune with Gremlin traversal queries for graph operations"
+context = """
+Amazon Neptune is AWS's managed graph database service. EdgeQuake connects to Neptune using the Gremlin \
+traversal language, which provides a fluent API for graph operations like adding vertices, creating edges, \
+and performing multi-hop traversals. Neptune with Gremlin is the AWS equivalent of what Apache AGE provides \
+on PostgreSQL locally — both fulfill the GraphStorage trait contract but with different underlying implementations.
+"""
+id = "c3d4e5f6-3001-4c2a-d001-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "In EdgeQuake's CDK infrastructure code, what construct is used to provision the S3 Vectors resources?"
+prompt.distractors = [
+    "A custom CloudFormation resource backed by a Lambda function that calls S3 APIs",
+    "An S3 Bucket construct with a special vectorSearchEnabled property set to true",
+    "A CfnCustomResource that provisions vector indices through the AWS CLI"
+]
+answer.answer = "CfnVectorBucket and CfnIndex constructs from aws-cdk-lib/aws-s3vectors"
+context = """
+AWS CDK provides L1 (CloudFormation) constructs for S3 Vectors through the aws-cdk-lib/aws-s3vectors module. \
+CfnVectorBucket creates the vector bucket (the container for vector data), and CfnIndex creates the index \
+within that bucket (defining the dimension and distance metric). These are native CDK constructs, not custom \
+resources, which means they benefit from CloudFormation's lifecycle management and drift detection.
+"""
+id = "c3d4e5f6-3001-4c2a-d001-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "Which AWS service does EdgeQuake use as the KVStorage backend in production for simple key-value persistence?"
+answer.answer = "DynamoDB"
+context = """
+Amazon DynamoDB is a fully managed NoSQL key-value and document database that provides single-digit millisecond \
+performance at any scale. EdgeQuake uses it as the KVStorage backend for storing configuration, state, and \
+other key-value data in production. Its serverless nature (no servers to manage, automatic scaling) aligns \
+well with EdgeQuake's cloud-native architecture.
+"""
+id = "c3d4e5f6-3001-4c2a-d001-000000000005"

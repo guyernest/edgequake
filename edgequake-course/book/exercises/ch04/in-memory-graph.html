@@ -1,0 +1,1274 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Exercise: In-Memory GraphStorage - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../../src/custom.css">
+        <link rel="stylesheet" href="../../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <div class="exercise-container">
+<article class="exercise" data-exercise-id="in-memory-graph" data-difficulty="intermediate">
+<header class="exercise-header">
+  <h2 id="in-memory-graph-storage" class="exercise-title"><a class="header" href="#in-memory-graph-storage">In-Memory Graph Storage</a></h2>
+  <code class=\"exercise-id\">in-memory-graph</code>
+  <div class="exercise-meta">
+    <span class="badge difficulty intermediate">⭐⭐ intermediate</span>
+    <span class="badge time">⏱️ 30 min</span>
+  </div>
+</header>
+<nav class="exercise-nav" aria-label="Exercise sections"><ul><li><a href="#in-memory-graph-description" data-section="description">📖 Overview</a></li><li><a href="#in-memory-graph-objectives" data-section="objectives">🎯 Objectives</a></li><li><a href="#in-memory-graph-starter" data-section="starter">💻 Code</a></li><li><a href="#in-memory-graph-hints" data-section="hints">💡 Hints</a></li><li><a href="#in-memory-graph-solution" data-section="solution">✅ Solution</a></li><li><a href="#in-memory-graph-tests" data-section="tests">🧪 Tests</a></li><li><a href="#in-memory-graph-reflection" data-section="reflection">🤔 Reflect</a></li></ul></nav>
+<section class="exercise-description" id="in-memory-graph-description">
+<p>A knowledge graph is the backbone of Graph RAG -- it stores entities as nodes
+and their relationships as directed edges. In this exercise you will implement
+a simplified in-memory graph storage layer using HashMaps, mirroring the
+<code>GraphStorage</code> trait that EdgeQuake uses to abstract over real backends like
+Neptune and DynamoDB.</p>
+</section>
+<section class="exercise-objectives" id="in-memory-graph-objectives">
+  <h3 id="-learning-objectives"><a class="header" href="#-learning-objectives">🎯 Learning Objectives</a></h3>
+  <div class="objectives-grid">
+    <div class="objectives-thinking">
+      <h4 id="thinking"><a class="header" href="#thinking">Thinking</a></h4>
+      <ul>
+        <li><input type="checkbox" id="in-memory-graph-thinking-0" class="objective-checkbox"><label for="in-memory-graph-thinking-0">Understand the node/edge data model for knowledge graphs</label></li>
+        <li><input type="checkbox" id="in-memory-graph-thinking-1" class="objective-checkbox"><label for="in-memory-graph-thinking-1">Reason about why adjacency lists enable efficient graph traversal</label></li>
+      </ul>
+    </div>
+    <div class="objectives-doing">
+      <h4 id="doing"><a class="header" href="#doing">Doing</a></h4>
+      <ul>
+        <li><input type="checkbox" id="in-memory-graph-doing-0" class="objective-checkbox"><label for="in-memory-graph-doing-0">Implement upsert_node with insert-or-update semantics</label></li>
+        <li><input type="checkbox" id="in-memory-graph-doing-1" class="objective-checkbox"><label for="in-memory-graph-doing-1">Implement upsert_edge with bidirectional adjacency tracking</label></li>
+        <li><input type="checkbox" id="in-memory-graph-doing-2" class="objective-checkbox"><label for="in-memory-graph-doing-2">Implement get_neighbors with optional edge-label filtering</label></li>
+        <li><input type="checkbox" id="in-memory-graph-doing-3" class="objective-checkbox"><label for="in-memory-graph-doing-3">Handle edge cases like missing nodes and duplicate edges</label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+<section class="exercise-discussion">
+  <h3 id="-discussion"><a class="header" href="#-discussion">💬 Discussion</a></h3>
+  <ul>
+    <li>Why does Graph RAG use &quot;upsert&quot; instead of separate &quot;insert&quot; and &quot;update&quot; operations?</li>
+    <li>What are the tradeoffs between adjacency-list and adjacency-matrix representations?</li>
+    <li>How would you extend this to support undirected edges or hyperedges?</li>
+  </ul>
+</section>
+<section class="exercise-starter" id="in-memory-graph-starter">
+  <div class="code-header">
+    <span class="filename">src/main.rs</span>
+    <div class="code-actions">
+      <button class="btn btn-copy" data-target="code-in-memory-graph" title="Copy code">📋 Copy</button>
+      <button class="btn btn-reset" data-target="code-in-memory-graph" title="Reset to original">↺ Reset</button>
+    </div>
+  </div>
+  <textarea class="code-editor" id="code-in-memory-graph" data-language="rust" data-original="use std::collections::{HashMap, HashSet};&#10;&#10;/// A node in the knowledge graph.&#10;#[derive(Debug, Clone)]&#10;struct Node {&#10;    id: String,&#10;    label: String,&#10;    properties: HashMap&lt;String, String&gt;,&#10;}&#10;&#10;/// A directed edge in the knowledge graph.&#10;#[derive(Debug, Clone)]&#10;struct Edge {&#10;    id: String,&#10;    source: String,&#10;    target: String,&#10;    label: String,&#10;    properties: HashMap&lt;String, String&gt;,&#10;}&#10;&#10;/// A neighbor reference returned by get_neighbors.&#10;#[derive(Debug, Clone)]&#10;struct Neighbor {&#10;    node_id: String,&#10;    edge_id: String,&#10;    edge_label: String,&#10;}&#10;&#10;/// In-memory graph storage using HashMaps.&#10;///&#10;/// Stores nodes by ID, edges by ID, and maintains adjacency lists&#10;/// for efficient neighbor lookups.&#10;struct InMemoryGraph {&#10;    nodes: HashMap&lt;String, Node&gt;,&#10;    edges: HashMap&lt;String, Edge&gt;,&#10;    /// Adjacency list: node_id -&gt; set of edge_ids going out from that node.&#10;    outgoing: HashMap&lt;String, HashSet&lt;String&gt;&gt;,&#10;    /// Adjacency list: node_id -&gt; set of edge_ids coming in to that node.&#10;    incoming: HashMap&lt;String, HashSet&lt;String&gt;&gt;,&#10;}&#10;&#10;impl InMemoryGraph {&#10;    fn new() -&gt; Self {&#10;        InMemoryGraph {&#10;            nodes: HashMap::new(),&#10;            edges: HashMap::new(),&#10;            outgoing: HashMap::new(),&#10;            incoming: HashMap::new(),&#10;        }&#10;    }&#10;&#10;    /// Insert or update a node.&#10;    ///&#10;    /// If a node with the same ID already exists, update its label and&#10;    /// merge its properties (new properties overwrite existing ones with&#10;    /// the same key, but existing keys not in the new node are preserved).&#10;    fn upsert_node(&amp;mut self, node: Node) {&#10;        // TODO: Implement upsert_node&#10;        // 1. Check if a node with this ID already exists.&#10;        // 2. If yes, update label and merge properties.&#10;        // 3. If no, insert the new node.&#10;        // 4. Ensure adjacency lists have entries for this node.&#10;        todo!(&quot;Implement upsert_node&quot;)&#10;    }&#10;&#10;    /// Insert or update an edge.&#10;    ///&#10;    /// If an edge with the same ID already exists, update its label and&#10;    /// merge its properties. Also update the adjacency lists.&#10;    fn upsert_edge(&amp;mut self, edge: Edge) {&#10;        // TODO: Implement upsert_edge&#10;        // 1. If updating an existing edge, remove old adjacency entries&#10;        //    if source/target changed.&#10;        // 2. Insert or update the edge.&#10;        // 3. Add the edge ID to outgoing[source] and incoming[target].&#10;        todo!(&quot;Implement upsert_edge&quot;)&#10;    }&#10;&#10;    /// Get a node by its ID.&#10;    fn get_node(&amp;self, id: &amp;str) -&gt; Option&lt;&amp;Node&gt; {&#10;        self.nodes.get(id)&#10;    }&#10;&#10;    /// Get an edge by its ID.&#10;    fn get_edge(&amp;self, id: &amp;str) -&gt; Option&lt;&amp;Edge&gt; {&#10;        self.edges.get(id)&#10;    }&#10;&#10;    /// Get all outgoing neighbors of a node, optionally filtered by edge label.&#10;    ///&#10;    /// Returns a list of Neighbor structs containing the neighbor node ID,&#10;    /// the edge ID, and the edge label.&#10;    fn get_neighbors(&amp;self, node_id: &amp;str, edge_label: Option&lt;&amp;str&gt;) -&gt; Vec&lt;Neighbor&gt; {&#10;        // TODO: Implement get_neighbors&#10;        // 1. Look up the outgoing edge IDs for this node.&#10;        // 2. For each edge, look up the edge details.&#10;        // 3. If edge_label filter is Some, only include edges matching that label.&#10;        // 4. Return Neighbor structs with (target node_id, edge_id, edge_label).&#10;        // 5. Return empty vec if the node doesn&#x27;t exist or has no outgoing edges.&#10;        todo!(&quot;Implement get_neighbors&quot;)&#10;    }&#10;&#10;    /// Get the total number of nodes.&#10;    fn node_count(&amp;self) -&gt; usize {&#10;        self.nodes.len()&#10;    }&#10;&#10;    /// Get the total number of edges.&#10;    fn edge_count(&amp;self) -&gt; usize {&#10;        self.edges.len()&#10;    }&#10;}&#10;&#10;fn main() {&#10;    let mut graph = InMemoryGraph::new();&#10;&#10;    // Add some entities&#10;    graph.upsert_node(Node {&#10;        id: &quot;person:alice&quot;.into(),&#10;        label: &quot;Person&quot;.into(),&#10;        properties: HashMap::from([(&quot;name&quot;.into(), &quot;Alice&quot;.into())]),&#10;    });&#10;    graph.upsert_node(Node {&#10;        id: &quot;org:acme&quot;.into(),&#10;        label: &quot;Organization&quot;.into(),&#10;        properties: HashMap::from([(&quot;name&quot;.into(), &quot;Acme Corp&quot;.into())]),&#10;    });&#10;    graph.upsert_node(Node {&#10;        id: &quot;person:bob&quot;.into(),&#10;        label: &quot;Person&quot;.into(),&#10;        properties: HashMap::from([(&quot;name&quot;.into(), &quot;Bob&quot;.into())]),&#10;    });&#10;&#10;    // Add relationships&#10;    graph.upsert_edge(Edge {&#10;        id: &quot;e1&quot;.into(),&#10;        source: &quot;person:alice&quot;.into(),&#10;        target: &quot;org:acme&quot;.into(),&#10;        label: &quot;WORKS_AT&quot;.into(),&#10;        properties: HashMap::from([(&quot;since&quot;.into(), &quot;2020&quot;.into())]),&#10;    });&#10;    graph.upsert_edge(Edge {&#10;        id: &quot;e2&quot;.into(),&#10;        source: &quot;person:bob&quot;.into(),&#10;        target: &quot;org:acme&quot;.into(),&#10;        label: &quot;WORKS_AT&quot;.into(),&#10;        properties: HashMap::new(),&#10;    });&#10;    graph.upsert_edge(Edge {&#10;        id: &quot;e3&quot;.into(),&#10;        source: &quot;person:alice&quot;.into(),&#10;        target: &quot;person:bob&quot;.into(),&#10;        label: &quot;KNOWS&quot;.into(),&#10;        properties: HashMap::new(),&#10;    });&#10;&#10;    println!(&quot;Graph has {} nodes and {} edges&quot;, graph.node_count(), graph.edge_count());&#10;&#10;    let neighbors = graph.get_neighbors(&quot;person:alice&quot;, None);&#10;    println!(&quot;\nAlice&#x27;s neighbors (all):&quot;);&#10;    for n in &amp;neighbors {&#10;        println!(&quot;  --[{}]--&gt; {}&quot;, n.edge_label, n.node_id);&#10;    }&#10;&#10;    let work_neighbors = graph.get_neighbors(&quot;person:alice&quot;, Some(&quot;WORKS_AT&quot;));&#10;    println!(&quot;\nAlice&#x27;s WORKS_AT neighbors:&quot;);&#10;    for n in &amp;work_neighbors {&#10;        println!(&quot;  --[{}]--&gt; {}&quot;, n.edge_label, n.node_id);&#10;    }&#10;}" spellcheck="false"></textarea>
+</section>
+<section class="exercise-hints" id="in-memory-graph-hints">
+  <h3 id="-hints"><a class="header" href="#-hints">💡 Hints</a></h3>
+  <details class="hint" data-level="1">
+    <summary>Hint 1: Upsert node with property merging</summary>
+    <div class="hint-content">
+<p>For merging properties, use <code>extend</code> to overwrite matching keys while keeping
+unmatched ones:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn upsert_node(&amp;mut self, node: Node) {
+    if let Some(existing) = self.nodes.get_mut(&amp;node.id) {
+        existing.label = node.label;
+        existing.properties.extend(node.properties);
+    } else {
+        let id = node.id.clone();
+        self.nodes.insert(id.clone(), node);
+        self.outgoing.entry(id.clone()).or_insert_with(HashSet::new);
+        self.incoming.entry(id).or_insert_with(HashSet::new);
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+    </div>
+  </details>
+  <details class="hint" data-level="2">
+    <summary>Hint 2: Get neighbors with optional filter</summary>
+    <div class="hint-content">
+<p>Look up the outgoing edges, resolve each edge ID, and apply the optional filter:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn get_neighbors(&amp;self, node_id: &amp;str, edge_label: Option&lt;&amp;str&gt;) -&gt; Vec&lt;Neighbor&gt; {
+    let Some(edge_ids) = self.outgoing.get(node_id) else {
+        return Vec::new();
+    };
+<pre><code>edge_ids.iter()
+    .filter_map(|eid| self.edges.get(eid))
+    .filter(|edge| edge_label.map_or(true, |label| edge.label == label))
+    .map(|edge| Neighbor {
+        node_id: edge.target.clone(),
+        edge_id: edge.id.clone(),
+        edge_label: edge.label.clone(),
+    })
+    .collect()
+<span class="boring">}</span></code></pre></pre>
+<p>}
+</code></pre>
+</div></p>
+  </details>
+</section>
+<section class="exercise-solution" id="in-memory-graph-solution">
+  <details class="solution">
+    <summary><span class="solution-warning">⚠️ Try the exercise first!</span><span class="solution-toggle">Show Solution</span></summary>
+    <div class="solution-content">
+      <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::collections::{HashMap, HashSet};
+<p>#[derive(Debug, Clone)]
+struct Node {
+id: String,
+label: String,
+properties: HashMap&lt;String, String&gt;,
+}</p>
+<p>#[derive(Debug, Clone)]
+struct Edge {
+id: String,
+source: String,
+target: String,
+label: String,
+properties: HashMap&lt;String, String&gt;,
+}</p>
+<p>#[derive(Debug, Clone)]
+struct Neighbor {
+node_id: String,
+edge_id: String,
+edge_label: String,
+}</p>
+<p>struct InMemoryGraph {
+nodes: HashMap&lt;String, Node&gt;,
+edges: HashMap&lt;String, Edge&gt;,
+outgoing: HashMap&lt;String, HashSet&lt;String&gt;&gt;,
+incoming: HashMap&lt;String, HashSet&lt;String&gt;&gt;,
+}</p>
+<p>impl InMemoryGraph {
+fn new() -&gt; Self {
+InMemoryGraph {
+nodes: HashMap::new(),
+edges: HashMap::new(),
+outgoing: HashMap::new(),
+incoming: HashMap::new(),
+}
+}</p>
+<pre><code>fn upsert_node(&amp;amp;mut self, node: Node) {
+    if let Some(existing) = self.nodes.get_mut(&amp;amp;node.id) {
+        existing.label = node.label;
+        existing.properties.extend(node.properties);
+    } else {
+        let id = node.id.clone();
+        self.nodes.insert(id.clone(), node);
+        self.outgoing.entry(id.clone()).or_insert_with(HashSet::new);
+        self.incoming.entry(id).or_insert_with(HashSet::new);
+    }
+}
+
+fn upsert_edge(&amp;amp;mut self, edge: Edge) {
+    // If updating an existing edge, clean up old adjacency entries
+    if let Some(existing) = self.edges.get(&amp;amp;edge.id) {
+        if existing.source != edge.source || existing.target != edge.target {
+            // Source or target changed, remove old adjacency entries
+            if let Some(out) = self.outgoing.get_mut(&amp;amp;existing.source) {
+                out.remove(&amp;amp;edge.id);
+            }
+            if let Some(inc) = self.incoming.get_mut(&amp;amp;existing.target) {
+                inc.remove(&amp;amp;edge.id);
+            }
+        }
+    }
+
+    // Update adjacency lists
+    self.outgoing
+        .entry(edge.source.clone())
+        .or_insert_with(HashSet::new)
+        .insert(edge.id.clone());
+    self.incoming
+        .entry(edge.target.clone())
+        .or_insert_with(HashSet::new)
+        .insert(edge.id.clone());
+
+    // Insert or update the edge
+    if let Some(existing) = self.edges.get_mut(&amp;amp;edge.id) {
+        existing.source = edge.source;
+        existing.target = edge.target;
+        existing.label = edge.label;
+        existing.properties.extend(edge.properties);
+    } else {
+        self.edges.insert(edge.id.clone(), edge);
+    }
+}
+
+fn get_node(&amp;amp;self, id: &amp;amp;str) -&amp;gt; Option&amp;lt;&amp;amp;Node&amp;gt; {
+    self.nodes.get(id)
+}
+
+fn get_edge(&amp;amp;self, id: &amp;amp;str) -&amp;gt; Option&amp;lt;&amp;amp;Edge&amp;gt; {
+    self.edges.get(id)
+}
+
+fn get_neighbors(&amp;amp;self, node_id: &amp;amp;str, edge_label: Option&amp;lt;&amp;amp;str&amp;gt;) -&amp;gt; Vec&amp;lt;Neighbor&amp;gt; {
+    let Some(edge_ids) = self.outgoing.get(node_id) else {
+        return Vec::new();
+    };
+
+    edge_ids
+        .iter()
+        .filter_map(|eid| self.edges.get(eid))
+        .filter(|edge| edge_label.map_or(true, |label| edge.label == label))
+        .map(|edge| Neighbor {
+            node_id: edge.target.clone(),
+            edge_id: edge.id.clone(),
+            edge_label: edge.label.clone(),
+        })
+        .collect()
+}
+
+fn node_count(&amp;amp;self) -&amp;gt; usize {
+    self.nodes.len()
+}
+
+fn edge_count(&amp;amp;self) -&amp;gt; usize {
+    self.edges.len()
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</p>
+<p>fn main() {
+let mut graph = InMemoryGraph::new();</p>
+<pre><code>graph.upsert_node(Node {
+    id: &amp;quot;person:alice&amp;quot;.into(),
+    label: &amp;quot;Person&amp;quot;.into(),
+    properties: HashMap::from([(&amp;quot;name&amp;quot;.into(), &amp;quot;Alice&amp;quot;.into())]),
+});
+graph.upsert_node(Node {
+    id: &amp;quot;org:acme&amp;quot;.into(),
+    label: &amp;quot;Organization&amp;quot;.into(),
+    properties: HashMap::from([(&amp;quot;name&amp;quot;.into(), &amp;quot;Acme Corp&amp;quot;.into())]),
+});
+graph.upsert_node(Node {
+    id: &amp;quot;person:bob&amp;quot;.into(),
+    label: &amp;quot;Person&amp;quot;.into(),
+    properties: HashMap::from([(&amp;quot;name&amp;quot;.into(), &amp;quot;Bob&amp;quot;.into())]),
+});
+
+graph.upsert_edge(Edge {
+    id: &amp;quot;e1&amp;quot;.into(),
+    source: &amp;quot;person:alice&amp;quot;.into(),
+    target: &amp;quot;org:acme&amp;quot;.into(),
+    label: &amp;quot;WORKS_AT&amp;quot;.into(),
+    properties: HashMap::from([(&amp;quot;since&amp;quot;.into(), &amp;quot;2020&amp;quot;.into())]),
+});
+graph.upsert_edge(Edge {
+    id: &amp;quot;e2&amp;quot;.into(),
+    source: &amp;quot;person:bob&amp;quot;.into(),
+    target: &amp;quot;org:acme&amp;quot;.into(),
+    label: &amp;quot;WORKS_AT&amp;quot;.into(),
+    properties: HashMap::new(),
+});
+graph.upsert_edge(Edge {
+    id: &amp;quot;e3&amp;quot;.into(),
+    source: &amp;quot;person:alice&amp;quot;.into(),
+    target: &amp;quot;person:bob&amp;quot;.into(),
+    label: &amp;quot;KNOWS&amp;quot;.into(),
+    properties: HashMap::new(),
+});
+
+println!(&amp;quot;Graph has {} nodes and {} edges&amp;quot;, graph.node_count(), graph.edge_count());
+
+let neighbors = graph.get_neighbors(&amp;quot;person:alice&amp;quot;, None);
+println!(&amp;quot;\nAlice&amp;#x27;s neighbors (all):&amp;quot;);
+for n in &amp;amp;neighbors {
+    println!(&amp;quot;  --[{}]--&amp;gt; {}&amp;quot;, n.edge_label, n.node_id);
+}
+
+let work_neighbors = graph.get_neighbors(&amp;quot;person:alice&amp;quot;, Some(&amp;quot;WORKS_AT&amp;quot;));
+println!(&amp;quot;\nAlice&amp;#x27;s WORKS_AT neighbors:&amp;quot;);
+for n in &amp;amp;work_neighbors {
+    println!(&amp;quot;  --[{}]--&amp;gt; {}&amp;quot;, n.edge_label, n.node_id);
+}
+</code></pre>
+<p>}</code></pre>
+<div class="solution-explanation"><h4 id="explanation"><a class="header" href="#explanation">Explanation</a></h4><p>The graph uses four HashMaps: <code>nodes</code> and <code>edges</code> for the primary data, and
+<code>outgoing</code>/<code>incoming</code> adjacency lists for efficient traversal. The adjacency
+lists map each node ID to the set of edge IDs connected to it.</p></p>
+<p><strong>Upsert semantics</strong>: When upserting a node, existing properties are preserved
+unless overwritten by the new node's properties (via <code>extend</code>). When upserting
+an edge, if the source or target changes, the old adjacency entries are cleaned
+up before inserting new ones.</p>
+<p><strong>Neighbor lookup</strong>: <code>get_neighbors</code> is O(degree) because it only iterates
+over the outgoing edges of the given node, not all edges in the graph. The
+optional <code>edge_label</code> filter uses <code>filter</code> to restrict results, enabling
+queries like "get all WORKS_AT relationships" efficiently.</p>
+</div>
+    </div>
+  </details>
+</section>
+<section class="exercise-tests" id="in-memory-graph-tests" data-mode="local">
+  <h3 id="-tests"><a class="header" href="#-tests">🧪 Tests</a></h3>
+  <div class="test-actions">
+    <div class="local-test-info"><p>Run these tests locally with:</p><pre><code>cargo test</code></pre></div>
+  </div>
+  <div class="test-results" id="results-in-memory-graph" hidden></div>
+  <details class="tests-code"><summary>View Test Code</summary>
+    <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+<pre><code>#[test]
+fn test_upsert_node_insert() {
+    let mut graph = InMemoryGraph::new();
+    graph.upsert_node(Node {
+        id: &amp;quot;n1&amp;quot;.into(),
+        label: &amp;quot;Person&amp;quot;.into(),
+        properties: HashMap::from([(&amp;quot;name&amp;quot;.into(), &amp;quot;Alice&amp;quot;.into())]),
+    });
+    assert_eq!(graph.node_count(), 1);
+    let node = graph.get_node(&amp;quot;n1&amp;quot;).unwrap();
+    assert_eq!(node.label, &amp;quot;Person&amp;quot;);
+    assert_eq!(node.properties.get(&amp;quot;name&amp;quot;).unwrap(), &amp;quot;Alice&amp;quot;);
+}
+
+#[test]
+fn test_upsert_node_update_merges_properties() {
+    let mut graph = InMemoryGraph::new();
+    graph.upsert_node(Node {
+        id: &amp;quot;n1&amp;quot;.into(),
+        label: &amp;quot;Person&amp;quot;.into(),
+        properties: HashMap::from([
+            (&amp;quot;name&amp;quot;.into(), &amp;quot;Alice&amp;quot;.into()),
+            (&amp;quot;age&amp;quot;.into(), &amp;quot;30&amp;quot;.into()),
+        ]),
+    });
+    graph.upsert_node(Node {
+        id: &amp;quot;n1&amp;quot;.into(),
+        label: &amp;quot;Employee&amp;quot;.into(),
+        properties: HashMap::from([(&amp;quot;role&amp;quot;.into(), &amp;quot;Engineer&amp;quot;.into())]),
+    });
+
+    assert_eq!(graph.node_count(), 1, &amp;quot;Upsert should not create a duplicate&amp;quot;);
+    let node = graph.get_node(&amp;quot;n1&amp;quot;).unwrap();
+    assert_eq!(node.label, &amp;quot;Employee&amp;quot;, &amp;quot;Label should be updated&amp;quot;);
+    assert_eq!(node.properties.get(&amp;quot;name&amp;quot;).unwrap(), &amp;quot;Alice&amp;quot;, &amp;quot;Existing property preserved&amp;quot;);
+    assert_eq!(node.properties.get(&amp;quot;age&amp;quot;).unwrap(), &amp;quot;30&amp;quot;, &amp;quot;Existing property preserved&amp;quot;);
+    assert_eq!(node.properties.get(&amp;quot;role&amp;quot;).unwrap(), &amp;quot;Engineer&amp;quot;, &amp;quot;New property added&amp;quot;);
+}
+
+#[test]
+fn test_upsert_edge() {
+    let mut graph = InMemoryGraph::new();
+    graph.upsert_node(Node { id: &amp;quot;a&amp;quot;.into(), label: &amp;quot;&amp;quot;.into(), properties: HashMap::new() });
+    graph.upsert_node(Node { id: &amp;quot;b&amp;quot;.into(), label: &amp;quot;&amp;quot;.into(), properties: HashMap::new() });
+    graph.upsert_edge(Edge {
+        id: &amp;quot;e1&amp;quot;.into(),
+        source: &amp;quot;a&amp;quot;.into(),
+        target: &amp;quot;b&amp;quot;.into(),
+        label: &amp;quot;KNOWS&amp;quot;.into(),
+        properties: HashMap::new(),
+    });
+
+    assert_eq!(graph.edge_count(), 1);
+    let edge = graph.get_edge(&amp;quot;e1&amp;quot;).unwrap();
+    assert_eq!(edge.source, &amp;quot;a&amp;quot;);
+    assert_eq!(edge.target, &amp;quot;b&amp;quot;);
+    assert_eq!(edge.label, &amp;quot;KNOWS&amp;quot;);
+}
+
+#[test]
+fn test_get_neighbors_all() {
+    let mut graph = InMemoryGraph::new();
+    graph.upsert_node(Node { id: &amp;quot;a&amp;quot;.into(), label: &amp;quot;&amp;quot;.into(), properties: HashMap::new() });
+    graph.upsert_node(Node { id: &amp;quot;b&amp;quot;.into(), label: &amp;quot;&amp;quot;.into(), properties: HashMap::new() });
+    graph.upsert_node(Node { id: &amp;quot;c&amp;quot;.into(), label: &amp;quot;&amp;quot;.into(), properties: HashMap::new() });
+    graph.upsert_edge(Edge {
+        id: &amp;quot;e1&amp;quot;.into(), source: &amp;quot;a&amp;quot;.into(), target: &amp;quot;b&amp;quot;.into(),
+        label: &amp;quot;KNOWS&amp;quot;.into(), properties: HashMap::new(),
+    });
+    graph.upsert_edge(Edge {
+        id: &amp;quot;e2&amp;quot;.into(), source: &amp;quot;a&amp;quot;.into(), target: &amp;quot;c&amp;quot;.into(),
+        label: &amp;quot;WORKS_WITH&amp;quot;.into(), properties: HashMap::new(),
+    });
+
+    let neighbors = graph.get_neighbors(&amp;quot;a&amp;quot;, None);
+    assert_eq!(neighbors.len(), 2, &amp;quot;Should return both neighbors&amp;quot;);
+}
+
+#[test]
+fn test_get_neighbors_filtered() {
+    let mut graph = InMemoryGraph::new();
+    graph.upsert_node(Node { id: &amp;quot;a&amp;quot;.into(), label: &amp;quot;&amp;quot;.into(), properties: HashMap::new() });
+    graph.upsert_node(Node { id: &amp;quot;b&amp;quot;.into(), label: &amp;quot;&amp;quot;.into(), properties: HashMap::new() });
+    graph.upsert_node(Node { id: &amp;quot;c&amp;quot;.into(), label: &amp;quot;&amp;quot;.into(), properties: HashMap::new() });
+    graph.upsert_edge(Edge {
+        id: &amp;quot;e1&amp;quot;.into(), source: &amp;quot;a&amp;quot;.into(), target: &amp;quot;b&amp;quot;.into(),
+        label: &amp;quot;KNOWS&amp;quot;.into(), properties: HashMap::new(),
+    });
+    graph.upsert_edge(Edge {
+        id: &amp;quot;e2&amp;quot;.into(), source: &amp;quot;a&amp;quot;.into(), target: &amp;quot;c&amp;quot;.into(),
+        label: &amp;quot;WORKS_WITH&amp;quot;.into(), properties: HashMap::new(),
+    });
+
+    let knows = graph.get_neighbors(&amp;quot;a&amp;quot;, Some(&amp;quot;KNOWS&amp;quot;));
+    assert_eq!(knows.len(), 1);
+    assert_eq!(knows[0].node_id, &amp;quot;b&amp;quot;);
+    assert_eq!(knows[0].edge_label, &amp;quot;KNOWS&amp;quot;);
+}
+
+#[test]
+fn test_get_neighbors_nonexistent_node() {
+    let graph = InMemoryGraph::new();
+    let neighbors = graph.get_neighbors(&amp;quot;nonexistent&amp;quot;, None);
+    assert!(neighbors.is_empty(), &amp;quot;Nonexistent node should return empty neighbors&amp;quot;);
+}
+
+#[test]
+fn test_directed_edges() {
+    let mut graph = InMemoryGraph::new();
+    graph.upsert_node(Node { id: &amp;quot;a&amp;quot;.into(), label: &amp;quot;&amp;quot;.into(), properties: HashMap::new() });
+    graph.upsert_node(Node { id: &amp;quot;b&amp;quot;.into(), label: &amp;quot;&amp;quot;.into(), properties: HashMap::new() });
+    graph.upsert_edge(Edge {
+        id: &amp;quot;e1&amp;quot;.into(), source: &amp;quot;a&amp;quot;.into(), target: &amp;quot;b&amp;quot;.into(),
+        label: &amp;quot;FOLLOWS&amp;quot;.into(), properties: HashMap::new(),
+    });
+
+    let a_neighbors = graph.get_neighbors(&amp;quot;a&amp;quot;, None);
+    let b_neighbors = graph.get_neighbors(&amp;quot;b&amp;quot;, None);
+    assert_eq!(a_neighbors.len(), 1, &amp;quot;a should have 1 outgoing neighbor&amp;quot;);
+    assert_eq!(b_neighbors.len(), 0, &amp;quot;b should have 0 outgoing neighbors (edge is directed)&amp;quot;);
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</code></pre></p>
+  </details>
+</section>
+<section class="exercise-reflection" id="in-memory-graph-reflection">
+  <h3 id="-reflection"><a class="header" href="#-reflection">🤔 Reflection</a></h3>
+  <ul>
+    <li>How would you add a `get_incoming_neighbors` method? When would you need it in a Graph RAG query?</li>
+    <li>What happens to the adjacency lists if you delete a node that still has edges? How would you handle cascading deletes?</li>
+    <li>How does this in-memory implementation compare to a real graph database like Neptune in terms of query capabilities?</li>
+  </ul>
+</section>
+<footer class="exercise-footer">
+  <button class="btn btn-complete" data-exercise-id="in-memory-graph">✓ Mark Complete</button>
+</footer>
+</article>
+</div>
+<h1 id="in-memory-graph-storage-1"><a class="header" href="#in-memory-graph-storage-1">In-Memory Graph Storage</a></h1>
+<p>A knowledge graph is the backbone of Graph RAG -- it stores entities as nodes
+and their relationships as directed edges. In this exercise you will implement
+a simplified in-memory graph storage layer using HashMaps, mirroring the
+<code>GraphStorage</code> trait that EdgeQuake uses to abstract over real backends like
+Neptune and DynamoDB.</p>
+<p>::: objectives
+thinking:</p>
+<ul>
+<li>Understand the node/edge data model for knowledge graphs</li>
+<li>Reason about why adjacency lists enable efficient graph traversal
+doing:</li>
+<li>Implement upsert_node with insert-or-update semantics</li>
+<li>Implement upsert_edge with bidirectional adjacency tracking</li>
+<li>Implement get_neighbors with optional edge-label filtering</li>
+<li>Handle edge cases like missing nodes and duplicate edges
+:::</li>
+</ul>
+<p>::: discussion</p>
+<ul>
+<li>Why does Graph RAG use "upsert" instead of separate "insert" and "update" operations?</li>
+<li>What are the tradeoffs between adjacency-list and adjacency-matrix representations?</li>
+<li>How would you extend this to support undirected edges or hyperedges?
+:::</li>
+</ul>
+<p>::: starter file="src/main.rs"</p>
+<pre><pre class="playground"><code class="language-rust">use std::collections::{HashMap, HashSet};
+
+/// A node in the knowledge graph.
+#[derive(Debug, Clone)]
+struct Node {
+    id: String,
+    label: String,
+    properties: HashMap&lt;String, String&gt;,
+}
+
+/// A directed edge in the knowledge graph.
+#[derive(Debug, Clone)]
+struct Edge {
+    id: String,
+    source: String,
+    target: String,
+    label: String,
+    properties: HashMap&lt;String, String&gt;,
+}
+
+/// A neighbor reference returned by get_neighbors.
+#[derive(Debug, Clone)]
+struct Neighbor {
+    node_id: String,
+    edge_id: String,
+    edge_label: String,
+}
+
+/// In-memory graph storage using HashMaps.
+///
+/// Stores nodes by ID, edges by ID, and maintains adjacency lists
+/// for efficient neighbor lookups.
+struct InMemoryGraph {
+    nodes: HashMap&lt;String, Node&gt;,
+    edges: HashMap&lt;String, Edge&gt;,
+    /// Adjacency list: node_id -&gt; set of edge_ids going out from that node.
+    outgoing: HashMap&lt;String, HashSet&lt;String&gt;&gt;,
+    /// Adjacency list: node_id -&gt; set of edge_ids coming in to that node.
+    incoming: HashMap&lt;String, HashSet&lt;String&gt;&gt;,
+}
+
+impl InMemoryGraph {
+    fn new() -&gt; Self {
+        InMemoryGraph {
+            nodes: HashMap::new(),
+            edges: HashMap::new(),
+            outgoing: HashMap::new(),
+            incoming: HashMap::new(),
+        }
+    }
+
+    /// Insert or update a node.
+    ///
+    /// If a node with the same ID already exists, update its label and
+    /// merge its properties (new properties overwrite existing ones with
+    /// the same key, but existing keys not in the new node are preserved).
+    fn upsert_node(&amp;mut self, node: Node) {
+        // TODO: Implement upsert_node
+        // 1. Check if a node with this ID already exists.
+        // 2. If yes, update label and merge properties.
+        // 3. If no, insert the new node.
+        // 4. Ensure adjacency lists have entries for this node.
+        todo!("Implement upsert_node")
+    }
+
+    /// Insert or update an edge.
+    ///
+    /// If an edge with the same ID already exists, update its label and
+    /// merge its properties. Also update the adjacency lists.
+    fn upsert_edge(&amp;mut self, edge: Edge) {
+        // TODO: Implement upsert_edge
+        // 1. If updating an existing edge, remove old adjacency entries
+        //    if source/target changed.
+        // 2. Insert or update the edge.
+        // 3. Add the edge ID to outgoing[source] and incoming[target].
+        todo!("Implement upsert_edge")
+    }
+
+    /// Get a node by its ID.
+    fn get_node(&amp;self, id: &amp;str) -&gt; Option&lt;&amp;Node&gt; {
+        self.nodes.get(id)
+    }
+
+    /// Get an edge by its ID.
+    fn get_edge(&amp;self, id: &amp;str) -&gt; Option&lt;&amp;Edge&gt; {
+        self.edges.get(id)
+    }
+
+    /// Get all outgoing neighbors of a node, optionally filtered by edge label.
+    ///
+    /// Returns a list of Neighbor structs containing the neighbor node ID,
+    /// the edge ID, and the edge label.
+    fn get_neighbors(&amp;self, node_id: &amp;str, edge_label: Option&lt;&amp;str&gt;) -&gt; Vec&lt;Neighbor&gt; {
+        // TODO: Implement get_neighbors
+        // 1. Look up the outgoing edge IDs for this node.
+        // 2. For each edge, look up the edge details.
+        // 3. If edge_label filter is Some, only include edges matching that label.
+        // 4. Return Neighbor structs with (target node_id, edge_id, edge_label).
+        // 5. Return empty vec if the node doesn't exist or has no outgoing edges.
+        todo!("Implement get_neighbors")
+    }
+
+    /// Get the total number of nodes.
+    fn node_count(&amp;self) -&gt; usize {
+        self.nodes.len()
+    }
+
+    /// Get the total number of edges.
+    fn edge_count(&amp;self) -&gt; usize {
+        self.edges.len()
+    }
+}
+
+fn main() {
+    let mut graph = InMemoryGraph::new();
+
+    // Add some entities
+    graph.upsert_node(Node {
+        id: "person:alice".into(),
+        label: "Person".into(),
+        properties: HashMap::from([("name".into(), "Alice".into())]),
+    });
+    graph.upsert_node(Node {
+        id: "org:acme".into(),
+        label: "Organization".into(),
+        properties: HashMap::from([("name".into(), "Acme Corp".into())]),
+    });
+    graph.upsert_node(Node {
+        id: "person:bob".into(),
+        label: "Person".into(),
+        properties: HashMap::from([("name".into(), "Bob".into())]),
+    });
+
+    // Add relationships
+    graph.upsert_edge(Edge {
+        id: "e1".into(),
+        source: "person:alice".into(),
+        target: "org:acme".into(),
+        label: "WORKS_AT".into(),
+        properties: HashMap::from([("since".into(), "2020".into())]),
+    });
+    graph.upsert_edge(Edge {
+        id: "e2".into(),
+        source: "person:bob".into(),
+        target: "org:acme".into(),
+        label: "WORKS_AT".into(),
+        properties: HashMap::new(),
+    });
+    graph.upsert_edge(Edge {
+        id: "e3".into(),
+        source: "person:alice".into(),
+        target: "person:bob".into(),
+        label: "KNOWS".into(),
+        properties: HashMap::new(),
+    });
+
+    println!("Graph has {} nodes and {} edges", graph.node_count(), graph.edge_count());
+
+    let neighbors = graph.get_neighbors("person:alice", None);
+    println!("\nAlice's neighbors (all):");
+    for n in &amp;neighbors {
+        println!("  --[{}]--&gt; {}", n.edge_label, n.node_id);
+    }
+
+    let work_neighbors = graph.get_neighbors("person:alice", Some("WORKS_AT"));
+    println!("\nAlice's WORKS_AT neighbors:");
+    for n in &amp;work_neighbors {
+        println!("  --[{}]--&gt; {}", n.edge_label, n.node_id);
+    }
+}</code></pre></pre>
+<p>:::</p>
+<p>::: hint level=1 title="Upsert node with property merging"
+For merging properties, use <code>extend</code> to overwrite matching keys while keeping
+unmatched ones:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn upsert_node(&amp;mut self, node: Node) {
+    if let Some(existing) = self.nodes.get_mut(&amp;node.id) {
+        existing.label = node.label;
+        existing.properties.extend(node.properties);
+    } else {
+        let id = node.id.clone();
+        self.nodes.insert(id.clone(), node);
+        self.outgoing.entry(id.clone()).or_insert_with(HashSet::new);
+        self.incoming.entry(id).or_insert_with(HashSet::new);
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: hint level=2 title="Get neighbors with optional filter"
+Look up the outgoing edges, resolve each edge ID, and apply the optional filter:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn get_neighbors(&amp;self, node_id: &amp;str, edge_label: Option&lt;&amp;str&gt;) -&gt; Vec&lt;Neighbor&gt; {
+    let Some(edge_ids) = self.outgoing.get(node_id) else {
+        return Vec::new();
+    };
+
+    edge_ids.iter()
+        .filter_map(|eid| self.edges.get(eid))
+        .filter(|edge| edge_label.map_or(true, |label| edge.label == label))
+        .map(|edge| Neighbor {
+            node_id: edge.target.clone(),
+            edge_id: edge.id.clone(),
+            edge_label: edge.label.clone(),
+        })
+        .collect()
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: solution</p>
+<pre><pre class="playground"><code class="language-rust">use std::collections::{HashMap, HashSet};
+
+#[derive(Debug, Clone)]
+struct Node {
+    id: String,
+    label: String,
+    properties: HashMap&lt;String, String&gt;,
+}
+
+#[derive(Debug, Clone)]
+struct Edge {
+    id: String,
+    source: String,
+    target: String,
+    label: String,
+    properties: HashMap&lt;String, String&gt;,
+}
+
+#[derive(Debug, Clone)]
+struct Neighbor {
+    node_id: String,
+    edge_id: String,
+    edge_label: String,
+}
+
+struct InMemoryGraph {
+    nodes: HashMap&lt;String, Node&gt;,
+    edges: HashMap&lt;String, Edge&gt;,
+    outgoing: HashMap&lt;String, HashSet&lt;String&gt;&gt;,
+    incoming: HashMap&lt;String, HashSet&lt;String&gt;&gt;,
+}
+
+impl InMemoryGraph {
+    fn new() -&gt; Self {
+        InMemoryGraph {
+            nodes: HashMap::new(),
+            edges: HashMap::new(),
+            outgoing: HashMap::new(),
+            incoming: HashMap::new(),
+        }
+    }
+
+    fn upsert_node(&amp;mut self, node: Node) {
+        if let Some(existing) = self.nodes.get_mut(&amp;node.id) {
+            existing.label = node.label;
+            existing.properties.extend(node.properties);
+        } else {
+            let id = node.id.clone();
+            self.nodes.insert(id.clone(), node);
+            self.outgoing.entry(id.clone()).or_insert_with(HashSet::new);
+            self.incoming.entry(id).or_insert_with(HashSet::new);
+        }
+    }
+
+    fn upsert_edge(&amp;mut self, edge: Edge) {
+        // If updating an existing edge, clean up old adjacency entries
+        if let Some(existing) = self.edges.get(&amp;edge.id) {
+            if existing.source != edge.source || existing.target != edge.target {
+                // Source or target changed, remove old adjacency entries
+                if let Some(out) = self.outgoing.get_mut(&amp;existing.source) {
+                    out.remove(&amp;edge.id);
+                }
+                if let Some(inc) = self.incoming.get_mut(&amp;existing.target) {
+                    inc.remove(&amp;edge.id);
+                }
+            }
+        }
+
+        // Update adjacency lists
+        self.outgoing
+            .entry(edge.source.clone())
+            .or_insert_with(HashSet::new)
+            .insert(edge.id.clone());
+        self.incoming
+            .entry(edge.target.clone())
+            .or_insert_with(HashSet::new)
+            .insert(edge.id.clone());
+
+        // Insert or update the edge
+        if let Some(existing) = self.edges.get_mut(&amp;edge.id) {
+            existing.source = edge.source;
+            existing.target = edge.target;
+            existing.label = edge.label;
+            existing.properties.extend(edge.properties);
+        } else {
+            self.edges.insert(edge.id.clone(), edge);
+        }
+    }
+
+    fn get_node(&amp;self, id: &amp;str) -&gt; Option&lt;&amp;Node&gt; {
+        self.nodes.get(id)
+    }
+
+    fn get_edge(&amp;self, id: &amp;str) -&gt; Option&lt;&amp;Edge&gt; {
+        self.edges.get(id)
+    }
+
+    fn get_neighbors(&amp;self, node_id: &amp;str, edge_label: Option&lt;&amp;str&gt;) -&gt; Vec&lt;Neighbor&gt; {
+        let Some(edge_ids) = self.outgoing.get(node_id) else {
+            return Vec::new();
+        };
+
+        edge_ids
+            .iter()
+            .filter_map(|eid| self.edges.get(eid))
+            .filter(|edge| edge_label.map_or(true, |label| edge.label == label))
+            .map(|edge| Neighbor {
+                node_id: edge.target.clone(),
+                edge_id: edge.id.clone(),
+                edge_label: edge.label.clone(),
+            })
+            .collect()
+    }
+
+    fn node_count(&amp;self) -&gt; usize {
+        self.nodes.len()
+    }
+
+    fn edge_count(&amp;self) -&gt; usize {
+        self.edges.len()
+    }
+}
+
+fn main() {
+    let mut graph = InMemoryGraph::new();
+
+    graph.upsert_node(Node {
+        id: "person:alice".into(),
+        label: "Person".into(),
+        properties: HashMap::from([("name".into(), "Alice".into())]),
+    });
+    graph.upsert_node(Node {
+        id: "org:acme".into(),
+        label: "Organization".into(),
+        properties: HashMap::from([("name".into(), "Acme Corp".into())]),
+    });
+    graph.upsert_node(Node {
+        id: "person:bob".into(),
+        label: "Person".into(),
+        properties: HashMap::from([("name".into(), "Bob".into())]),
+    });
+
+    graph.upsert_edge(Edge {
+        id: "e1".into(),
+        source: "person:alice".into(),
+        target: "org:acme".into(),
+        label: "WORKS_AT".into(),
+        properties: HashMap::from([("since".into(), "2020".into())]),
+    });
+    graph.upsert_edge(Edge {
+        id: "e2".into(),
+        source: "person:bob".into(),
+        target: "org:acme".into(),
+        label: "WORKS_AT".into(),
+        properties: HashMap::new(),
+    });
+    graph.upsert_edge(Edge {
+        id: "e3".into(),
+        source: "person:alice".into(),
+        target: "person:bob".into(),
+        label: "KNOWS".into(),
+        properties: HashMap::new(),
+    });
+
+    println!("Graph has {} nodes and {} edges", graph.node_count(), graph.edge_count());
+
+    let neighbors = graph.get_neighbors("person:alice", None);
+    println!("\nAlice's neighbors (all):");
+    for n in &amp;neighbors {
+        println!("  --[{}]--&gt; {}", n.edge_label, n.node_id);
+    }
+
+    let work_neighbors = graph.get_neighbors("person:alice", Some("WORKS_AT"));
+    println!("\nAlice's WORKS_AT neighbors:");
+    for n in &amp;work_neighbors {
+        println!("  --[{}]--&gt; {}", n.edge_label, n.node_id);
+    }
+}</code></pre></pre>
+<h3 id="explanation-1"><a class="header" href="#explanation-1">Explanation</a></h3>
+<p>The graph uses four HashMaps: <code>nodes</code> and <code>edges</code> for the primary data, and
+<code>outgoing</code>/<code>incoming</code> adjacency lists for efficient traversal. The adjacency
+lists map each node ID to the set of edge IDs connected to it.</p>
+<p><strong>Upsert semantics</strong>: When upserting a node, existing properties are preserved
+unless overwritten by the new node's properties (via <code>extend</code>). When upserting
+an edge, if the source or target changes, the old adjacency entries are cleaned
+up before inserting new ones.</p>
+<p><strong>Neighbor lookup</strong>: <code>get_neighbors</code> is O(degree) because it only iterates
+over the outgoing edges of the given node, not all edges in the graph. The
+optional <code>edge_label</code> filter uses <code>filter</code> to restrict results, enabling
+queries like "get all WORKS_AT relationships" efficiently.
+:::</p>
+<p>::: tests mode=local</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_upsert_node_insert() {
+        let mut graph = InMemoryGraph::new();
+        graph.upsert_node(Node {
+            id: "n1".into(),
+            label: "Person".into(),
+            properties: HashMap::from([("name".into(), "Alice".into())]),
+        });
+        assert_eq!(graph.node_count(), 1);
+        let node = graph.get_node("n1").unwrap();
+        assert_eq!(node.label, "Person");
+        assert_eq!(node.properties.get("name").unwrap(), "Alice");
+    }
+
+    #[test]
+    fn test_upsert_node_update_merges_properties() {
+        let mut graph = InMemoryGraph::new();
+        graph.upsert_node(Node {
+            id: "n1".into(),
+            label: "Person".into(),
+            properties: HashMap::from([
+                ("name".into(), "Alice".into()),
+                ("age".into(), "30".into()),
+            ]),
+        });
+        graph.upsert_node(Node {
+            id: "n1".into(),
+            label: "Employee".into(),
+            properties: HashMap::from([("role".into(), "Engineer".into())]),
+        });
+
+        assert_eq!(graph.node_count(), 1, "Upsert should not create a duplicate");
+        let node = graph.get_node("n1").unwrap();
+        assert_eq!(node.label, "Employee", "Label should be updated");
+        assert_eq!(node.properties.get("name").unwrap(), "Alice", "Existing property preserved");
+        assert_eq!(node.properties.get("age").unwrap(), "30", "Existing property preserved");
+        assert_eq!(node.properties.get("role").unwrap(), "Engineer", "New property added");
+    }
+
+    #[test]
+    fn test_upsert_edge() {
+        let mut graph = InMemoryGraph::new();
+        graph.upsert_node(Node { id: "a".into(), label: "".into(), properties: HashMap::new() });
+        graph.upsert_node(Node { id: "b".into(), label: "".into(), properties: HashMap::new() });
+        graph.upsert_edge(Edge {
+            id: "e1".into(),
+            source: "a".into(),
+            target: "b".into(),
+            label: "KNOWS".into(),
+            properties: HashMap::new(),
+        });
+
+        assert_eq!(graph.edge_count(), 1);
+        let edge = graph.get_edge("e1").unwrap();
+        assert_eq!(edge.source, "a");
+        assert_eq!(edge.target, "b");
+        assert_eq!(edge.label, "KNOWS");
+    }
+
+    #[test]
+    fn test_get_neighbors_all() {
+        let mut graph = InMemoryGraph::new();
+        graph.upsert_node(Node { id: "a".into(), label: "".into(), properties: HashMap::new() });
+        graph.upsert_node(Node { id: "b".into(), label: "".into(), properties: HashMap::new() });
+        graph.upsert_node(Node { id: "c".into(), label: "".into(), properties: HashMap::new() });
+        graph.upsert_edge(Edge {
+            id: "e1".into(), source: "a".into(), target: "b".into(),
+            label: "KNOWS".into(), properties: HashMap::new(),
+        });
+        graph.upsert_edge(Edge {
+            id: "e2".into(), source: "a".into(), target: "c".into(),
+            label: "WORKS_WITH".into(), properties: HashMap::new(),
+        });
+
+        let neighbors = graph.get_neighbors("a", None);
+        assert_eq!(neighbors.len(), 2, "Should return both neighbors");
+    }
+
+    #[test]
+    fn test_get_neighbors_filtered() {
+        let mut graph = InMemoryGraph::new();
+        graph.upsert_node(Node { id: "a".into(), label: "".into(), properties: HashMap::new() });
+        graph.upsert_node(Node { id: "b".into(), label: "".into(), properties: HashMap::new() });
+        graph.upsert_node(Node { id: "c".into(), label: "".into(), properties: HashMap::new() });
+        graph.upsert_edge(Edge {
+            id: "e1".into(), source: "a".into(), target: "b".into(),
+            label: "KNOWS".into(), properties: HashMap::new(),
+        });
+        graph.upsert_edge(Edge {
+            id: "e2".into(), source: "a".into(), target: "c".into(),
+            label: "WORKS_WITH".into(), properties: HashMap::new(),
+        });
+
+        let knows = graph.get_neighbors("a", Some("KNOWS"));
+        assert_eq!(knows.len(), 1);
+        assert_eq!(knows[0].node_id, "b");
+        assert_eq!(knows[0].edge_label, "KNOWS");
+    }
+
+    #[test]
+    fn test_get_neighbors_nonexistent_node() {
+        let graph = InMemoryGraph::new();
+        let neighbors = graph.get_neighbors("nonexistent", None);
+        assert!(neighbors.is_empty(), "Nonexistent node should return empty neighbors");
+    }
+
+    #[test]
+    fn test_directed_edges() {
+        let mut graph = InMemoryGraph::new();
+        graph.upsert_node(Node { id: "a".into(), label: "".into(), properties: HashMap::new() });
+        graph.upsert_node(Node { id: "b".into(), label: "".into(), properties: HashMap::new() });
+        graph.upsert_edge(Edge {
+            id: "e1".into(), source: "a".into(), target: "b".into(),
+            label: "FOLLOWS".into(), properties: HashMap::new(),
+        });
+
+        let a_neighbors = graph.get_neighbors("a", None);
+        let b_neighbors = graph.get_neighbors("b", None);
+        assert_eq!(a_neighbors.len(), 1, "a should have 1 outgoing neighbor");
+        assert_eq!(b_neighbors.len(), 0, "b should have 0 outgoing neighbors (edge is directed)");
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: reflection</p>
+<ul>
+<li>How would you add a <code>get_incoming_neighbors</code> method? When would you need it in a Graph RAG query?</li>
+<li>What happens to the adjacency lists if you delete a node that still has edges? How would you handle cascading deletes?</li>
+<li>How does this in-memory implementation compare to a real graph database like Neptune in terms of query capabilities?
+:::</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../part2-graph/ch04-03-graph-storage-trait.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../part2-graph/ch05-ingestion-pipeline.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../part2-graph/ch04-03-graph-storage-trait.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../part2-graph/ch05-ingestion-pipeline.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../../ace.js"></script>
+        <script src="../../mode-rust.js"></script>
+        <script src="../../editor.js"></script>
+        <script src="../../theme-dawn.js"></script>
+        <script src="../../theme-tomorrow_night.js"></script>
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

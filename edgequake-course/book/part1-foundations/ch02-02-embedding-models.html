@@ -1,0 +1,541 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Embedding Models - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="22-embedding-models"><a class="header" href="#22-embedding-models">2.2 Embedding Models</a></h1>
+<p>An embedding model transforms text into a dense vector in high-dimensional
+space such that semantically similar texts have similar vectors. Choosing
+the right model -- and understanding its tradeoffs -- is one of the most
+impactful decisions in RAG system design.</p>
+<h2 id="bi-encoders-vs-cross-encoders"><a class="header" href="#bi-encoders-vs-cross-encoders">Bi-Encoders vs Cross-Encoders</a></h2>
+<p>There are two fundamentally different architectures for computing text
+similarity, and they serve different roles in a RAG pipeline.</p>
+<h3 id="bi-encoders-independent-encoding"><a class="header" href="#bi-encoders-independent-encoding">Bi-Encoders (Independent Encoding)</a></h3>
+<p>A bi-encoder processes the query and each document <em>independently</em>, producing
+a vector for each. Similarity is computed by comparing vectors (cosine
+similarity, dot product).</p>
+<pre class="mermaid">flowchart LR
+    Q[Query Text] --&gt; EQ[Encoder]
+    D[Document Text] --&gt; ED[Encoder]
+    EQ --&gt; VQ[Query Vector]
+    ED --&gt; VD[Document Vector]
+    VQ --&gt; SIM[Cosine Similarity]
+    VD --&gt; SIM
+    SIM --&gt; S[Score: 0.87]
+</pre>
+<p><strong>Advantages:</strong></p>
+<ul>
+<li>Document vectors are computed <em>once</em> at ingestion time and cached</li>
+<li>Query encoding is a single model call regardless of corpus size</li>
+<li>Enables sub-millisecond retrieval via approximate nearest neighbor (ANN) indices</li>
+</ul>
+<p><strong>Disadvantages:</strong></p>
+<ul>
+<li>Cannot capture fine-grained query-document interactions</li>
+<li>Lower accuracy than cross-encoders for nuanced relevance judgments</li>
+</ul>
+<p><strong>Examples:</strong> OpenAI text-embedding-3, Cohere embed-v3, BGE, E5, GTE</p>
+<h3 id="cross-encoders-joint-encoding"><a class="header" href="#cross-encoders-joint-encoding">Cross-Encoders (Joint Encoding)</a></h3>
+<p>A cross-encoder processes the query and document <em>together</em> as a single
+input, producing a scalar relevance score rather than independent vectors.</p>
+<pre class="mermaid">flowchart LR
+    Q[Query Text] --&gt; C[&quot;Encoder([query] [SEP] [document])&quot;]
+    D[Document Text] --&gt; C
+    C --&gt; S[Relevance Score: 0.94]
+</pre>
+<p><strong>Advantages:</strong></p>
+<ul>
+<li>Can capture token-level interactions between query and document</li>
+<li>Significantly more accurate relevance scoring</li>
+</ul>
+<p><strong>Disadvantages:</strong></p>
+<ul>
+<li>Must run the model once per (query, document) pair</li>
+<li>Cannot pre-compute document representations</li>
+<li>Too slow for initial retrieval over large corpora</li>
+</ul>
+<p><strong>Examples:</strong> Cohere Rerank, cross-encoder/ms-marco-MiniLM-L-12-v2</p>
+<h3 id="when-to-use-each"><a class="header" href="#when-to-use-each">When to Use Each</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Stage</th><th>Architecture</th><th>Why</th></tr></thead><tbody>
+<tr><td><strong>Indexing</strong></td><td>Bi-encoder</td><td>Pre-compute document embeddings</td></tr>
+<tr><td><strong>Initial retrieval</strong></td><td>Bi-encoder</td><td>Fast search over millions of vectors</td></tr>
+<tr><td><strong>Reranking</strong></td><td>Cross-encoder</td><td>Accurate scoring of top-k candidates</td></tr>
+</tbody></table>
+</div>
+<p>This two-stage pattern (bi-encoder retrieve, cross-encoder rerank) is the
+standard architecture in production RAG systems. We cover reranking in
+detail in Chapter 3.</p>
+<h2 id="model-comparison"><a class="header" href="#model-comparison">Model Comparison</a></h2>
+<h3 id="openai-embedding-models"><a class="header" href="#openai-embedding-models">OpenAI Embedding Models</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Model</th><th>Dimensions</th><th>Max Tokens</th><th>Cost (per 1M tokens)</th><th>Notes</th></tr></thead><tbody>
+<tr><td>text-embedding-3-small</td><td>1536 (or 512)</td><td>8,191</td><td>$0.02</td><td>Good quality/cost ratio</td></tr>
+<tr><td>text-embedding-3-large</td><td>3072 (or 256-3072)</td><td>8,191</td><td>$0.13</td><td>Highest quality</td></tr>
+<tr><td>text-embedding-ada-002</td><td>1536</td><td>8,191</td><td>$0.10</td><td>Legacy, still widely used</td></tr>
+</tbody></table>
+</div>
+<p>The <code>text-embedding-3</code> models support <em>Matryoshka dimensions</em> -- you can
+request a lower-dimensional output (e.g., 512 instead of 1536) with minimal
+quality loss. This reduces storage and search costs.</p>
+<h3 id="open-source-models"><a class="header" href="#open-source-models">Open-Source Models</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Model</th><th>Dimensions</th><th>Max Tokens</th><th>Notes</th></tr></thead><tbody>
+<tr><td>BGE-large-en-v1.5</td><td>1024</td><td>512</td><td>Strong MTEB benchmark performance</td></tr>
+<tr><td>E5-mistral-7b</td><td>4096</td><td>4,096</td><td>LLM-based, highest quality</td></tr>
+<tr><td>GTE-large</td><td>1024</td><td>512</td><td>Good all-around</td></tr>
+<tr><td>all-MiniLM-L6-v2</td><td>384</td><td>256</td><td>Very fast, lower quality</td></tr>
+</tbody></table>
+</div>
+<h3 id="calling-embedding-apis-from-rust"><a class="header" href="#calling-embedding-apis-from-rust">Calling Embedding APIs from Rust</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use reqwest::Client;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize)]
+struct EmbeddingRequest {
+    model: String,
+    input: Vec&lt;String&gt;,
+    dimensions: Option&lt;usize&gt;,
+}
+
+#[derive(Deserialize)]
+struct EmbeddingResponse {
+    data: Vec&lt;EmbeddingData&gt;,
+    usage: Usage,
+}
+
+#[derive(Deserialize)]
+struct EmbeddingData {
+    embedding: Vec&lt;f32&gt;,
+    index: usize,
+}
+
+#[derive(Deserialize)]
+struct Usage {
+    prompt_tokens: usize,
+    total_tokens: usize,
+}
+
+/// Embed texts using OpenAI's API
+async fn embed_texts(
+    client: &amp;Client,
+    api_key: &amp;str,
+    texts: Vec&lt;String&gt;,
+    model: &amp;str,
+    dimensions: Option&lt;usize&gt;,
+) -&gt; Result&lt;Vec&lt;Vec&lt;f32&gt;&gt;, Box&lt;dyn std::error::Error&gt;&gt; {
+    let request = EmbeddingRequest {
+        model: model.to_string(),
+        input: texts,
+        dimensions,
+    };
+
+    let response: EmbeddingResponse = client
+        .post("https://api.openai.com/v1/embeddings")
+        .bearer_auth(api_key)
+        .json(&amp;request)
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    println!("Tokens used: {}", response.usage.total_tokens);
+
+    // Sort by index to preserve input order
+    let mut data = response.data;
+    data.sort_by_key(|d| d.index);
+    Ok(data.into_iter().map(|d| d.embedding).collect())
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="dimension-tradeoffs"><a class="header" href="#dimension-tradeoffs">Dimension Tradeoffs</a></h2>
+<p>Embedding dimension directly affects storage, memory, and search performance:</p>
+<pre><code class="language-text">1M chunks at different dimensions:
+  384-dim  * 4 bytes = 1.5 GB
+  1024-dim * 4 bytes = 3.9 GB
+  1536-dim * 4 bytes = 5.9 GB
+  3072-dim * 4 bytes = 11.7 GB
+</code></pre>
+<h3 id="the-matryoshka-trick"><a class="header" href="#the-matryoshka-trick">The Matryoshka Trick</a></h3>
+<p>Modern models like <code>text-embedding-3-small</code> support truncating embeddings
+to fewer dimensions. The first N dimensions capture the most important
+information (like a PCA projection):</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Truncate an embedding to fewer dimensions and re-normalize
+fn truncate_embedding(embedding: &amp;[f32], target_dim: usize) -&gt; Vec&lt;f32&gt; {
+    let truncated = &amp;embedding[..target_dim.min(embedding.len())];
+
+    // Re-normalize after truncation
+    let magnitude: f32 = truncated.iter().map(|x| x * x).sum::&lt;f32&gt;().sqrt();
+    if magnitude &gt; 0.0 {
+        truncated.iter().map(|x| x / magnitude).collect()
+    } else {
+        truncated.to_vec()
+    }
+}
+
+// Example: reduce 1536-dim to 512-dim with ~1% quality loss
+let full = embed_texts(&amp;client, key, texts, "text-embedding-3-small", None).await?;
+let compact: Vec&lt;Vec&lt;f32&gt;&gt; = full
+    .iter()
+    .map(|v| truncate_embedding(v, 512))
+    .collect();
+<span class="boring">}</span></code></pre></pre>
+<p>Alternatively, request the reduced dimension directly from the API:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let compact = embed_texts(
+    &amp;client,
+    key,
+    texts,
+    "text-embedding-3-small",
+    Some(512), // API returns 512-dim vectors directly
+).await?;
+<span class="boring">}</span></code></pre></pre>
+<h2 id="distance-metrics"><a class="header" href="#distance-metrics">Distance Metrics</a></h2>
+<p>The choice of distance metric must match how your embedding model was
+trained.</p>
+<h3 id="cosine-similarity"><a class="header" href="#cosine-similarity">Cosine Similarity</a></h3>
+<p>Measures the angle between vectors. Range: [-1, 1]. Most common for
+normalized embeddings.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn cosine_similarity(a: &amp;[f32], b: &amp;[f32]) -&gt; f32 {
+    let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+    let mag_a: f32 = a.iter().map(|x| x * x).sum::&lt;f32&gt;().sqrt();
+    let mag_b: f32 = b.iter().map(|x| x * x).sum::&lt;f32&gt;().sqrt();
+    dot / (mag_a * mag_b)
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="dot-product"><a class="header" href="#dot-product">Dot Product</a></h3>
+<p>Equivalent to cosine similarity when vectors are L2-normalized (which
+OpenAI embeddings are). Faster to compute (no magnitude calculation).</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn dot_product(a: &amp;[f32], b: &amp;[f32]) -&gt; f32 {
+    a.iter().zip(b).map(|(x, y)| x * y).sum()
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="euclidean-distance"><a class="header" href="#euclidean-distance">Euclidean Distance</a></h3>
+<p>Measures straight-line distance. Lower is more similar. Sensitive to
+magnitude differences.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn euclidean_distance(a: &amp;[f32], b: &amp;[f32]) -&gt; f32 {
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| (x - y).powi(2))
+        .sum::&lt;f32&gt;()
+        .sqrt()
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="which-to-use"><a class="header" href="#which-to-use">Which to Use?</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Metric</th><th>When to Use</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Cosine similarity</td><td>Default choice for most embedding models</td><td>Magnitude-invariant</td></tr>
+<tr><td>Dot product</td><td>Normalized embeddings (OpenAI, Cohere)</td><td>Faster than cosine</td></tr>
+<tr><td>Euclidean</td><td>Some specialized models</td><td>Rarely the best choice for text</td></tr>
+</tbody></table>
+</div>
+<blockquote>
+<p><strong>EdgeQuake note</strong>: S3 Vectors uses cosine distance (1 - cosine similarity).
+EdgeQuake converts this to a similarity score via <code>1.0 - distance</code>.</p>
+</blockquote>
+<h2 id="batch-embedding-strategies"><a class="header" href="#batch-embedding-strategies">Batch Embedding Strategies</a></h2>
+<p>Production ingestion pipelines embed millions of chunks. Efficient batching
+is critical:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Embed chunks in batches to stay within API limits
+async fn embed_in_batches(
+    client: &amp;Client,
+    api_key: &amp;str,
+    chunks: &amp;[String],
+    batch_size: usize,
+) -&gt; Result&lt;Vec&lt;Vec&lt;f32&gt;&gt;, Box&lt;dyn std::error::Error&gt;&gt; {
+    let mut all_embeddings = Vec::with_capacity(chunks.len());
+
+    for batch in chunks.chunks(batch_size) {
+        let embeddings = embed_texts(
+            client,
+            api_key,
+            batch.to_vec(),
+            "text-embedding-3-small",
+            Some(512),
+        )
+        .await?;
+        all_embeddings.extend(embeddings);
+
+        // Respect rate limits
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    Ok(all_embeddings)
+}
+<span class="boring">}</span></code></pre></pre>
+<p>OpenAI's batch embedding endpoint accepts up to 2,048 texts per request
+with a total token limit of ~8,000 tokens per text. For large-scale
+ingestion, EdgeQuake uses the OpenAI Batch API for 50% cost savings
+(covered in Part III).</p>
+<h2 id="summary"><a class="header" href="#summary">Summary</a></h2>
+<p>Bi-encoders produce independent vectors for fast retrieval; cross-encoders
+produce pairwise scores for accurate reranking. Modern embedding models
+support Matryoshka dimensions for flexible quality/cost tradeoffs. Always
+match your distance metric to your model's training objective, and batch
+your embedding calls for production efficiency.</p>
+<hr />
+<p><em>Next: <a href="ch02-03-chunking-strategies.html">2.3 Chunking Strategies</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part1-foundations/ch02-01-tokenization.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part1-foundations/ch02-03-chunking-strategies.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part1-foundations/ch02-01-tokenization.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part1-foundations/ch02-03-chunking-strategies.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

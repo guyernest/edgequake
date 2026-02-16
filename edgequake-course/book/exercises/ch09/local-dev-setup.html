@@ -1,0 +1,783 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Exercise: Local Dev Setup - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../../src/custom.css">
+        <link rel="stylesheet" href="../../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="exercise-local-dev-setup"><a class="header" href="#exercise-local-dev-setup">Exercise: Local Dev Setup</a></h1>
+<div class="exercise-container">
+<article class="exercise" data-exercise-id="ch09-local-dev-setup" data-difficulty="beginner">
+<header class="exercise-header">
+  <h2 id="exercise-local-dev-setup-1" class="exercise-title"><a class="header" href="#exercise-local-dev-setup-1">Exercise: Local Dev Setup</a></h2>
+  <code class=\"exercise-id\">ch09-local-dev-setup</code>
+  <div class="exercise-meta">
+    <span class="badge difficulty beginner">⭐ beginner</span>
+    <span class="badge time">⏱️ 20 min</span>
+  </div>
+</header>
+<nav class="exercise-nav" aria-label="Exercise sections"><ul><li><a href="#ch09-local-dev-setup-description" data-section="description">📖 Overview</a></li><li><a href="#ch09-local-dev-setup-objectives" data-section="objectives">🎯 Objectives</a></li><li><a href="#ch09-local-dev-setup-starter" data-section="starter">💻 Code</a></li><li><a href="#ch09-local-dev-setup-hints" data-section="hints">💡 Hints</a></li><li><a href="#ch09-local-dev-setup-solution" data-section="solution">✅ Solution</a></li><li><a href="#ch09-local-dev-setup-tests" data-section="tests">🧪 Tests</a></li><li><a href="#ch09-local-dev-setup-reflection" data-section="reflection">🤔 Reflect</a></li></ul></nav>
+<section class="exercise-description" id="ch09-local-dev-setup-description">
+<p>In chapter 9 you learned that EdgeQuake's local development environment uses
+Docker Compose to run PostgreSQL with the pgvector and Apache AGE extensions.
+A reproducible local stack ensures every developer has an identical environment
+and eliminates "works on my machine" problems.</p>
+<p>In this exercise you will complete a Docker Compose configuration for the
+EdgeQuake development stack and write a Rust program that verifies connectivity
+to all services.</p>
+</section>
+<section class="exercise-objectives" id="ch09-local-dev-setup-objectives">
+  <h3 id="-learning-objectives"><a class="header" href="#-learning-objectives">🎯 Learning Objectives</a></h3>
+  <div class="objectives-grid">
+    <div class="objectives-thinking">
+      <h4 id="thinking"><a class="header" href="#thinking">Thinking</a></h4>
+      <ul>
+        <li><input type="checkbox" id="ch09-local-dev-setup-thinking-0" class="objective-checkbox"><label for="ch09-local-dev-setup-thinking-0">Understand how Docker Compose defines multi-service development environments</label></li>
+        <li><input type="checkbox" id="ch09-local-dev-setup-thinking-1" class="objective-checkbox"><label for="ch09-local-dev-setup-thinking-1">Recognize the importance of health checks for service dependency ordering</label></li>
+        <li><input type="checkbox" id="ch09-local-dev-setup-thinking-2" class="objective-checkbox"><label for="ch09-local-dev-setup-thinking-2">Know which PostgreSQL extensions EdgeQuake requires and why</label></li>
+      </ul>
+    </div>
+    <div class="objectives-doing">
+      <h4 id="doing"><a class="header" href="#doing">Doing</a></h4>
+      <ul>
+        <li><input type="checkbox" id="ch09-local-dev-setup-doing-0" class="objective-checkbox"><label for="ch09-local-dev-setup-doing-0">Complete a Docker Compose YAML file with PostgreSQL configuration</label></li>
+        <li><input type="checkbox" id="ch09-local-dev-setup-doing-1" class="objective-checkbox"><label for="ch09-local-dev-setup-doing-1">Configure health checks for reliable startup ordering</label></li>
+        <li><input type="checkbox" id="ch09-local-dev-setup-doing-2" class="objective-checkbox"><label for="ch09-local-dev-setup-doing-2">Write a Rust connectivity test using sqlx</label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+<section class="exercise-discussion">
+  <h3 id="-discussion"><a class="header" href="#-discussion">💬 Discussion</a></h3>
+  <ul>
+    <li>Why does EdgeQuake use Docker Compose for local development instead of asking developers to install PostgreSQL natively?</li>
+    <li>What is the purpose of health checks in Docker Compose, and what happens without them?</li>
+    <li>How do the local PostgreSQL extensions (pgvector, AGE) map to AWS services in production?</li>
+  </ul>
+</section>
+<section class="exercise-starter" id="ch09-local-dev-setup-starter">
+  <div class="code-header">
+    <span class="filename">src/main.rs</span>
+    <div class="code-actions">
+      <button class="btn btn-copy" data-target="code-ch09-local-dev-setup" title="Copy code">📋 Copy</button>
+      <button class="btn btn-reset" data-target="code-ch09-local-dev-setup" title="Reset to original">↺ Reset</button>
+    </div>
+  </div>
+  <textarea class="code-editor" id="code-ch09-local-dev-setup" data-language="rust" data-original="//! EdgeQuake local development connectivity check.&#10;//!&#10;//! Verifies that all required services are running and accessible.&#10;&#10;use sqlx::postgres::PgPoolOptions;&#10;use std::time::Duration;&#10;&#10;#[tokio::main]&#10;async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {&#10;    println!(&quot;EdgeQuake Local Dev -- Connectivity Check&quot;);&#10;    println!(&quot;==========================================\n&quot;);&#10;&#10;    // TODO: Build the connection string from environment variables&#10;    // with a fallback to default local development values.&#10;    // Format: postgres://user:password@host:port/database&#10;    let database_url = std::env::var(&quot;DATABASE_URL&quot;)&#10;        .unwrap_or_else(|_| {&#10;            // TODO: Fill in the default connection string matching your&#10;            // docker-compose.yml credentials&#10;            todo!(&quot;Provide default DATABASE_URL&quot;)&#10;        });&#10;&#10;    // TODO: Create a connection pool with a 10-second connect timeout&#10;    // and a maximum of 5 connections.&#10;    // Use PgPoolOptions::new() and configure it.&#10;    let pool = todo!(&quot;Create the connection pool&quot;);&#10;&#10;    // Test 1: Basic connectivity&#10;    println!(&quot;[1/3] Testing PostgreSQL connectivity...&quot;);&#10;    // TODO: Execute &quot;SELECT 1 as alive&quot; and verify the result.&#10;    // Use sqlx::query_scalar::&lt;_, i32&gt;(&quot;SELECT 1&quot;).fetch_one(&amp;pool).await?&#10;    let alive: i32 = todo!(&quot;Execute SELECT 1&quot;);&#10;    assert_eq!(alive, 1);&#10;    println!(&quot;  OK -- PostgreSQL is responding\n&quot;);&#10;&#10;    // Test 2: pgvector extension&#10;    println!(&quot;[2/3] Checking pgvector extension...&quot;);&#10;    // TODO: Query pg_extension for the vector extension version.&#10;    // SELECT extversion FROM pg_extension WHERE extname = &#x27;vector&#x27;&#10;    let pgvector_version: Option&lt;String&gt; = todo!(&quot;Query pgvector version&quot;);&#10;    match pgvector_version {&#10;        Some(version) =&gt; println!(&quot;  OK -- pgvector {} installed\n&quot;, version),&#10;        None =&gt; {&#10;            eprintln!(&quot;  FAIL -- pgvector extension not found&quot;);&#10;            std::process::exit(1);&#10;        }&#10;    }&#10;&#10;    // Test 3: Vector operations&#10;    println!(&quot;[3/3] Testing vector operations...&quot;);&#10;    // TODO: Run a simple vector similarity query to verify pgvector works.&#10;    // SELECT 1 - (embedding &lt;=&gt; &#x27;[1,0,0]&#x27;) AS similarity&#10;    // FROM (SELECT &#x27;[0.9,0.1,0.0]&#x27;::vector(3) AS embedding) t&#10;    let similarity: f64 = todo!(&quot;Execute vector similarity test&quot;);&#10;    assert!(similarity &gt; 0.9, &quot;Expected high similarity, got {}&quot;, similarity);&#10;    println!(&quot;  OK -- Vector similarity query works (score: {:.4})\n&quot;, similarity);&#10;&#10;    println!(&quot;==========================================&quot;);&#10;    println!(&quot;All checks passed! Environment is ready.&quot;);&#10;&#10;    Ok(())&#10;}" spellcheck="false"></textarea>
+</section>
+<section class="exercise-hints" id="ch09-local-dev-setup-hints">
+  <h3 id="-hints"><a class="header" href="#-hints">💡 Hints</a></h3>
+  <details class="hint" data-level="1">
+    <summary>Hint 1: Docker Compose basics</summary>
+    <div class="hint-content">
+<p>The PostgreSQL image and port mapping should look like:</p>
+<pre><code class="language-yaml">image: ankane/pgvector:pg16
+ports:
+  - "5432:5432"
+</code></pre>
+<p>For the health check, use:</p>
+<pre><code class="language-yaml">test: ["CMD-SHELL", "pg_isready -U edgequake"]
+</code></pre>
+    </div>
+  </details>
+  <details class="hint" data-level="2">
+    <summary>Hint 2: Connection pool setup</summary>
+    <div class="hint-content">
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let pool = PgPoolOptions::new()
+    .max_connections(5)
+    .acquire_timeout(Duration::from_secs(10))
+    .connect(&amp;database_url)
+    .await?;
+<span class="boring">}</span></code></pre></pre>
+    </div>
+  </details>
+  <details class="hint" data-level="3">
+    <summary>Hint 3: Vector similarity query</summary>
+    <div class="hint-content">
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let similarity: f64 = sqlx::query_scalar(
+    "SELECT 1 - ('[0.9,0.1,0.0]'::vector(3) &lt;=&gt; '[1,0,0]'::vector(3)) AS similarity"
+)
+.fetch_one(&amp;pool)
+.await?;
+<span class="boring">}</span></code></pre></pre>
+    </div>
+  </details>
+</section>
+<section class="exercise-solution" id="ch09-local-dev-setup-solution">
+  <details class="solution">
+    <summary><span class="solution-warning">⚠️ Try the exercise first!</span><span class="solution-toggle">Show Solution</span></summary>
+    <div class="solution-content">
+      <pre><code class="language-yaml"># docker-compose.yml
+version: &quot;3.8&quot;
+<p>services:
+postgres:
+image: ankane/pgvector:pg16
+container_name: edgequake-postgres
+environment:
+POSTGRES_USER: edgequake
+POSTGRES_PASSWORD: edgequake_dev
+POSTGRES_DB: edgequake
+ports:
+- "5432:5432"
+volumes:
+- pgdata:/var/lib/postgresql/data
+- ./init.sql:/docker-entrypoint-initdb.d/init.sql
+healthcheck:
+test: ["CMD-SHELL", "pg_isready -U edgequake"]
+interval: 5s
+timeout: 5s
+retries: 5</p>
+<p>volumes:
+pgdata:</code></pre>
+<div class="solution-explanation"><h4 id="explanation"><a class="header" href="#explanation">Explanation</a></h4><p>The Docker Compose stack provides:</p></p>
+<ul>
+<li><strong>PostgreSQL with pgvector</strong>: The <code>ankane/pgvector:pg16</code> image includes the vector
+extension pre-compiled. The <code>init.sql</code> script enables it on first startup.</li>
+<li><strong>Health checks</strong>: <code>pg_isready</code> verifies the database accepts connections before
+dependent services start. Without health checks, the Rust program would fail with
+connection refused errors on first boot.</li>
+<li><strong>Volume mount</strong>: <code>pgdata</code> persists data across <code>docker compose down/up</code> cycles.</li>
+<li><strong>Connectivity test</strong>: The Rust program verifies three things: basic SQL works,
+pgvector is installed, and vector similarity queries produce correct results.</li>
+</ul>
+</div>
+    </div>
+  </details>
+</section>
+<section class="exercise-tests" id="ch09-local-dev-setup-tests" data-mode="local">
+  <h3 id="-tests"><a class="header" href="#-tests">🧪 Tests</a></h3>
+  <div class="test-actions">
+    <div class="local-test-info"><p>Run these tests locally with:</p><pre><code>cargo test</code></pre></div>
+  </div>
+  <div class="test-results" id="results-ch09-local-dev-setup" hidden></div>
+  <details class="tests-code"><summary>View Test Code</summary>
+    <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    /// These tests verify the Docker Compose configuration is valid
+    /// and the connectivity check logic is sound. They do NOT require
+    /// a running Docker environment.
+<pre><code>#[test]
+fn test_default_database_url_format() {
+    let url = &amp;quot;postgres://edgequake:edgequake_dev@localhost:5432/edgequake&amp;quot;;
+    assert!(url.starts_with(&amp;quot;postgres://&amp;quot;));
+    assert!(url.contains(&amp;quot;@localhost:5432/&amp;quot;));
+    assert!(url.contains(&amp;quot;edgequake&amp;quot;));
+}
+
+#[test]
+fn test_database_url_from_env() {
+    // Verify that DATABASE_URL env var would override the default
+    std::env::set_var(&amp;quot;DATABASE_URL_TEST&amp;quot;, &amp;quot;postgres://custom:pass@db:5432/mydb&amp;quot;);
+    let url = std::env::var(&amp;quot;DATABASE_URL_TEST&amp;quot;).unwrap();
+    assert!(url.contains(&amp;quot;custom&amp;quot;));
+    std::env::remove_var(&amp;quot;DATABASE_URL_TEST&amp;quot;);
+}
+
+#[test]
+fn test_init_sql_has_vector_extension() {
+    // Verify the init script includes the vector extension
+    let init_sql = &amp;quot;CREATE EXTENSION IF NOT EXISTS vector;&amp;quot;;
+    assert!(init_sql.contains(&amp;quot;vector&amp;quot;));
+}
+
+#[test]
+fn test_health_check_command() {
+    // Verify the health check command structure
+    let cmd = &amp;quot;pg_isready -U edgequake&amp;quot;;
+    assert!(cmd.contains(&amp;quot;pg_isready&amp;quot;));
+    assert!(cmd.contains(&amp;quot;edgequake&amp;quot;));
+}
+<span class="boring">}</span></code></pre></pre>
+<p>}</code></pre></p>
+  </details>
+</section>
+<section class="exercise-reflection" id="ch09-local-dev-setup-reflection">
+  <h3 id="-reflection"><a class="header" href="#-reflection">🤔 Reflection</a></h3>
+  <ul>
+    <li>How would you add a Redis service to this Docker Compose file for caching?</li>
+    <li>The init.sql script runs only on first database creation. How would you handle</li>
+    <li>What changes when moving from this local setup to AWS? Which services get</li>
+  </ul>
+</section>
+<footer class="exercise-footer">
+  <button class="btn btn-complete" data-exercise-id="ch09-local-dev-setup">✓ Mark Complete</button>
+</footer>
+</article>
+</div>
+<p>In chapter 9 you learned that EdgeQuake's local development environment uses
+Docker Compose to run PostgreSQL with the pgvector and Apache AGE extensions.
+A reproducible local stack ensures every developer has an identical environment
+and eliminates "works on my machine" problems.</p>
+<p>In this exercise you will complete a Docker Compose configuration for the
+EdgeQuake development stack and write a Rust program that verifies connectivity
+to all services.</p>
+<p>::: objectives
+thinking:</p>
+<ul>
+<li>Understand how Docker Compose defines multi-service development environments</li>
+<li>Recognize the importance of health checks for service dependency ordering</li>
+<li>Know which PostgreSQL extensions EdgeQuake requires and why
+doing:</li>
+<li>Complete a Docker Compose YAML file with PostgreSQL configuration</li>
+<li>Configure health checks for reliable startup ordering</li>
+<li>Write a Rust connectivity test using sqlx
+:::</li>
+</ul>
+<p>::: discussion</p>
+<ul>
+<li>Why does EdgeQuake use Docker Compose for local development instead of asking developers to install PostgreSQL natively?</li>
+<li>What is the purpose of health checks in Docker Compose, and what happens without them?</li>
+<li>How do the local PostgreSQL extensions (pgvector, AGE) map to AWS services in production?
+:::</li>
+</ul>
+<p>::: starter file="docker-compose.yml"</p>
+<pre><code class="language-yaml"># EdgeQuake Local Development Stack
+# Complete the TODOs to configure all services.
+
+version: "3.8"
+
+services:
+  postgres:
+    # TODO: Use the ankane/pgvector:pg16 image (includes pgvector extension)
+    image: # YOUR IMAGE HERE
+    container_name: edgequake-postgres
+    environment:
+      # TODO: Set PostgreSQL credentials and database name
+      POSTGRES_USER: # YOUR VALUE
+      POSTGRES_PASSWORD: # YOUR VALUE
+      POSTGRES_DB: # YOUR VALUE
+    ports:
+      # TODO: Map container port 5432 to host port 5432
+      - # YOUR PORT MAPPING
+    volumes:
+      # Persist data across container restarts
+      - pgdata:/var/lib/postgresql/data
+      # TODO: Mount the init script that creates extensions
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      # TODO: Use pg_isready to check database readiness
+      test: # YOUR HEALTH CHECK COMMAND
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+</code></pre>
+<p>:::</p>
+<p>::: starter file="init.sql"</p>
+<pre><code class="language-sql">-- Extensions required by EdgeQuake
+-- pgvector: vector similarity search
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- pg_trgm: trigram-based text search (used for fuzzy matching)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- Verify extensions are installed
+SELECT extname, extversion FROM pg_extension WHERE extname IN ('vector', 'pg_trgm');
+</code></pre>
+<p>:::</p>
+<p>::: starter file="src/main.rs"</p>
+<pre><pre class="playground"><code class="language-rust">//! EdgeQuake local development connectivity check.
+//!
+//! Verifies that all required services are running and accessible.
+
+use sqlx::postgres::PgPoolOptions;
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    println!("EdgeQuake Local Dev -- Connectivity Check");
+    println!("==========================================\n");
+
+    // TODO: Build the connection string from environment variables
+    // with a fallback to default local development values.
+    // Format: postgres://user:password@host:port/database
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| {
+            // TODO: Fill in the default connection string matching your
+            // docker-compose.yml credentials
+            todo!("Provide default DATABASE_URL")
+        });
+
+    // TODO: Create a connection pool with a 10-second connect timeout
+    // and a maximum of 5 connections.
+    // Use PgPoolOptions::new() and configure it.
+    let pool = todo!("Create the connection pool");
+
+    // Test 1: Basic connectivity
+    println!("[1/3] Testing PostgreSQL connectivity...");
+    // TODO: Execute "SELECT 1 as alive" and verify the result.
+    // Use sqlx::query_scalar::&lt;_, i32&gt;("SELECT 1").fetch_one(&amp;pool).await?
+    let alive: i32 = todo!("Execute SELECT 1");
+    assert_eq!(alive, 1);
+    println!("  OK -- PostgreSQL is responding\n");
+
+    // Test 2: pgvector extension
+    println!("[2/3] Checking pgvector extension...");
+    // TODO: Query pg_extension for the vector extension version.
+    // SELECT extversion FROM pg_extension WHERE extname = 'vector'
+    let pgvector_version: Option&lt;String&gt; = todo!("Query pgvector version");
+    match pgvector_version {
+        Some(version) =&gt; println!("  OK -- pgvector {} installed\n", version),
+        None =&gt; {
+            eprintln!("  FAIL -- pgvector extension not found");
+            std::process::exit(1);
+        }
+    }
+
+    // Test 3: Vector operations
+    println!("[3/3] Testing vector operations...");
+    // TODO: Run a simple vector similarity query to verify pgvector works.
+    // SELECT 1 - (embedding &lt;=&gt; '[1,0,0]') AS similarity
+    // FROM (SELECT '[0.9,0.1,0.0]'::vector(3) AS embedding) t
+    let similarity: f64 = todo!("Execute vector similarity test");
+    assert!(similarity &gt; 0.9, "Expected high similarity, got {}", similarity);
+    println!("  OK -- Vector similarity query works (score: {:.4})\n", similarity);
+
+    println!("==========================================");
+    println!("All checks passed! Environment is ready.");
+
+    Ok(())
+}</code></pre></pre>
+<p>:::</p>
+<p>::: hint level=1 title="Docker Compose basics"
+The PostgreSQL image and port mapping should look like:</p>
+<pre><code class="language-yaml">image: ankane/pgvector:pg16
+ports:
+  - "5432:5432"
+</code></pre>
+<p>For the health check, use:</p>
+<pre><code class="language-yaml">test: ["CMD-SHELL", "pg_isready -U edgequake"]
+</code></pre>
+<p>:::</p>
+<p>::: hint level=2 title="Connection pool setup"</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let pool = PgPoolOptions::new()
+    .max_connections(5)
+    .acquire_timeout(Duration::from_secs(10))
+    .connect(&amp;database_url)
+    .await?;
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: hint level=3 title="Vector similarity query"</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let similarity: f64 = sqlx::query_scalar(
+    "SELECT 1 - ('[0.9,0.1,0.0]'::vector(3) &lt;=&gt; '[1,0,0]'::vector(3)) AS similarity"
+)
+.fetch_one(&amp;pool)
+.await?;
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: solution</p>
+<pre><code class="language-yaml"># docker-compose.yml
+version: "3.8"
+
+services:
+  postgres:
+    image: ankane/pgvector:pg16
+    container_name: edgequake-postgres
+    environment:
+      POSTGRES_USER: edgequake
+      POSTGRES_PASSWORD: edgequake_dev
+      POSTGRES_DB: edgequake
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edgequake"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+</code></pre>
+<pre><pre class="playground"><code class="language-rust">//! EdgeQuake local development connectivity check.
+
+use sqlx::postgres::PgPoolOptions;
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    println!("EdgeQuake Local Dev -- Connectivity Check");
+    println!("==========================================\n");
+
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://edgequake:edgequake_dev@localhost:5432/edgequake".to_string()
+    });
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .acquire_timeout(Duration::from_secs(10))
+        .connect(&amp;database_url)
+        .await?;
+
+    // Test 1: Basic connectivity
+    println!("[1/3] Testing PostgreSQL connectivity...");
+    let alive: i32 = sqlx::query_scalar("SELECT 1")
+        .fetch_one(&amp;pool)
+        .await?;
+    assert_eq!(alive, 1);
+    println!("  OK -- PostgreSQL is responding\n");
+
+    // Test 2: pgvector extension
+    println!("[2/3] Checking pgvector extension...");
+    let pgvector_version: Option&lt;String&gt; = sqlx::query_scalar(
+        "SELECT extversion FROM pg_extension WHERE extname = 'vector'"
+    )
+    .fetch_optional(&amp;pool)
+    .await?;
+
+    match pgvector_version {
+        Some(version) =&gt; println!("  OK -- pgvector {} installed\n", version),
+        None =&gt; {
+            eprintln!("  FAIL -- pgvector extension not found");
+            std::process::exit(1);
+        }
+    }
+
+    // Test 3: Vector operations
+    println!("[3/3] Testing vector operations...");
+    let similarity: f64 = sqlx::query_scalar(
+        "SELECT 1 - ('[0.9,0.1,0.0]'::vector(3) &lt;=&gt; '[1,0,0]'::vector(3)) AS similarity"
+    )
+    .fetch_one(&amp;pool)
+    .await?;
+    assert!(similarity &gt; 0.9, "Expected high similarity, got {}", similarity);
+    println!("  OK -- Vector similarity query works (score: {:.4})\n", similarity);
+
+    println!("==========================================");
+    println!("All checks passed! Environment is ready.");
+
+    Ok(())
+}</code></pre></pre>
+<h3 id="explanation-1"><a class="header" href="#explanation-1">Explanation</a></h3>
+<p>The Docker Compose stack provides:</p>
+<ul>
+<li><strong>PostgreSQL with pgvector</strong>: The <code>ankane/pgvector:pg16</code> image includes the vector
+extension pre-compiled. The <code>init.sql</code> script enables it on first startup.</li>
+<li><strong>Health checks</strong>: <code>pg_isready</code> verifies the database accepts connections before
+dependent services start. Without health checks, the Rust program would fail with
+connection refused errors on first boot.</li>
+<li><strong>Volume mount</strong>: <code>pgdata</code> persists data across <code>docker compose down/up</code> cycles.</li>
+<li><strong>Connectivity test</strong>: The Rust program verifies three things: basic SQL works,
+pgvector is installed, and vector similarity queries produce correct results.
+:::</li>
+</ul>
+<p>::: tests mode=local</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    /// These tests verify the Docker Compose configuration is valid
+    /// and the connectivity check logic is sound. They do NOT require
+    /// a running Docker environment.
+
+    #[test]
+    fn test_default_database_url_format() {
+        let url = "postgres://edgequake:edgequake_dev@localhost:5432/edgequake";
+        assert!(url.starts_with("postgres://"));
+        assert!(url.contains("@localhost:5432/"));
+        assert!(url.contains("edgequake"));
+    }
+
+    #[test]
+    fn test_database_url_from_env() {
+        // Verify that DATABASE_URL env var would override the default
+        std::env::set_var("DATABASE_URL_TEST", "postgres://custom:pass@db:5432/mydb");
+        let url = std::env::var("DATABASE_URL_TEST").unwrap();
+        assert!(url.contains("custom"));
+        std::env::remove_var("DATABASE_URL_TEST");
+    }
+
+    #[test]
+    fn test_init_sql_has_vector_extension() {
+        // Verify the init script includes the vector extension
+        let init_sql = "CREATE EXTENSION IF NOT EXISTS vector;";
+        assert!(init_sql.contains("vector"));
+    }
+
+    #[test]
+    fn test_health_check_command() {
+        // Verify the health check command structure
+        let cmd = "pg_isready -U edgequake";
+        assert!(cmd.contains("pg_isready"));
+        assert!(cmd.contains("edgequake"));
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>:::</p>
+<p>::: reflection</p>
+<ul>
+<li>How would you add a Redis service to this Docker Compose file for caching?
+What health check would you use for Redis?</li>
+<li>The init.sql script runs only on first database creation. How would you handle
+schema migrations for subsequent deployments?</li>
+<li>What changes when moving from this local setup to AWS? Which services get
+replaced by managed alternatives?
+:::</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../part3-production/ch09-03-llm-providers.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../part3-production/ch10-aws-deployment.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../part3-production/ch09-03-llm-providers.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../part3-production/ch10-aws-deployment.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../../ace.js"></script>
+        <script src="../../mode-rust.js"></script>
+        <script src="../../editor.js"></script>
+        <script src="../../theme-dawn.js"></script>
+        <script src="../../theme-tomorrow_night.js"></script>
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

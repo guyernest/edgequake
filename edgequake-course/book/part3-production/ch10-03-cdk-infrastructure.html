@@ -1,0 +1,589 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>CDK Infrastructure - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="103-cdk-infrastructure"><a class="header" href="#103-cdk-infrastructure">10.3 CDK Infrastructure</a></h2>
+<p>AWS CDK (Cloud Development Kit) lets you define cloud infrastructure in
+TypeScript (or Python, Java, Go, C#). EdgeQuake uses TypeScript CDK to
+provision the complete storage layer: S3 Vectors, Neptune, DynamoDB, VPC
+networking, and IAM roles. This section walks through the CDK stack design.</p>
+<h3 id="why-cdk-over-cloudformation-or-terraform"><a class="header" href="#why-cdk-over-cloudformation-or-terraform">Why CDK Over CloudFormation or Terraform?</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Tool</th><th>Language</th><th>State Management</th><th>AWS Integration</th></tr></thead><tbody>
+<tr><td>CloudFormation</td><td>YAML/JSON</td><td>Managed by AWS</td><td>Native</td></tr>
+<tr><td>Terraform</td><td>HCL</td><td>External state file</td><td>Plugin-based</td></tr>
+<tr><td>CDK</td><td>TypeScript/Python</td><td>Managed by AWS (via CFN)</td><td>Native + higher-level constructs</td></tr>
+</tbody></table>
+</div>
+<p>CDK compiles to CloudFormation under the hood, so you get the reliability of
+CloudFormation with the expressiveness of a real programming language.
+Loops, conditionals, and abstractions are all available.</p>
+<h3 id="multi-stack-architecture"><a class="header" href="#multi-stack-architecture">Multi-Stack Architecture</a></h3>
+<p>EdgeQuake's infrastructure is split into multiple CDK stacks to separate
+resources with different lifecycles:</p>
+<pre class="mermaid">graph TD
+    subgraph &quot;CDK App&quot;
+        NS[NetworkStack&lt;br/&gt;VPC, Subnets, NAT]
+        DS[DataStack&lt;br/&gt;Neptune, DynamoDB,&lt;br/&gt;S3 Vectors]
+        CS[ComputeStack&lt;br/&gt;ECS, ALB, Lambda]
+    end
+
+    NS --&gt; DS
+    DS --&gt; CS
+
+    style NS fill:#f9f9f9,stroke:#333
+    style DS fill:#ffe0b2,stroke:#333
+    style CS fill:#bbdefb,stroke:#333
+</pre>
+<div class="table-wrapper"><table><thead><tr><th>Stack</th><th>Contains</th><th>Lifecycle</th></tr></thead><tbody>
+<tr><td><code>NetworkStack</code></td><td>VPC, subnets, NAT Gateway, VPC endpoints</td><td>Rarely changes</td></tr>
+<tr><td><code>DataStack</code></td><td>Neptune, DynamoDB, S3 Vectors</td><td>Changes when adding new storage</td></tr>
+<tr><td><code>ComputeStack</code></td><td>ECS services, Lambda functions, ALB</td><td>Changes on every deployment</td></tr>
+</tbody></table>
+</div>
+<p>This separation means you can deploy new application code (ComputeStack)
+without risking changes to your database infrastructure (DataStack).</p>
+<h3 id="the-data-stack"><a class="header" href="#the-data-stack">The Data Stack</a></h3>
+<p>The data stack provisions all storage resources. Here is a complete example:</p>
+<pre><code class="language-typescript">import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as neptune from 'aws-cdk-lib/aws-neptune';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import { CfnVectorBucket, CfnIndex } from 'aws-cdk-lib/aws-s3vectors';
+
+interface DataStackProps extends cdk.StackProps {
+  vpc: ec2.IVpc;
+  prefix: string;
+}
+
+export class DataStack extends cdk.Stack {
+  public readonly neptuneEndpoint: string;
+  public readonly dynamoTableName: string;
+  public readonly vectorBucketName: string;
+  public readonly vectorIndexName: string;
+
+  constructor(scope: Construct, id: string, props: DataStackProps) {
+    super(scope, id, props);
+
+    // ========== S3 Vectors ==========
+    const vectorBucket = new CfnVectorBucket(this, 'VectorBucket', {
+      vectorBucketName: `${props.prefix}-vectors`,
+    });
+
+    const vectorIndex = new CfnIndex(this, 'VectorIndex', {
+      vectorBucketName: vectorBucket.vectorBucketName!,
+      indexName: 'embeddings-1536',
+      dimension: 1536,
+      distanceMetric: 'cosine',
+      dataType: 'float32',
+    });
+    vectorIndex.addDependency(vectorBucket);
+
+    this.vectorBucketName = `${props.prefix}-vectors`;
+    this.vectorIndexName = 'embeddings-1536';
+
+    // ========== DynamoDB ==========
+    const kvTable = new dynamodb.Table(this, 'KVTable', {
+      tableName: `${props.prefix}-kv`,
+      partitionKey: {
+        name: 'namespace',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'id',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    this.dynamoTableName = kvTable.tableName;
+
+    // ========== Neptune ==========
+    const neptuneSubnetGroup = new neptune.CfnDBSubnetGroup(
+      this, 'NeptuneSubnetGroup', {
+        dbSubnetGroupDescription: 'EdgeQuake Neptune subnets',
+        subnetIds: props.vpc.privateSubnets.map(s =&gt; s.subnetId),
+      }
+    );
+
+    const neptuneSG = new ec2.SecurityGroup(this, 'NeptuneSG', {
+      vpc: props.vpc,
+      description: 'Neptune cluster security group',
+      allowAllOutbound: false,
+    });
+
+    // Allow inbound from private subnets on port 8182
+    neptuneSG.addIngressRule(
+      ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
+      ec2.Port.tcp(8182),
+      'Neptune access from VPC'
+    );
+
+    const neptuneCluster = new neptune.CfnDBCluster(
+      this, 'NeptuneCluster', {
+        dbSubnetGroupName: neptuneSubnetGroup.ref,
+        vpcSecurityGroupIds: [neptuneSG.securityGroupId],
+        iamAuthEnabled: true,
+        storageEncrypted: true,
+        serverlessScalingConfiguration: {
+          minCapacity: 1.0,   // Scale to near-zero
+          maxCapacity: 32.0,  // Scale up under load
+        },
+      }
+    );
+    neptuneCluster.addDependency(neptuneSubnetGroup);
+
+    this.neptuneEndpoint = neptuneCluster.attrEndpoint;
+
+    // ========== Outputs ==========
+    new cdk.CfnOutput(this, 'NeptuneEndpointOutput', {
+      value: neptuneCluster.attrEndpoint,
+      exportName: `${props.prefix}-neptune-endpoint`,
+    });
+
+    new cdk.CfnOutput(this, 'DynamoTableOutput', {
+      value: kvTable.tableName,
+      exportName: `${props.prefix}-dynamo-table`,
+    });
+
+    new cdk.CfnOutput(this, 'VectorBucketOutput', {
+      value: this.vectorBucketName,
+      exportName: `${props.prefix}-vector-bucket`,
+    });
+  }
+}
+</code></pre>
+<h3 id="s3-vectors-cdk-details"><a class="header" href="#s3-vectors-cdk-details">S3 Vectors CDK Details</a></h3>
+<p>S3 Vectors uses L1 (CloudFormation-level) constructs because it is a newer
+service without higher-level L2 constructs yet:</p>
+<pre><code class="language-typescript">// L1 construct -- maps directly to CloudFormation
+const vectorBucket = new CfnVectorBucket(this, 'VectorBucket', {
+  vectorBucketName: `${props.prefix}-vectors`,
+});
+
+const vectorIndex = new CfnIndex(this, 'VectorIndex', {
+  vectorBucketName: vectorBucket.vectorBucketName!,
+  indexName: 'embeddings-1536',
+  dimension: 1536,
+  distanceMetric: 'cosine',
+  dataType: 'float32',
+});
+</code></pre>
+<p>Key configuration parameters:</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>dimension</code></td><td>1536</td><td>Must match your embedding model output</td></tr>
+<tr><td><code>distanceMetric</code></td><td><code>cosine</code></td><td>Standard for text embeddings</td></tr>
+<tr><td><code>dataType</code></td><td><code>float32</code></td><td>Standard precision</td></tr>
+</tbody></table>
+</div>
+<p>The <code>addDependency</code> call ensures the index is created after the bucket:</p>
+<pre><code class="language-typescript">vectorIndex.addDependency(vectorBucket);
+</code></pre>
+<h3 id="neptune-cdk-details"><a class="header" href="#neptune-cdk-details">Neptune CDK Details</a></h3>
+<p>Neptune uses serverless scaling configuration to minimize costs during low
+usage and scale up under load:</p>
+<pre><code class="language-typescript">const neptuneCluster = new neptune.CfnDBCluster(this, 'NeptuneCluster', {
+  serverlessScalingConfiguration: {
+    minCapacity: 1.0,    // Minimum Neptune Capacity Units
+    maxCapacity: 32.0,   // Maximum NCUs
+  },
+  iamAuthEnabled: true,   // Required for Neptune Data API
+  storageEncrypted: true, // Encryption at rest
+});
+</code></pre>
+<p>Neptune Capacity Units (NCUs) determine compute power:</p>
+<div class="table-wrapper"><table><thead><tr><th>NCUs</th><th>Approximate Memory</th><th>Cost</th></tr></thead><tbody>
+<tr><td>1.0</td><td>2 GB</td><td>Minimal</td></tr>
+<tr><td>8.0</td><td>16 GB</td><td>Medium workloads</td></tr>
+<tr><td>32.0</td><td>64 GB</td><td>Large graph traversals</td></tr>
+</tbody></table>
+</div>
+<h3 id="dynamodb-cdk-details"><a class="header" href="#dynamodb-cdk-details">DynamoDB CDK Details</a></h3>
+<p>DynamoDB uses pay-per-request billing with point-in-time recovery:</p>
+<pre><code class="language-typescript">const kvTable = new dynamodb.Table(this, 'KVTable', {
+  partitionKey: { name: 'namespace', type: dynamodb.AttributeType.STRING },
+  sortKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+  billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+  pointInTimeRecovery: true,
+  removalPolicy: cdk.RemovalPolicy.RETAIN,
+});
+</code></pre>
+<p>The <code>RETAIN</code> removal policy prevents accidental data loss if the stack is
+deleted -- the table will be orphaned rather than destroyed.</p>
+<h3 id="iam-role-for-edgequake-service"><a class="header" href="#iam-role-for-edgequake-service">IAM Role for EdgeQuake Service</a></h3>
+<p>The compute stack creates an IAM role with permissions for all three storage
+services:</p>
+<pre><code class="language-typescript">import * as iam from 'aws-cdk-lib/aws-iam';
+
+const taskRole = new iam.Role(this, 'EdgeQuakeTaskRole', {
+  assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+});
+
+// S3 Vectors permissions
+taskRole.addToPolicy(new iam.PolicyStatement({
+  actions: [
+    's3vectors:CreateVectorBucket',
+    's3vectors:GetVectorBucket',
+    's3vectors:CreateIndex',
+    's3vectors:GetIndex',
+    's3vectors:DeleteIndex',
+    's3vectors:PutVectors',
+    's3vectors:GetVectors',
+    's3vectors:DeleteVectors',
+    's3vectors:QueryVectors',
+    's3vectors:ListVectors',
+  ],
+  resources: [`arn:aws:s3vectors:*:${this.account}:vector-bucket/${props.prefix}-vectors/*`],
+}));
+
+// Neptune permissions
+taskRole.addToPolicy(new iam.PolicyStatement({
+  actions: [
+    'neptune-db:ReadDataViaQuery',
+    'neptune-db:WriteDataViaQuery',
+    'neptune-db:DeleteDataViaQuery',
+  ],
+  resources: [props.neptuneClusterArn + '/*'],
+}));
+
+// DynamoDB permissions
+taskRole.addToPolicy(new iam.PolicyStatement({
+  actions: [
+    'dynamodb:GetItem',
+    'dynamodb:BatchGetItem',
+    'dynamodb:Query',
+    'dynamodb:PutItem',
+    'dynamodb:BatchWriteItem',
+    'dynamodb:UpdateItem',
+    'dynamodb:DeleteItem',
+    'dynamodb:DescribeTable',
+  ],
+  resources: [props.dynamoTableArn],
+}));
+</code></pre>
+<h3 id="environment-configuration"><a class="header" href="#environment-configuration">Environment Configuration</a></h3>
+<p>The compute stack passes storage configuration as environment variables to ECS
+tasks:</p>
+<pre><code class="language-typescript">const taskDefinition = new ecs.FargateTaskDefinition(this, 'Task', {
+  taskRole: taskRole,
+});
+
+taskDefinition.addContainer('edgequake', {
+  image: ecs.ContainerImage.fromAsset('../'),
+  environment: {
+    NEPTUNE_ENDPOINT: props.neptuneEndpoint,
+    VECTOR_BUCKET: props.vectorBucketName,
+    VECTOR_INDEX: props.vectorIndexName,
+    DYNAMODB_TABLE: props.dynamoTableName,
+    LLM_PROVIDER: 'openai',
+    EMBEDDING_PROVIDER: 'openai',
+    RUST_LOG: 'info,edgequake=debug',
+  },
+  secrets: {
+    OPENAI_API_KEY: ecs.Secret.fromSsmParameter(
+      ssm.StringParameter.fromSecureStringParameterAttributes(
+        this, 'OpenAIKey', { parameterName: '/edgequake/openai-api-key' }
+      )
+    ),
+  },
+});
+</code></pre>
+<p>Notice that the OpenAI API key is stored in AWS Systems Manager Parameter
+Store (SSM) as a SecureString, not as a plaintext environment variable. ECS
+resolves it at container start time.</p>
+<h3 id="deploying-the-stacks"><a class="header" href="#deploying-the-stacks">Deploying the Stacks</a></h3>
+<pre><code class="language-bash"># Install CDK dependencies
+cd infrastructure &amp;&amp; npm install
+
+# Bootstrap CDK (first time only)
+cdk bootstrap
+
+# Deploy all stacks in order
+cdk deploy NetworkStack DataStack ComputeStack
+
+# Or deploy everything at once (CDK resolves dependencies)
+cdk deploy --all
+</code></pre>
+<h3 id="vpc-endpoints"><a class="header" href="#vpc-endpoints">VPC Endpoints</a></h3>
+<p>To avoid routing AWS service traffic through the NAT Gateway, add VPC
+endpoints for DynamoDB and S3:</p>
+<pre><code class="language-typescript">// Gateway endpoint for DynamoDB (free)
+props.vpc.addGatewayEndpoint('DynamoEndpoint', {
+  service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+});
+
+// Gateway endpoint for S3 (free, covers S3 Vectors)
+props.vpc.addGatewayEndpoint('S3Endpoint', {
+  service: ec2.GatewayVpcEndpointAwsService.S3,
+});
+</code></pre>
+<p>Gateway endpoints are free and route traffic directly within the AWS network,
+bypassing the NAT Gateway entirely.</p>
+<h3 id="summary"><a class="header" href="#summary">Summary</a></h3>
+<p>CDK infrastructure is organized into three stacks: NetworkStack (VPC),
+DataStack (S3 Vectors, Neptune, DynamoDB), and ComputeStack (ECS, Lambda).
+S3 Vectors uses L1 <code>CfnVectorBucket</code> and <code>CfnIndex</code> constructs. Neptune uses
+serverless scaling to minimize costs. DynamoDB uses pay-per-request billing
+with RETAIN removal policy. IAM roles provide least-privilege access to all
+three services, and VPC endpoints eliminate NAT Gateway costs for AWS service
+traffic.</p>
+<hr />
+<p><em>Next: <a href="../part4-enterprise/ch11-security.html">Chapter 11: Security and Multi-Tenancy</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part3-production/ch10-02-neptune-dynamodb.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../exercises/ch10/cdk-stack.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part3-production/ch10-02-neptune-dynamodb.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../exercises/ch10/cdk-stack.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

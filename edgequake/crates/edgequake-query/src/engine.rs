@@ -127,6 +127,10 @@ pub struct QueryRequest {
     /// @implements SPEC-032: Model selection at query time
     #[serde(default)]
     pub llm_model: Option<String>,
+
+    /// Override: enable or disable chunk content hydration from KV storage.
+    #[serde(default)]
+    pub enable_chunk_content: Option<bool>,
 }
 
 /// A single message in conversation history.
@@ -154,6 +158,7 @@ impl QueryRequest {
             rerank_top_k: None,
             llm_provider: None,
             llm_model: None,
+            enable_chunk_content: None,
         }
     }
 
@@ -252,6 +257,12 @@ impl QueryRequest {
     /// Set the rerank top K for this request.
     pub fn with_rerank_top_k(mut self, top_k: usize) -> Self {
         self.rerank_top_k = Some(top_k);
+        self
+    }
+
+    /// Override chunk content hydration for this request.
+    pub fn with_chunk_content(mut self, enable: bool) -> Self {
+        self.enable_chunk_content = Some(enable);
         self
     }
 }

@@ -4556,13 +4556,11 @@ pub async fn update_document(
     }
 
     // Step 3: Clean old graph data
-    let vector_storage = get_workspace_vector_storage_strict(&state, &workspace_id).await.ok();
-    match cleanup_document_graph_data(
-        &document_id,
-        &state.graph_storage,
-        vector_storage.as_ref(),
-    )
-    .await
+    let vector_storage = get_workspace_vector_storage_strict(&state, &workspace_id)
+        .await
+        .ok();
+    match cleanup_document_graph_data(&document_id, &state.graph_storage, vector_storage.as_ref())
+        .await
     {
         Ok(stats) => {
             debug!(
@@ -4667,7 +4665,11 @@ pub async fn update_document(
     match pipeline.process(&document_id, &content).await {
         Ok(result) => {
             let entity_count: usize = result.extractions.iter().map(|e| e.entities.len()).sum();
-            let relationship_count: usize = result.extractions.iter().map(|e| e.relationships.len()).sum();
+            let relationship_count: usize = result
+                .extractions
+                .iter()
+                .map(|e| e.relationships.len())
+                .sum();
 
             // Update metadata to completed
             let mut final_metadata = state
@@ -4678,10 +4680,7 @@ pub async fn update_document(
 
             if let Some(obj) = final_metadata.as_object_mut() {
                 obj.insert("status".to_string(), serde_json::json!("completed"));
-                obj.insert(
-                    "entity_count".to_string(),
-                    serde_json::json!(entity_count),
-                );
+                obj.insert("entity_count".to_string(), serde_json::json!(entity_count));
                 obj.insert(
                     "relationship_count".to_string(),
                     serde_json::json!(relationship_count),
@@ -4733,10 +4732,7 @@ pub async fn update_document(
                 .upsert(&[(metadata_key, fail_metadata)])
                 .await;
 
-            Err(ApiError::Internal(format!(
-                "Re-ingestion failed: {}",
-                e
-            )))
+            Err(ApiError::Internal(format!("Re-ingestion failed: {}", e)))
         }
     }
 }

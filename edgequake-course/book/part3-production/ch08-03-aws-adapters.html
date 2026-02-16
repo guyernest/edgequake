@@ -1,0 +1,549 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>AWS Storage Adapters - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="83-aws-storage-adapters"><a class="header" href="#83-aws-storage-adapters">8.3 AWS Storage Adapters</a></h2>
+<p>The <code>edgequake-storage-aws</code> crate provides storage adapters backed by fully
+managed AWS services. These adapters implement the same <code>GraphStorage</code>,
+<code>VectorStorage</code>, and <code>KVStorage</code> traits as the memory and PostgreSQL
+implementations, but trade self-managed infrastructure for pay-per-use cloud
+services.</p>
+<h3 id="adapter-overview"><a class="header" href="#adapter-overview">Adapter Overview</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Adapter</th><th>Trait</th><th>AWS Service</th><th>Feature Flag</th></tr></thead><tbody>
+<tr><td><code>S3VectorsStorage</code></td><td><code>VectorStorage</code></td><td>S3 Vectors</td><td><code>s3vectors</code></td></tr>
+<tr><td><code>NeptuneGraphStorage</code></td><td><code>GraphStorage</code></td><td>Amazon Neptune</td><td><code>neptune</code></td></tr>
+<tr><td><code>DynamoKVStorage</code></td><td><code>KVStorage</code></td><td>Amazon DynamoDB</td><td><code>dynamodb</code></td></tr>
+</tbody></table>
+</div><pre class="mermaid">graph TD
+    subgraph &quot;edgequake-storage-aws&quot;
+        S3V[S3VectorsStorage&lt;br/&gt;Native vector search]
+        NEP[NeptuneGraphStorage&lt;br/&gt;Gremlin over HTTP]
+        DDB[DynamoKVStorage&lt;br/&gt;Key-value storage]
+    end
+
+    S3V --&gt; S3VS[S3 Vectors Service&lt;br/&gt;aws-sdk-s3vectors]
+    NEP --&gt; NEPS[Neptune Data API&lt;br/&gt;aws-sdk-neptunedata]
+    DDB --&gt; DDBS[DynamoDB&lt;br/&gt;aws-sdk-dynamodb]
+
+    S3V -.-&gt;|implements| VT[VectorStorage trait]
+    NEP -.-&gt;|implements| GT[GraphStorage trait]
+    DDB -.-&gt;|implements| KT[KVStorage trait]
+</pre>
+<h3 id="constructor-patterns-new-vs-new_with_client"><a class="header" href="#constructor-patterns-new-vs-new_with_client">Constructor Patterns: <code>new()</code> vs <code>new_with_client()</code></a></h3>
+<p>Every AWS adapter provides two constructors. This dual pattern solves a real
+problem: in production you might want the adapter to manage its own AWS client,
+but in testing or batch processing you need to inject a pre-configured client
+(e.g., with a custom endpoint URL for LocalStack).</p>
+<h4 id="pattern-1-newconfig----self-managed-client"><a class="header" href="#pattern-1-newconfig----self-managed-client">Pattern 1: <code>new(config)</code> -- Self-Managed Client</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use edgequake_storage_aws::{S3VectorsConfig, S3VectorsStorage};
+
+let config = S3VectorsConfig {
+    vector_bucket_name: "my-vectors".to_string(),
+    index_name: "embeddings".to_string(),
+    dimension: 1536,
+};
+
+// Loads AWS credentials from environment, creates its own client.
+let storage = S3VectorsStorage::new(config).await?;
+<span class="boring">}</span></code></pre></pre>
+<p>This constructor calls <code>aws_config::load_defaults()</code> internally, creating an
+AWS SDK client configured from environment variables (<code>AWS_REGION</code>,
+<code>AWS_ACCESS_KEY_ID</code>, etc.) or instance profiles.</p>
+<h4 id="pattern-2-new_with_clientconfig-client----injected-client"><a class="header" href="#pattern-2-new_with_clientconfig-client----injected-client">Pattern 2: <code>new_with_client(config, client)</code> -- Injected Client</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_s3vectors::Client;
+use edgequake_storage_aws::{S3VectorsConfig, S3VectorsStorage};
+
+// Caller controls the client configuration.
+let aws_config = aws_config::from_env()
+    .endpoint_url("http://localhost:4566")  // LocalStack
+    .load()
+    .await;
+let client = Client::new(&amp;aws_config);
+
+let config = S3VectorsConfig {
+    vector_bucket_name: "test-vectors".to_string(),
+    index_name: "test-index".to_string(),
+    dimension: 1536,
+};
+
+// No async -- client is already configured.
+let storage = S3VectorsStorage::new_with_client(config, client);
+<span class="boring">}</span></code></pre></pre>
+<p>Notice that <code>new_with_client</code> is <strong>synchronous</strong> (not async) because it does
+not need to load AWS configuration. This is a deliberate design choice that
+makes testing simpler.</p>
+<h3 id="s3vectorsstorage-native-vector-search"><a class="header" href="#s3vectorsstorage-native-vector-search">S3VectorsStorage: Native Vector Search</a></h3>
+<p><code>S3VectorsStorage</code> uses the AWS S3 Vectors service via <code>aws-sdk-s3vectors</code>.
+Unlike the older <code>S3VectorStorage</code> (which stored vectors as JSON files and
+managed its own HNSW index), S3 Vectors provides native cosine similarity
+search with automatic indexing.</p>
+<h4 id="configuration"><a class="header" href="#configuration">Configuration</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Debug, Clone)]
+pub struct S3VectorsConfig {
+    /// Name of the S3 vector bucket.
+    pub vector_bucket_name: String,
+    /// Name of the vector index within the bucket.
+    pub index_name: String,
+    /// Expected embedding dimension (e.g., 1536 for text-embedding-3-small).
+    pub dimension: usize,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Environment variables used in practice:</p>
+<div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Purpose</th><th>Example</th></tr></thead><tbody>
+<tr><td><code>VECTOR_BUCKET</code></td><td>Vector bucket name</td><td><code>edgequake-vectors-prod</code></td></tr>
+<tr><td><code>VECTOR_INDEX</code></td><td>Index name within the bucket</td><td><code>embeddings-1536</code></td></tr>
+</tbody></table>
+</div>
+<h4 id="score-conversion"><a class="header" href="#score-conversion">Score Conversion</a></h4>
+<p>S3 Vectors returns <strong>cosine distance</strong> (lower = more similar), but EdgeQuake's
+<code>VectorSearchResult</code> uses <strong>similarity score</strong> (higher = more similar). The
+conversion is straightforward:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// S3 Vectors cosine distance: 0.0 = identical, 2.0 = opposite
+// EdgeQuake similarity score: 1.0 = identical, -1.0 = opposite
+let score = 1.0 - distance;
+<span class="boring">}</span></code></pre></pre>
+<p>This conversion happens inside the <code>query()</code> implementation, so callers
+always see normalized similarity scores regardless of which backend is active.</p>
+<h4 id="batch-operations"><a class="header" href="#batch-operations">Batch Operations</a></h4>
+<p>S3 Vectors has API limits that the adapter handles transparently:</p>
+<div class="table-wrapper"><table><thead><tr><th>Operation</th><th>Batch Limit</th><th>Adapter Behavior</th></tr></thead><tbody>
+<tr><td><code>put_vectors</code></td><td>500 per call</td><td>Auto-chunks into 500-item batches</td></tr>
+<tr><td><code>get_vectors</code></td><td>100 per call</td><td>Auto-chunks into 100-item batches</td></tr>
+<tr><td><code>delete_vectors</code></td><td>500 per call</td><td>Auto-chunks into 500-item batches</td></tr>
+<tr><td><code>query_vectors</code></td><td>top_k max 100</td><td>Requests up to 100, truncates to requested top_k</td></tr>
+</tbody></table>
+</div>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// The adapter transparently batches 2000 vectors into 4 API calls.
+let data: Vec&lt;(String, Vec&lt;f32&gt;, serde_json::Value)&gt; = generate_embeddings();
+storage.upsert(&amp;data).await?; // Handles chunking internally
+<span class="boring">}</span></code></pre></pre>
+<h3 id="neptunegraphstorage-managed-graph-database"><a class="header" href="#neptunegraphstorage-managed-graph-database">NeptuneGraphStorage: Managed Graph Database</a></h3>
+<p><code>NeptuneGraphStorage</code> executes Gremlin queries over HTTP using the Neptune
+Data API (<code>aws-sdk-neptunedata</code>). This replaces the older WebSocket-based
+approach that could not use IAM authentication.</p>
+<pre class="mermaid">graph LR
+    A[EdgeQuake] --&gt;|HTTP + SigV4| B[Neptune Data API]
+    B --&gt; C[Neptune Cluster]
+    C --&gt; D[Primary Instance]
+    C --&gt; E[Read Replicas]
+</pre>
+<h4 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let config = NeptuneConfig::new(
+    "my-cluster.cluster-xxx.us-east-1.neptune.amazonaws.com:8182"
+)
+.with_namespace("workspace-1")
+.with_timeout(30);
+
+let storage = NeptuneGraphStorage::new(config).await?;
+<span class="boring">}</span></code></pre></pre>
+<h4 id="gremlin-query-translation"><a class="header" href="#gremlin-query-translation">Gremlin Query Translation</a></h4>
+<p>Each <code>GraphStorage</code> trait method translates to Gremlin traversals. For example,
+<code>upsert_node</code> generates:</p>
+<pre><code class="language-groovy">g.V('ALICE').has('namespace', 'workspace-1')
+  .fold()
+  .coalesce(
+    unfold().sideEffect(__.properties().drop())
+      .property('entity_type', 'PERSON')
+      .property('namespace', 'workspace-1'),
+    addV('Entity').property(id, 'ALICE')
+      .property('entity_type', 'PERSON')
+      .property('namespace', 'workspace-1')
+  )
+</code></pre>
+<p>The <code>coalesce</code> pattern implements upsert: if the vertex exists, update its
+properties; otherwise create it. The <code>sideEffect(__.properties().drop())</code>
+ensures stale properties are removed before setting new ones.</p>
+<h4 id="graphson-unwrapping"><a class="header" href="#graphson-unwrapping">GraphSON Unwrapping</a></h4>
+<p>The Neptune Data API returns results in GraphSON format, where every value is
+wrapped in <code>{"@type": "g:Int64", "@value": 42}</code> envelopes. The adapter
+includes a recursive <code>unwrap_graphson()</code> function that strips these wrappers
+to produce clean JSON:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Before unwrapping:
+{"@type": "g:Map", "@value": [
+    {"@type": "g:T", "@value": "id"}, "ALICE",
+    {"@type": "g:T", "@value": "label"}, "Entity"
+]}
+
+// After unwrapping:
+{"id": "ALICE", "label": "Entity"}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="dynamokvstorage-serverless-key-value"><a class="header" href="#dynamokvstorage-serverless-key-value">DynamoKVStorage: Serverless Key-Value</a></h3>
+<p><code>DynamoKVStorage</code> implements <code>KVStorage</code> using DynamoDB's on-demand mode for
+true pay-per-request pricing.</p>
+<h4 id="table-design"><a class="header" href="#table-design">Table Design</a></h4>
+<pre><code class="language-text">Primary Key:
+  Partition Key: namespace (String)  -- tenant isolation
+  Sort Key:      id (String)         -- record identifier
+
+Attributes:
+  data       (String)  -- JSON-serialized value
+  status     (String)  -- optional status tracking
+  created_at (Number)  -- epoch timestamp
+  updated_at (Number)  -- epoch timestamp
+</code></pre>
+<h4 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use edgequake_storage_aws::{DynamoKVConfig, DynamoKVStorage};
+
+let config = DynamoKVConfig::new("edgequake-kv", "documents")
+    .with_on_demand(true)
+    .with_pitr(true);  // Point-in-time recovery
+
+// Self-managed client:
+let storage = DynamoKVStorage::new(config.clone()).await?;
+
+// Or inject a client:
+let client = aws_sdk_dynamodb::Client::new(&amp;aws_config);
+let storage = DynamoKVStorage::new_with_client(config, client);
+<span class="boring">}</span></code></pre></pre>
+<h4 id="atomic-status-transitions"><a class="header" href="#atomic-status-transitions">Atomic Status Transitions</a></h4>
+<p>The <code>transition_if_status</code> implementation uses DynamoDB's conditional update
+expression for atomic compare-and-swap:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>self.client
+    .update_item()
+    .table_name(&amp;self.config.table_name)
+    .set_key(Some(key))
+    .update_expression("SET #status = :new_status, updated_at = :ts")
+    .condition_expression("#status = :expected_status")
+    .expression_attribute_names("#status", "status")
+    .expression_attribute_values(":expected_status", /* ... */)
+    .expression_attribute_values(":new_status", /* ... */)
+    .send()
+    .await;
+<span class="boring">}</span></code></pre></pre>
+<p>If the condition fails (status has changed), DynamoDB returns a
+<code>ConditionalCheckFailedException</code>, which the adapter catches and converts to
+<code>Ok(false)</code>.</p>
+<h3 id="aws-sdk-re-exports"><a class="header" href="#aws-sdk-re-exports">AWS SDK Re-exports</a></h3>
+<p>The <code>edgequake-storage-aws</code> crate re-exports AWS SDK crates for convenience,
+so downstream code does not need to add them as direct dependencies:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// These are re-exported from edgequake-storage-aws:
+use edgequake_storage_aws::aws_sdk_s3;
+use edgequake_storage_aws::aws_sdk_s3vectors;
+use edgequake_storage_aws::aws_sdk_dynamodb;
+use edgequake_storage_aws::aws_config;
+<span class="boring">}</span></code></pre></pre>
+<p>This avoids version conflicts between the SDK version used by the adapter and
+the version used by your application code.</p>
+<h3 id="error-handling-awsstorageerror"><a class="header" href="#error-handling-awsstorageerror">Error Handling: AwsStorageError</a></h3>
+<p>AWS adapters use their own error type that automatically converts to
+<code>StorageError</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Error, Debug)]
+pub enum AwsStorageError {
+    #[error("S3 error: {0}")]
+    S3Error(String),
+    #[error("S3 Vectors error: {0}")]
+    S3VectorsError(String),
+    #[error("DynamoDB error: {0}")]
+    DynamoDbError(String),
+    #[error("Neptune error: {0}")]
+    NeptuneError(String),
+    // ...
+}
+
+// Automatic conversion:
+impl From&lt;AwsStorageError&gt; for StorageError { /* ... */ }
+<span class="boring">}</span></code></pre></pre>
+<p>Each adapter also includes a helper function (e.g., <code>s3v_err</code>, <code>neptune_err</code>,
+<code>dynamo_err</code>) that extracts meaningful error messages from AWS SDK errors,
+which often return unhelpful "service error" strings from their <code>Display</code>
+implementation.</p>
+<h3 id="feature-flags"><a class="header" href="#feature-flags">Feature Flags</a></h3>
+<pre><code class="language-toml">[features]
+default = ["s3vectors", "neptune", "dynamodb"]
+s3vectors = ["aws-sdk-s3vectors"]
+neptune = ["aws-sdk-neptunedata"]
+dynamodb = ["aws-sdk-dynamodb"]
+athena = ["aws-sdk-athena"]
+full = ["s3vectors", "neptune", "dynamodb", "athena"]
+</code></pre>
+<p>Enable only the adapters you need to keep compile times and binary sizes
+reasonable. A Lambda function that only uses S3 Vectors and DynamoDB can
+skip the Neptune dependency entirely.</p>
+<h3 id="summary"><a class="header" href="#summary">Summary</a></h3>
+<p>The AWS adapters implement the same storage traits as the memory and PostgreSQL
+adapters, but target fully managed services. The dual constructor pattern
+(<code>new</code> vs <code>new_with_client</code>) supports both production and testing scenarios.
+S3 Vectors provides native vector search, Neptune handles graph traversal via
+Gremlin, and DynamoDB offers serverless key-value storage with atomic
+compare-and-swap. AWS SDK re-exports and automatic error conversion keep the
+integration ergonomic.</p>
+<hr />
+<p><em>Next: <a href="ch09-local-dev.html">Chapter 9: Local Development Environment</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part3-production/ch08-02-memory-postgres.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../exercises/ch08/file-kv-storage.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part3-production/ch08-02-memory-postgres.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../exercises/ch08/file-kv-storage.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

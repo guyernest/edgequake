@@ -1,0 +1,605 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Role-Based Access Control - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="112-role-based-access-control"><a class="header" href="#112-role-based-access-control">11.2 Role-Based Access Control</a></h2>
+<p>Authentication tells you <strong>who</strong> is making a request. Authorization tells you
+<strong>what</strong> they are allowed to do. Role-Based Access Control (RBAC) is the most
+widely adopted authorization model for enterprise APIs because it is simple to
+reason about, easy to audit, and maps naturally to organizational structures.</p>
+<p>In EdgeQuake, every authenticated user has a <code>role</code> claim in their JWT. The
+RBAC layer checks this role against the required permission before any
+operation proceeds. If the role lacks the necessary permission, the request
+is rejected with a 403 Forbidden response -- the user is authenticated but
+not authorized.</p>
+<h3 id="the-role-hierarchy"><a class="header" href="#the-role-hierarchy">The Role Hierarchy</a></h3>
+<p>EdgeQuake defines three roles in a strict hierarchy. Higher roles inherit all
+permissions of lower roles:</p>
+<pre class="mermaid">graph TD
+    A[Admin] --&gt; B[Editor]
+    B --&gt; C[Viewer]
+
+    style A fill:#8b1a1a,stroke:#cc3333,color:#fff
+    style B fill:#1a4a8b,stroke:#3377cc,color:#fff
+    style C fill:#1a6b3a,stroke:#33aa55,color:#fff
+</pre>
+<div class="table-wrapper"><table><thead><tr><th>Role</th><th>Permissions</th><th>Typical User</th></tr></thead><tbody>
+<tr><td><strong>Viewer</strong></td><td>Query the knowledge base, read entities and relationships</td><td>Analysts, stakeholders</td></tr>
+<tr><td><strong>Editor</strong></td><td>All Viewer permissions + ingest documents, update entities</td><td>Data engineers, content authors</td></tr>
+<tr><td><strong>Admin</strong></td><td>All Editor permissions + manage workspaces, delete data, manage users</td><td>Platform administrators</td></tr>
+</tbody></table>
+</div>
+<h3 id="defining-roles-and-permissions"><a class="header" href="#defining-roles-and-permissions">Defining Roles and Permissions</a></h3>
+<p>Start by defining the role and permission types as enums. Using enums instead
+of strings gives you compile-time safety and exhaustive matching:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use serde::{Deserialize, Serialize};
+use std::fmt;
+
+/// Roles supported by EdgeQuake's RBAC system.
+///
+/// Roles form a hierarchy: Admin &gt; Editor &gt; Viewer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Role {
+    Viewer = 0,
+    Editor = 1,
+    Admin = 2,
+}
+
+impl Role {
+    /// Parse a role from a string claim value.
+    pub fn from_claim(s: &amp;str) -&gt; Option&lt;Self&gt; {
+        match s {
+            "viewer" =&gt; Some(Role::Viewer),
+            "editor" =&gt; Some(Role::Editor),
+            "admin" =&gt; Some(Role::Admin),
+            _ =&gt; None,
+        }
+    }
+
+    /// Check whether this role has at least the given permission level.
+    pub fn has_permission(&amp;self, required: Permission) -&gt; bool {
+        let required_role = required.minimum_role();
+        *self &gt;= required_role
+    }
+}
+
+impl fmt::Display for Role {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
+        match self {
+            Role::Viewer =&gt; write!(f, "viewer"),
+            Role::Editor =&gt; write!(f, "editor"),
+            Role::Admin =&gt; write!(f, "admin"),
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Notice the derived <code>PartialOrd</code> and <code>Ord</code> traits. Because the enum variants
+are ordered (<code>Viewer = 0</code>, <code>Editor = 1</code>, <code>Admin = 2</code>), you can compare roles
+with standard comparison operators. <code>Admin &gt;= Editor</code> is <code>true</code>, which makes
+the hierarchy check trivial.</p>
+<h3 id="defining-permissions"><a class="header" href="#defining-permissions">Defining Permissions</a></h3>
+<p>Permissions map operations to the minimum role required to perform them:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Permissions that can be checked against a user's role.
+#[derive(Debug, Clone, Copy)]
+pub enum Permission {
+    /// Read entities, relationships, and query results.
+    Read,
+
+    /// Ingest documents and create/update entities.
+    Write,
+
+    /// Delete data, manage workspaces, administer users.
+    Manage,
+}
+
+impl Permission {
+    /// Return the minimum role required for this permission.
+    pub fn minimum_role(&amp;self) -&gt; Role {
+        match self {
+            Permission::Read =&gt; Role::Viewer,
+            Permission::Write =&gt; Role::Editor,
+            Permission::Manage =&gt; Role::Admin,
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="the-permission-check-function"><a class="header" href="#the-permission-check-function">The Permission Check Function</a></h3>
+<p>The core authorization check is a single function that combines the JWT claims
+with a required permission:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use crate::auth::{AuthError, Claims};
+
+/// Verify that the authenticated user has the required permission.
+///
+/// Returns `Ok(())` if authorized, or `Err(AuthError::Forbidden)` if not.
+pub fn require_permission(claims: &amp;Claims, required: Permission) -&gt; Result&lt;(), AuthError&gt; {
+    let role = Role::from_claim(&amp;claims.role).ok_or_else(|| {
+        tracing::warn!(
+            user = %claims.sub,
+            role = %claims.role,
+            "unknown role in JWT claims"
+        );
+        AuthError::Forbidden("unknown role".into())
+    })?;
+
+    if role.has_permission(required) {
+        tracing::debug!(
+            user = %claims.sub,
+            role = %role,
+            permission = ?required,
+            "permission granted"
+        );
+        Ok(())
+    } else {
+        tracing::warn!(
+            user = %claims.sub,
+            role = %role,
+            required_permission = ?required,
+            "insufficient permissions"
+        );
+        Err(AuthError::Forbidden(format!(
+            "role '{}' lacks {:?} permission",
+            role, required
+        )))
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="protecting-api-endpoints"><a class="header" href="#protecting-api-endpoints">Protecting API Endpoints</a></h3>
+<p>With the permission check in place, you can guard each handler with a single
+line of authorization logic:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
+
+/// Handler: query the knowledge base.
+/// Requires: Read permission (Viewer, Editor, or Admin).
+async fn handle_query(
+    Extension(claims): Extension&lt;Claims&gt;,
+    Json(query): Json&lt;QueryRequest&gt;,
+) -&gt; Result&lt;impl IntoResponse, AuthError&gt; {
+    require_permission(&amp;claims, Permission::Read)?;
+
+    // Proceed with query using claims.workspace_id for namespace isolation.
+    let results = execute_query(&amp;claims.workspace_id, &amp;query).await?;
+    Ok(Json(results))
+}
+
+/// Handler: ingest documents into the knowledge base.
+/// Requires: Write permission (Editor or Admin only).
+async fn handle_ingest(
+    Extension(claims): Extension&lt;Claims&gt;,
+    Json(payload): Json&lt;IngestRequest&gt;,
+) -&gt; Result&lt;impl IntoResponse, AuthError&gt; {
+    require_permission(&amp;claims, Permission::Write)?;
+
+    let stats = run_ingestion(&amp;claims.workspace_id, &amp;payload).await?;
+    Ok(Json(stats))
+}
+
+/// Handler: delete a workspace and all its data.
+/// Requires: Manage permission (Admin only).
+async fn handle_delete_workspace(
+    Extension(claims): Extension&lt;Claims&gt;,
+) -&gt; Result&lt;impl IntoResponse, AuthError&gt; {
+    require_permission(&amp;claims, Permission::Manage)?;
+
+    clear_workspace(&amp;claims.workspace_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="middleware-based-rbac-alternative-approach"><a class="header" href="#middleware-based-rbac-alternative-approach">Middleware-Based RBAC (Alternative Approach)</a></h3>
+<p>For routes that share the same permission requirement, you can factor the
+check into a middleware instead of repeating it in every handler:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use axum::{extract::Request, middleware::Next, response::Response};
+
+/// Create a middleware that requires a specific permission.
+///
+/// Usage:
+/// ```rust
+/// let editor_routes = Router::new()
+///     .route("/ingest", post(handle_ingest))
+///     .layer(middleware::from_fn(|req, next| {
+///         require_role_middleware(req, next, Permission::Write)
+///     }));
+/// ```
+pub async fn require_role_middleware(
+    request: Request,
+    next: Next,
+    required: Permission,
+) -&gt; Result&lt;Response, AuthError&gt; {
+    let claims = request
+        .extensions()
+        .get::&lt;Claims&gt;()
+        .ok_or(AuthError::MissingHeader)?;
+
+    require_permission(claims, required)?;
+
+    Ok(next.run(request).await)
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This pattern is useful when you have many endpoints that share the same
+permission level. Group them under a single router and apply the middleware
+once:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub fn create_router(config: Arc&lt;JwtConfig&gt;) -&gt; Router {
+    // Viewer routes -- read-only access.
+    let viewer_routes = Router::new()
+        .route("/api/query", get(handle_query))
+        .route("/api/entities", get(list_entities));
+
+    // Editor routes -- read + write access.
+    let editor_routes = Router::new()
+        .route("/api/ingest", post(handle_ingest))
+        .route("/api/entities", put(update_entity));
+
+    // Admin routes -- full access.
+    let admin_routes = Router::new()
+        .route("/api/workspace", delete(handle_delete_workspace))
+        .route("/api/users", post(manage_users));
+
+    Router::new()
+        .merge(viewer_routes)    // Permission checked in handlers
+        .merge(editor_routes)    // Permission checked in handlers
+        .merge(admin_routes)     // Permission checked in handlers
+        .layer(middleware::from_fn(jwt_auth_middleware))
+        .layer(Extension(config))
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="request-authorization-flow"><a class="header" href="#request-authorization-flow">Request Authorization Flow</a></h3>
+<p>The complete flow from authentication through authorization:</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant JWT as JWT Middleware
+    participant RBAC as RBAC Check
+    participant H as Handler
+    participant S as Storage
+
+    C-&gt;&gt;JWT: Request with Bearer token
+    JWT-&gt;&gt;JWT: Validate signature &amp; expiry
+    JWT-&gt;&gt;RBAC: Claims { sub, role, workspace_id }
+    RBAC-&gt;&gt;RBAC: role.has_permission(required)?
+    alt Authorized
+        RBAC-&gt;&gt;H: Proceed
+        H-&gt;&gt;S: Query with namespace(workspace_id)
+        S--&gt;&gt;C: 200 OK
+    else Forbidden
+        RBAC--&gt;&gt;C: 403 Forbidden
+    end
+</pre>
+<h3 id="testing-rbac"><a class="header" href="#testing-rbac">Testing RBAC</a></h3>
+<p>RBAC logic is pure and synchronous, making it straightforward to test:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn viewer_can_read() {
+        let claims = Claims {
+            sub: "user_1".into(),
+            workspace_id: "acme".into(),
+            role: "viewer".into(),
+            exp: u64::MAX,
+            iat: 0,
+        };
+        assert!(require_permission(&amp;claims, Permission::Read).is_ok());
+    }
+
+    #[test]
+    fn viewer_cannot_write() {
+        let claims = Claims {
+            sub: "user_1".into(),
+            workspace_id: "acme".into(),
+            role: "viewer".into(),
+            exp: u64::MAX,
+            iat: 0,
+        };
+        assert!(require_permission(&amp;claims, Permission::Write).is_err());
+    }
+
+    #[test]
+    fn admin_can_do_everything() {
+        let claims = Claims {
+            sub: "admin_1".into(),
+            workspace_id: "acme".into(),
+            role: "admin".into(),
+            exp: u64::MAX,
+            iat: 0,
+        };
+        assert!(require_permission(&amp;claims, Permission::Read).is_ok());
+        assert!(require_permission(&amp;claims, Permission::Write).is_ok());
+        assert!(require_permission(&amp;claims, Permission::Manage).is_ok());
+    }
+
+    #[test]
+    fn unknown_role_is_rejected() {
+        let claims = Claims {
+            sub: "hacker".into(),
+            workspace_id: "acme".into(),
+            role: "superuser".into(),
+            exp: u64::MAX,
+            iat: 0,
+        };
+        assert!(require_permission(&amp;claims, Permission::Read).is_err());
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="key-takeaways"><a class="header" href="#key-takeaways">Key Takeaways</a></h3>
+<ul>
+<li>RBAC maps each user's role to a set of permissions, enforced before any
+operation proceeds.</li>
+<li>Using Rust enums with derived <code>Ord</code> makes the hierarchy check a simple
+comparison -- no complex permission matrices required.</li>
+<li>Permission checks can live in individual handlers (fine-grained) or in
+middleware (coarse-grained) depending on your routing structure.</li>
+<li>Always log authorization failures with the user's identity and the
+permission they attempted -- this is essential for security auditing.</li>
+</ul>
+<hr />
+<p><em>Next: <a href="ch11-03-tenant-isolation.html">11.3 Namespace-Based Tenant Isolation</a></em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part4-enterprise/ch11-01-jwt-auth.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../part4-enterprise/ch11-03-tenant-isolation.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part4-enterprise/ch11-01-jwt-auth.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../part4-enterprise/ch11-03-tenant-isolation.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

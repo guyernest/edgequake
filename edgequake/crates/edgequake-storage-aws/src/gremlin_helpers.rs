@@ -93,10 +93,7 @@ impl GremlinQueryBuilder {
 
     /// Build a query to get all vertices in namespace.
     pub fn get_all_vertices(&self) -> String {
-        format!(
-            "g.V().has('namespace', '{}').elementMap()",
-            self.namespace
-        )
+        format!("g.V().has('namespace', '{}').elementMap()", self.namespace)
     }
 
     /// Build a query to get all edges in namespace.
@@ -109,10 +106,7 @@ impl GremlinQueryBuilder {
 
     /// Build a query to count vertices.
     pub fn count_vertices(&self) -> String {
-        format!(
-            "g.V().has('namespace', '{}').count()",
-            self.namespace
-        )
+        format!("g.V().has('namespace', '{}').count()", self.namespace)
     }
 
     /// Build a query to count edges.
@@ -145,10 +139,7 @@ impl GremlinQueryBuilder {
 
     /// Build a query to search nodes by text.
     pub fn search_nodes(&self, limit: usize, entity_type: Option<&str>) -> String {
-        let mut query = format!(
-            "g.V().has('namespace', '{}')",
-            self.namespace
-        );
+        let mut query = format!("g.V().has('namespace', '{}')", self.namespace);
 
         if let Some(et) = entity_type {
             query.push_str(&format!(".has('entity_type', '{}')", et));
@@ -180,9 +171,7 @@ impl GremlinQueryBuilder {
 
     /// Convert properties HashMap to Gremlin property chain.
     fn properties_chain(&self, properties: &HashMap<String, JsonValue>) -> String {
-        let mut parts = vec![
-            format!(".property('namespace', '{}')", self.namespace)
-        ];
+        let mut parts = vec![format!(".property('namespace', '{}')", self.namespace)];
 
         for (key, value) in properties {
             let value_str = self.json_to_gremlin_value(value);
@@ -236,10 +225,7 @@ pub fn gremlin_within(values: &[String]) -> String {
 ///
 /// Neptune returns properties as arrays of objects: `[{"value": "foo"}]`
 pub fn parse_neptune_property(prop: &JsonValue) -> Option<JsonValue> {
-    prop.as_array()?
-        .first()?
-        .get("value")
-        .cloned()
+    prop.as_array()?.first()?.get("value").cloned()
 }
 
 /// Parse all properties from a Neptune vertex/edge.
@@ -316,7 +302,10 @@ mod tests {
 
         let result = parse_neptune_properties(&props);
         assert_eq!(result.len(), 2);
-        assert_eq!(result.get("name"), Some(&JsonValue::String("Alice".to_string())));
+        assert_eq!(
+            result.get("name"),
+            Some(&JsonValue::String("Alice".to_string()))
+        );
         assert_eq!(result.get("age"), Some(&JsonValue::Number(30.into())));
     }
 }

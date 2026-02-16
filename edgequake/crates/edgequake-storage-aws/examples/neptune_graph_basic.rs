@@ -33,13 +33,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🌊 EdgeQuake Neptune Graph Storage Example\n");
 
     // Get Neptune endpoint from environment
-    let endpoint = std::env::var("NEPTUNE_ENDPOINT")
-        .unwrap_or_else(|_| {
-            eprintln!("❌ NEPTUNE_ENDPOINT not set!");
-            eprintln!("   Set it to your Neptune cluster endpoint:");
-            eprintln!("   export NEPTUNE_ENDPOINT=cluster.region.neptune.amazonaws.com:8182");
-            std::process::exit(1);
-        });
+    let endpoint = std::env::var("NEPTUNE_ENDPOINT").unwrap_or_else(|_| {
+        eprintln!("❌ NEPTUNE_ENDPOINT not set!");
+        eprintln!("   Set it to your Neptune cluster endpoint:");
+        eprintln!("   export NEPTUNE_ENDPOINT=cluster.region.neptune.amazonaws.com:8182");
+        std::process::exit(1);
+    });
 
     println!("🔌 Connecting to Neptune: {}", endpoint);
 
@@ -66,7 +65,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Check current state
     let node_count = storage.node_count().await?;
     let edge_count = storage.edge_count().await?;
-    println!("📊 Current state: {} nodes, {} edges", node_count, edge_count);
+    println!(
+        "📊 Current state: {} nodes, {} edges",
+        node_count, edge_count
+    );
     println!();
 
     // Optional: Clear existing data
@@ -142,7 +144,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let neighbors = storage.get_neighbors("rust", 1).await?;
     println!("   Rust is connected to:");
     for neighbor in neighbors {
-        let name = neighbor.properties.get("name")
+        let name = neighbor
+            .properties
+            .get("name")
             .and_then(|v| v.as_str())
             .unwrap_or(&neighbor.id);
         println!("   - {}", name);
@@ -160,12 +164,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Extract knowledge graph
     println!("3. Knowledge graph starting from 'rust' (depth 2):");
     let graph = storage.get_knowledge_graph("rust", 2, 20).await?;
-    println!("   Found {} nodes and {} edges", graph.node_count(), graph.edge_count());
+    println!(
+        "   Found {} nodes and {} edges",
+        graph.node_count(),
+        graph.edge_count()
+    );
 
     if !graph.nodes.is_empty() {
         println!("   Nodes:");
         for node in &graph.nodes {
-            let name = node.properties.get("name")
+            let name = node
+                .properties
+                .get("name")
                 .and_then(|v| v.as_str())
                 .unwrap_or(&node.id);
             println!("   - {}", name);
@@ -185,7 +195,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let results = storage.search_nodes("web", 10, None, None, None).await?;
     println!("   Found {} results:", results.len());
     for (node, degree) in results {
-        let name = node.properties.get("name")
+        let name = node
+            .properties
+            .get("name")
             .and_then(|v| v.as_str())
             .unwrap_or(&node.id);
         println!("   - {} (degree: {})", name, degree);
@@ -197,19 +209,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let all_nodes = storage.get_all_nodes().await?;
     let languages: Vec<_> = all_nodes
         .iter()
-        .filter(|n| {
-            n.properties.get("type")
-                .and_then(|v| v.as_str())
-                == Some("language")
-        })
+        .filter(|n| n.properties.get("type").and_then(|v| v.as_str()) == Some("language"))
         .collect();
 
     println!("   Found {} languages:", languages.len());
     for node in languages {
-        let name = node.properties.get("name")
+        let name = node
+            .properties
+            .get("name")
             .and_then(|v| v.as_str())
             .unwrap_or(&node.id);
-        let desc = node.properties.get("description")
+        let desc = node
+            .properties
+            .get("description")
             .and_then(|v| v.as_str())
             .unwrap_or("");
         println!("   - {}: {}", name, desc);

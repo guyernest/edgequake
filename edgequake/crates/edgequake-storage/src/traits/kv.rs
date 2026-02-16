@@ -131,6 +131,18 @@ pub trait KVStorage: Send + Sync {
     /// Get the count of records in storage.
     async fn count(&self) -> Result<usize>;
 
+    /// Count records whose key starts with the given prefix.
+    ///
+    /// Useful for distinguishing record types in a shared namespace
+    /// (e.g., `doc:` for documents, `chunk:` for chunks).
+    ///
+    /// Default implementation fetches all keys and filters client-side.
+    /// Backends should override with efficient server-side filtering.
+    async fn count_by_prefix(&self, prefix: &str) -> Result<usize> {
+        let all_keys = self.keys().await?;
+        Ok(all_keys.iter().filter(|k| k.starts_with(prefix)).count())
+    }
+
     /// Get all keys in storage.
     async fn keys(&self) -> Result<Vec<String>>;
 

@@ -1,0 +1,495 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Why RAG Alone Is Not Enough - Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Build production knowledge bases using graph-enhanced RAG in Rust">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../src/custom.css">
+        <link rel="stylesheet" href="../src/theme/exercises.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Modern Knowledge Bases: Graph-Enhanced RAG with EdgeQuake</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/edgequake/edgequake" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="34-why-rag-alone-is-not-enough"><a class="header" href="#34-why-rag-alone-is-not-enough">3.4 Why RAG Alone Is Not Enough</a></h1>
+<p>We have now built a sophisticated retrieval stack: contextual embeddings,
+hybrid search with BM25 and dense retrieval, reciprocal rank fusion, and
+cross-encoder reranking. This is the state of the art for flat retrieval.</p>
+<p>It is not enough.</p>
+<p>This section catalogs the specific failure modes that even advanced RAG
+cannot solve -- failures that motivate the graph-enhanced approach we
+develop in Part II.</p>
+<h2 id="failure-mode-1-multi-hop-reasoning"><a class="header" href="#failure-mode-1-multi-hop-reasoning">Failure Mode 1: Multi-Hop Reasoning</a></h2>
+<p>Many real-world questions require combining information from multiple
+documents that are not directly related by keyword or semantic similarity.</p>
+<h3 id="example-the-epstein-dataset"><a class="header" href="#example-the-epstein-dataset">Example: The Epstein Dataset</a></h3>
+<p>Consider a corpus of legal documents, financial records, and flight logs:</p>
+<pre><code class="language-text">Query: "Which companies received funding from entities connected to
+        individuals who traveled to the island in 2003?"
+
+Required information chain:
+  1. Flight logs → People who traveled to the island in 2003
+  2. People → Their business entities and associations
+  3. Entities → Funding relationships with companies
+  4. Companies → Names and details
+
+This requires 3 hops across 4 document types.
+</code></pre>
+<p>Flat retrieval retrieves the top-k chunks most similar to the query. It
+might find some flight logs and some funding records, but it cannot
+<em>traverse the chain</em> from flights to people to entities to companies.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// What flat retrieval returns for a multi-hop query
+fn flat_retrieval_failure() {
+    let query = "companies funded by entities connected to island travelers in 2003";
+
+    // Dense retrieval finds chunks containing similar terms:
+    let results = vec![
+        "Flight manifest for 2003 shows passengers A, B, C...",
+        "Entity X provided funding to Company Y in 2004...",
+        "Overview of island property records and visitors...",
+        "Company Z received investment from various sources...",
+        "Travel records for individuals associated with...",
+    ];
+
+    // Problem: No result connects A/B/C (travelers) to X (entity) to Y (company)
+    // The LLM receives disconnected fragments and cannot bridge the gaps
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="why-this-fails"><a class="header" href="#why-this-fails">Why This Fails</a></h3>
+<p>Flat retrieval operates on <em>independent</em> similarity scores. There is no
+mechanism to say "I found the travelers, now find their business
+associations." Each chunk is scored against the query in isolation.</p>
+<p>The LLM might <em>attempt</em> to reason across chunks, but it is working with
+at most k=5--10 chunks -- a tiny fraction of the corpus. The probability
+that the right chain of evidence lands in those 5--10 chunks by
+independent similarity is vanishingly small.</p>
+<h2 id="failure-mode-2-relationship-blindness"><a class="header" href="#failure-mode-2-relationship-blindness">Failure Mode 2: Relationship Blindness</a></h2>
+<p>Flat retrieval treats documents as independent bags of text. It has no
+model of the relationships <em>between</em> entities mentioned in those documents.</p>
+<pre><code class="language-text">Document A: "John Smith is the CEO of Acme Corp."
+Document B: "Acme Corp acquired Widget Inc in 2023."
+Document C: "Widget Inc holds Patent #12345 for quantum computing."
+
+Query: "What patents does John Smith's company portfolio include?"
+
+Flat retrieval might find Document A and Document C individually,
+but it has no way to traverse: John Smith → Acme Corp → Widget Inc → Patent.
+</code></pre>
+<p>Knowledge graphs solve this by explicitly modeling entities (John Smith,
+Acme Corp, Widget Inc, Patent #12345) and their relationships (CEO_OF,
+ACQUIRED, HOLDS_PATENT). Graph traversal then answers the query directly.</p>
+<pre class="mermaid">flowchart LR
+    JS[John Smith] --&gt;|CEO_OF| AC[Acme Corp]
+    AC --&gt;|ACQUIRED| WI[Widget Inc]
+    WI --&gt;|HOLDS_PATENT| P[&quot;Patent #12345\nQuantum Computing&quot;]
+
+    style JS fill:#e8f5e9,stroke:#2e7d32
+    style P fill:#fff3e0,stroke:#e65100
+</pre>
+<h2 id="failure-mode-3-lost-in-the-middle"><a class="header" href="#failure-mode-3-lost-in-the-middle">Failure Mode 3: Lost in the Middle</a></h2>
+<p>Even when relevant chunks are retrieved, their position in the LLM's
+context affects whether they are used. Research (Liu et al., 2023) shows
+that LLMs attend most strongly to the beginning and end of the context
+window, while information in the middle is often ignored.</p>
+<pre><code class="language-text">Context position vs. LLM attention:
+  [Beginning]  ████████████  High attention
+  [Middle]     ██            Low attention -- information here is "lost"
+  [End]        ████████████  High attention
+</code></pre>
+<p>This means that even if you retrieve the right chunks, their ordering in
+the prompt matters. With k=10 retrieved chunks, chunks at positions 4--7
+are significantly less likely to influence the generated answer.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Demonstrate the "lost in the middle" problem
+fn lost_in_the_middle() {
+    let retrieved_chunks = vec![
+        "Relevant: Company founded in 2019",        // Position 1: USED
+        "Somewhat relevant: Industry overview",       // Position 2: USED
+        "Relevant: Key partnership with XYZ Corp",    // Position 3: partially used
+        "CRITICAL: Revenue was $4.2M in Q3",         // Position 4: LOST
+        "CRITICAL: CEO resigned on March 15",        // Position 5: LOST
+        "Somewhat relevant: Market analysis",         // Position 6: LOST
+        "Relevant: New product launch details",       // Position 7: partially used
+        "Background: Competitor landscape",           // Position 8: USED
+        "Relevant: Q4 projections show growth",       // Position 9: USED
+        "Relevant: Board approved expansion",         // Position 10: USED
+    ];
+
+    // The LLM generates an answer that mentions the founding year,
+    // Q4 projections, and board approval -- but MISSES the $4.2M
+    // revenue figure and CEO resignation, which were buried in the middle.
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="mitigations-partial"><a class="header" href="#mitigations-partial">Mitigations (Partial)</a></h3>
+<ul>
+<li><strong>Reranking</strong>: Put the most relevant chunks first</li>
+<li><strong>Fewer chunks</strong>: Use k=5 instead of k=10 to reduce the middle</li>
+<li><strong>Interleaved ordering</strong>: Alternate important/less important chunks</li>
+<li><strong>Multiple passes</strong>: Generate, identify gaps, re-retrieve</li>
+</ul>
+<p>None of these fully solve the problem. Graph-enhanced retrieval helps by
+providing <em>structured</em> context (entity relationships) rather than a flat
+list of text chunks.</p>
+<h2 id="failure-mode-4-no-global-awareness"><a class="header" href="#failure-mode-4-no-global-awareness">Failure Mode 4: No Global Awareness</a></h2>
+<p>Flat retrieval is inherently <em>local</em>. It finds chunks similar to the query
+but has no global awareness of the corpus structure, frequency patterns,
+or cross-document themes.</p>
+<h3 id="questions-that-require-global-awareness"><a class="header" href="#questions-that-require-global-awareness">Questions That Require Global Awareness</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Question Type</th><th>Example</th><th>Why Flat RAG Fails</th></tr></thead><tbody>
+<tr><td>Aggregation</td><td>"How many companies did Entity X fund?"</td><td>Cannot count across documents</td></tr>
+<tr><td>Comparison</td><td>"Compare the travel patterns of A and B"</td><td>Cannot systematically gather all data for A and B</td></tr>
+<tr><td>Trend</td><td>"How did the network of connections evolve from 2001 to 2005?"</td><td>Cannot model temporal relationships</td></tr>
+<tr><td>Completeness</td><td>"List ALL entities mentioned in the Panama Papers"</td><td>Top-k is inherently incomplete</td></tr>
+</tbody></table>
+</div>
+<p>Graph-enhanced RAG addresses these by pre-extracting entities and
+relationships into a queryable structure, enabling aggregation, traversal,
+and global pattern analysis.</p>
+<h2 id="the-case-for-graph-enhanced-rag"><a class="header" href="#the-case-for-graph-enhanced-rag">The Case for Graph-Enhanced RAG</a></h2>
+<p>The failures above share a common root cause: flat retrieval treats a
+corpus as an unstructured collection of text chunks. It has no model of
+the <em>structure</em> latent in the data -- the entities, their relationships,
+and how information flows between documents.</p>
+<p>Graph-enhanced RAG adds a knowledge graph layer:</p>
+<pre class="mermaid">flowchart TD
+    subgraph FlatRAG[&quot;Traditional RAG&quot;]
+        Q1[Query] --&gt; VS1[(Vector Store)]
+        VS1 --&gt; C1[Chunks]
+        C1 --&gt; LLM1[LLM]
+    end
+
+    subgraph GraphRAG[&quot;Graph-Enhanced RAG&quot;]
+        Q2[Query] --&gt; VS2[(Vector Store)]
+        Q2 --&gt; KG[(Knowledge Graph)]
+        VS2 --&gt; C2[Chunks]
+        KG --&gt; E2[Entities +\nRelationships]
+        C2 --&gt; MERGE[Merge Context]
+        E2 --&gt; MERGE
+        MERGE --&gt; LLM2[LLM]
+    end
+
+    style KG fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style MERGE fill:#fff3e0,stroke:#e65100,stroke-width:2px
+</pre>
+<p>The knowledge graph enables:</p>
+<ol>
+<li><strong>Multi-hop traversal</strong>: Follow relationship chains across entities</li>
+<li><strong>Relationship awareness</strong>: Understand how entities connect</li>
+<li><strong>Global queries</strong>: Aggregate across the full graph structure</li>
+<li><strong>Structured context</strong>: Provide the LLM with entity-relationship
+triples, not just text chunks</li>
+</ol>
+<h2 id="preview-what-part-ii-covers"><a class="header" href="#preview-what-part-ii-covers">Preview: What Part II Covers</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Chapter</th><th>Topic</th></tr></thead><tbody>
+<tr><td>4. Knowledge Graphs</td><td>Graph data models, property graphs, schema design</td></tr>
+<tr><td>5. Entity Extraction</td><td>Using LLMs to extract entities and relationships from text</td></tr>
+<tr><td>6. Graph-Enhanced Retrieval</td><td>Combining vector search with graph traversal</td></tr>
+<tr><td>7. EdgeQuake's Graph Pipeline</td><td>Production entity extraction, storage, and querying</td></tr>
+</tbody></table>
+</div>
+<h2 id="a-concrete-example"><a class="header" href="#a-concrete-example">A Concrete Example</a></h2>
+<p>Here is a preview of how graph-enhanced retrieval handles the multi-hop
+query that flat retrieval could not:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Graph-enhanced retrieval for multi-hop queries
+async fn graph_enhanced_query(
+    query: &amp;str,
+    vector_store: &amp;VectorStore,
+    graph: &amp;KnowledgeGraph,
+    embedder: &amp;dyn Embedder,
+) -&gt; RetrievalContext {
+    // Step 1: Extract entities from the query
+    let query_entities = extract_entities(query).await;
+    // ["island", "2003", "companies", "funding"]
+
+    // Step 2: Find matching entities in the graph
+    let graph_entities = graph.find_entities(&amp;query_entities).await;
+
+    // Step 3: Traverse relationships (multi-hop)
+    let traversal = graph.traverse(
+        &amp;graph_entities,
+        TraversalConfig {
+            max_hops: 3,
+            relationship_types: vec!["TRAVELED_TO", "ASSOCIATED_WITH", "FUNDED"],
+        },
+    ).await;
+
+    // Step 4: Also do vector search for supporting text
+    let vector_results = vector_store.search(
+        &amp;embedder.embed_batch(&amp;[query]).await.unwrap()[0],
+        5,
+    ).await;
+
+    // Step 5: Combine graph traversal results with vector results
+    RetrievalContext {
+        graph_paths: traversal.paths,     // Entity-relationship chains
+        text_chunks: vector_results,       // Supporting text evidence
+        entities: traversal.entities,      // All discovered entities
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The graph traversal finds the complete chain: travelers -&gt; people -&gt;
+entities -&gt; companies, even though no single text chunk contains all
+of this information.</p>
+<h2 id="summary"><a class="header" href="#summary">Summary</a></h2>
+<p>Even with contextual retrieval, hybrid search, and reranking, flat RAG
+fails at multi-hop reasoning, relationship traversal, and global corpus
+awareness. These failures are not engineering problems to be optimized
+away -- they are architectural limitations of treating a corpus as a flat
+collection of text chunks. Graph-enhanced RAG adds the structural layer
+that enables relationship-aware, multi-hop retrieval. That is the subject
+of Part II.</p>
+<hr />
+<p><em>End of Part I: RAG Foundations.</em>
+<em>Continue to Part II: Graph-Enhanced RAG.</em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../part1-foundations/ch03-03-reranking.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../exercises/ch03/hybrid-search.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../part1-foundations/ch03-03-reranking.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../exercises/ch03/hybrid-search.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js"></script>
+        <script src="../mode-rust.js"></script>
+        <script src="../editor.js"></script>
+        <script src="../theme-dawn.js"></script>
+        <script src="../theme-tomorrow_night.js"></script>
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../src/theme/exercises.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

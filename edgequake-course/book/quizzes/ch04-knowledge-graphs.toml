@@ -1,0 +1,93 @@
+# Quiz: Knowledge Graphs for RAG
+
+id = "ch04-knowledge-graphs"
+title = "Knowledge Graphs for RAG"
+lesson_id = "ch04"
+pass_threshold = 0.7
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "In the property graph model used by EdgeQuake, what does a GraphEdge represent and what metadata does it carry?"
+prompt.distractors = [
+    "A GraphEdge is a container for multiple related entities with a shared embedding vector",
+    "A GraphEdge is a document chunk with source and target pointers to the original file",
+    "A GraphEdge is an index entry that maps keywords to entity identifiers"
+]
+answer.answer = "A GraphEdge is a directed relationship between two entities, carrying a relationship type, description, weight, and source_id"
+context = """
+In the property graph model, GraphEdge connects a source entity to a target entity
+with a typed, directed relationship. Each edge carries: a relationship type (e.g.,
+'BUSINESS_PARTNER'), a natural language description, a numerical weight indicating
+strength or confidence, and a source_id linking back to the originating document.
+This rich metadata enables both graph traversal and semantic understanding of
+relationships.
+"""
+id = "e4d5f6a7-4444-4d00-b400-000000000001"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What does a GraphNode contain beyond its name and entity type?"
+prompt.distractors = [
+    "A list of all edges connected to this node and their weights",
+    "The raw text of the original document chunk it was extracted from",
+    "A precomputed PageRank score used for retrieval ranking"
+]
+answer.answer = "A natural language description summarizing the entity and a source_id linking to the originating document"
+context = """
+A GraphNode stores: an entity name (e.g., 'Acme Corp'), an entity type (e.g.,
+'Organization'), a natural language description synthesized during extraction that
+summarizes what is known about the entity, and a source_id tracing it back to the
+source document. The description is particularly important because it gets embedded
+as a vector, enabling semantic search over entities, not just exact name matching.
+"""
+id = "e4d5f6a7-4444-4d00-b400-000000000002"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "How does LightRAG's dual-level retrieval combine low-level and high-level knowledge?"
+prompt.distractors = [
+    "Low-level retrieves document summaries while high-level retrieves full documents",
+    "Low-level uses BM25 keyword search while high-level uses vector similarity",
+    "Low-level retrieves recent data while high-level retrieves historical data"
+]
+answer.answer = "Low-level retrieves specific entities and their direct relationships, while high-level retrieves broader themes and community summaries"
+context = """
+LightRAG's dual-level approach addresses different query types: low-level retrieval
+finds specific entities and their immediate neighbors (e.g., 'What companies did
+Person X work for?'), while high-level retrieval finds thematic communities and
+patterns across many entities (e.g., 'What are the main financial networks in
+this dataset?'). Combining both levels gives precise facts and broad context.
+"""
+id = "e4d5f6a7-4444-4d00-b400-000000000003"
+
+[[questions]]
+type = "MultipleChoice"
+prompt.prompt = "What is the purpose of the GraphStorage trait in EdgeQuake's architecture?"
+prompt.distractors = [
+    "It defines how to serialize graph data into JSON for API responses",
+    "It specifies the LLM prompts used for entity extraction from documents",
+    "It manages the HTTP endpoints for graph query operations"
+]
+answer.answer = "It defines an async interface for graph operations (upsert, get, delete nodes and edges) that any storage backend must implement"
+context = """
+The GraphStorage trait is a core abstraction in edgequake-storage that defines the
+contract for any graph storage backend. It includes async methods for upserting,
+retrieving, and deleting both nodes and edges, as well as querying neighbors.
+This trait-based design allows swapping backends (in-memory, PostgreSQL, Neptune,
+DynamoDB) without changing the ingestion or query logic. Each backend implements
+GraphStorage with its own persistence strategy.
+"""
+id = "e4d5f6a7-4444-4d00-b400-000000000004"
+
+[[questions]]
+type = "ShortAnswer"
+prompt.prompt = "What mechanism does EdgeQuake use to keep multiple tenants' graph data isolated within a shared storage backend?"
+answer.answer = "namespace"
+context = """
+EdgeQuake uses namespace isolation to separate tenant data. Every storage operation
+(graph, vector, key-value) is scoped to a namespace string. This means tenant A's
+entities and relationships are completely invisible to tenant B's queries, even
+though they may share the same underlying database. Namespaces act as a logical
+partition key across all storage traits.
+"""
+id = "e4d5f6a7-4444-4d00-b400-000000000005"
