@@ -57,7 +57,7 @@ use aws_sdk_dynamodb::Client as DynamoDbClient;
 use serde_json::Value as JsonValue;
 use tracing::{debug, info, warn};
 
-use edgequake_storage::{KVStorage, StorageError};
+use edgequake_storage::KVStorage;
 
 use crate::error::AwsStorageError;
 
@@ -169,12 +169,12 @@ impl DynamoKVStorage {
     pub async fn new(config: DynamoKVConfig) -> crate::error::Result<Self> {
         // Load AWS configuration
         let aws_config = if let Some(region) = &config.region {
-            aws_config::from_env()
+            aws_config::defaults(aws_config::BehaviorVersion::latest())
                 .region(aws_sdk_dynamodb::config::Region::new(region.clone()))
                 .load()
                 .await
         } else {
-            aws_config::load_from_env().await
+            aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await
         };
 
         let client = DynamoDbClient::new(&aws_config);

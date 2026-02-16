@@ -4593,7 +4593,7 @@ pub async fn update_document(
     // Step 4: Update content if provided
     let content = if let Some(new_content) = request.content {
         // Update stored content
-        state
+        let _ = state
             .kv_storage
             .upsert(&[(content_key.clone(), serde_json::json!(new_content))])
             .await;
@@ -4622,7 +4622,7 @@ pub async fn update_document(
                 serde_json::json!(Utc::now().to_rfc3339()),
             );
         }
-        state
+        let _ = state
             .kv_storage
             .upsert(&[(metadata_key.clone(), updated_metadata)])
             .await;
@@ -4651,7 +4651,7 @@ pub async fn update_document(
                 serde_json::json!(Utc::now().to_rfc3339()),
             );
         }
-        state
+        let _ = state
             .kv_storage
             .upsert(&[(metadata_key.clone(), updated_metadata)])
             .await;
@@ -4694,7 +4694,7 @@ pub async fn update_document(
                     serde_json::json!(Utc::now().to_rfc3339()),
                 );
             }
-            state
+            let _ = state
                 .kv_storage
                 .upsert(&[(metadata_key, final_metadata)])
                 .await;
@@ -4727,7 +4727,7 @@ pub async fn update_document(
                     serde_json::json!(Utc::now().to_rfc3339()),
                 );
             }
-            state
+            let _ = state
                 .kv_storage
                 .upsert(&[(metadata_key, fail_metadata)])
                 .await;

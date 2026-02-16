@@ -297,7 +297,7 @@ impl VectorStorage for S3VectorsStorage {
                 let score = v.distance().map(|d| 1.0 - d).unwrap_or(0.0);
                 let metadata = v
                     .metadata()
-                    .map(|d| Self::document_to_json(d))
+                    .map(Self::document_to_json)
                     .unwrap_or(serde_json::Value::Null);
 
                 Some(VectorSearchResult {

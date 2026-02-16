@@ -56,7 +56,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
-use edgequake_storage::{StorageError, VectorSearchResult, VectorStorage};
+use edgequake_storage::{VectorSearchResult, VectorStorage};
 
 use crate::error::AwsStorageError;
 
@@ -222,12 +222,12 @@ impl S3VectorStorage {
     pub async fn new(config: S3Config) -> crate::error::Result<Self> {
         // Load AWS configuration
         let aws_config = if let Some(region) = &config.region {
-            aws_config::from_env()
+            aws_config::defaults(aws_config::BehaviorVersion::latest())
                 .region(aws_sdk_s3::config::Region::new(region.clone()))
                 .load()
                 .await
         } else {
-            aws_config::load_from_env().await
+            aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await
         };
 
         let s3_client = S3Client::new(&aws_config);
@@ -621,7 +621,7 @@ impl VectorStorage for S3VectorStorage {
         info!("Upserting {} vectors to S3", data.len());
 
         // Validate dimensions
-        for (id, embedding, _) in data {
+        for (_id, embedding, _) in data {
             if embedding.len() != self.config.dimension {
                 return Err(AwsStorageError::DimensionMismatch {
                     expected: self.config.dimension,
@@ -662,19 +662,13 @@ impl VectorStorage for S3VectorStorage {
 
         // Update HNSW index
         let mut index_guard = self.index.write().await;
-        let mut index = index_guard.take().unwrap_or_else(|| {
+        let index = index_guard.take().unwrap_or_else(|| {
             Builder::default().build(Vec::<VectorPoint>::new(), Vec::<String>::new())
         });
 
-        for (id, embedding, _) in data {
-            let point = VectorPoint {
-                id: id.clone(),
-                vector: embedding.clone(),
-            };
-            // Note: instant-distance doesn't support incremental updates easily
-            // For production, we'd need to rebuild the index periodically
-            // For now, we'll rebuild when index gets large enough
-        }
+        // Note: instant-distance doesn't support incremental updates easily
+        // For production, we'd need to rebuild the index periodically
+        // For now, we rebuild when index gets large enough (see below)
 
         // Rebuild index if it's been updated significantly
         if manifest.total_vectors % 10000 == 0 {
@@ -740,7 +734,7 @@ impl VectorStorage for S3VectorStorage {
 
     async fn get_by_ids(
         &self,
-        ids: &[String],
+        _ids: &[String],
     ) -> edgequake_storage::error::Result<Vec<(String, Vec<f32>)>> {
         warn!("get_by_ids not efficiently implemented for S3 - requires full scan");
         Ok(Vec::new())
@@ -788,7 +782,7 @@ impl VectorStorage for S3VectorStorage {
 
     async fn clear_workspace(
         &self,
-        workspace_id: &uuid::Uuid,
+        _workspace_id: &uuid::Uuid,
     ) -> edgequake_storage::error::Result<usize> {
         // For S3, each workspace has its own namespace
         // So clearing this workspace means clearing all data

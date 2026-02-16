@@ -58,7 +58,6 @@
 //! ```
 
 use crate::error::{AwsStorageError, Result};
-use async_trait::async_trait;
 use aws_sdk_athena::types::{QueryExecutionContext, QueryExecutionState, ResultConfiguration};
 use aws_sdk_athena::Client as AthenaClient;
 use serde_json::{json, Value as JsonValue};
@@ -266,12 +265,12 @@ impl AthenaQueryEngine {
     /// Create a new Athena query engine.
     pub async fn new(config: AthenaConfig) -> Result<Self> {
         let aws_config = if let Some(region) = &config.region {
-            aws_config::from_env()
+            aws_config::defaults(aws_config::BehaviorVersion::latest())
                 .region(aws_config::Region::new(region.clone()))
                 .load()
                 .await
         } else {
-            aws_config::load_from_env().await
+            aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await
         };
 
         let client = Arc::new(AthenaClient::new(&aws_config));
@@ -429,7 +428,6 @@ impl AthenaQueryEngine {
     /// * `execution_id` - Query execution ID from `start_query()`
     pub async fn get_query_results(&self, execution_id: &str) -> Result<Vec<AthenaRow>> {
         let mut rows = Vec::new();
-        let mut next_token: Option<String> = None;
 
         // Get column names from first page
         let first_response = self
@@ -477,7 +475,7 @@ impl AthenaQueryEngine {
             rows.push(AthenaRow::new(column_map));
         }
 
-        next_token = first_response.next_token().map(|s| s.to_string());
+        let mut next_token = first_response.next_token().map(|s| s.to_string());
 
         // Fetch remaining pages
         while let Some(token) = next_token {
