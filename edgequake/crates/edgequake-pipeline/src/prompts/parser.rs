@@ -233,16 +233,18 @@ impl JsonExtractionParser {
         // Early detection of empty or completion-only responses
         // WHY: Avoid noisy warnings when LLM returns just <|COMPLETE|> or empty content
         let trimmed = json_str.trim();
-        if trimmed.is_empty()
-            || trimmed == DEFAULT_COMPLETION_DELIMITER
-            || trimmed.len() < 10 {
+        if trimmed.is_empty() || trimmed == DEFAULT_COMPLETION_DELIMITER || trimmed.len() < 10 {
             tracing::debug!(
                 chunk_id = %chunk_id,
                 response_preview = %trimmed.chars().take(50).collect::<String>(),
                 "Empty or minimal response - returning empty extraction"
             );
-            result.metadata.insert("parser".to_string(), serde_json::json!("json"));
-            result.metadata.insert("empty_response".to_string(), serde_json::json!(true));
+            result
+                .metadata
+                .insert("parser".to_string(), serde_json::json!("json"));
+            result
+                .metadata
+                .insert("empty_response".to_string(), serde_json::json!(true));
             return Ok(result);
         }
 
@@ -405,22 +407,34 @@ impl HybridExtractionParser {
         if trimmed.is_empty() {
             tracing::debug!(chunk_id = %chunk_id, "Empty response - returning empty extraction");
             let mut result = ExtractionResult::new(chunk_id);
-            result.metadata.insert("parser".to_string(), serde_json::json!("hybrid"));
-            result.metadata.insert("empty_response".to_string(), serde_json::json!(true));
+            result
+                .metadata
+                .insert("parser".to_string(), serde_json::json!("hybrid"));
+            result
+                .metadata
+                .insert("empty_response".to_string(), serde_json::json!(true));
             return Ok(result);
         }
 
         // If response is ONLY the completion delimiter or very minimal content
-        if trimmed == DEFAULT_COMPLETION_DELIMITER || (trimmed.len() < 20 && !trimmed.contains(DEFAULT_TUPLE_DELIMITER)) {
+        if trimmed == DEFAULT_COMPLETION_DELIMITER
+            || (trimmed.len() < 20 && !trimmed.contains(DEFAULT_TUPLE_DELIMITER))
+        {
             tracing::debug!(
                 chunk_id = %chunk_id,
                 response_preview = %trimmed.chars().take(50).collect::<String>(),
                 "Minimal/completion-only response - returning empty extraction"
             );
             let mut result = ExtractionResult::new(chunk_id);
-            result.metadata.insert("parser".to_string(), serde_json::json!("hybrid"));
-            result.metadata.insert("empty_response".to_string(), serde_json::json!(true));
-            result.metadata.insert("is_complete".to_string(), serde_json::json!(true));
+            result
+                .metadata
+                .insert("parser".to_string(), serde_json::json!("hybrid"));
+            result
+                .metadata
+                .insert("empty_response".to_string(), serde_json::json!(true));
+            result
+                .metadata
+                .insert("is_complete".to_string(), serde_json::json!(true));
             return Ok(result);
         }
 
@@ -949,7 +963,10 @@ relation<|#|>A<|#|>   <|#|>broken<|#|>Empty target
         assert_eq!(result.entities.len(), 0);
         assert_eq!(result.relationships.len(), 0);
         assert_eq!(
-            result.metadata.get("empty_response").and_then(|v| v.as_bool()),
+            result
+                .metadata
+                .get("empty_response")
+                .and_then(|v| v.as_bool()),
             Some(true)
         );
     }
@@ -963,7 +980,10 @@ relation<|#|>A<|#|>   <|#|>broken<|#|>Empty target
         assert_eq!(result.entities.len(), 0);
         assert_eq!(result.relationships.len(), 0);
         assert_eq!(
-            result.metadata.get("empty_response").and_then(|v| v.as_bool()),
+            result
+                .metadata
+                .get("empty_response")
+                .and_then(|v| v.as_bool()),
             Some(true)
         );
         assert_eq!(
@@ -981,7 +1001,10 @@ relation<|#|>A<|#|>   <|#|>broken<|#|>Empty target
         assert_eq!(result.entities.len(), 0);
         assert_eq!(result.relationships.len(), 0);
         assert_eq!(
-            result.metadata.get("empty_response").and_then(|v| v.as_bool()),
+            result
+                .metadata
+                .get("empty_response")
+                .and_then(|v| v.as_bool()),
             Some(true)
         );
     }
@@ -995,7 +1018,10 @@ relation<|#|>A<|#|>   <|#|>broken<|#|>Empty target
         assert_eq!(result.entities.len(), 0);
         assert_eq!(result.relationships.len(), 0);
         assert_eq!(
-            result.metadata.get("empty_response").and_then(|v| v.as_bool()),
+            result
+                .metadata
+                .get("empty_response")
+                .and_then(|v| v.as_bool()),
             Some(true)
         );
     }

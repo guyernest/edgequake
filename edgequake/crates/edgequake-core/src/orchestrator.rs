@@ -1416,7 +1416,13 @@ impl EdgeQuake {
         // 4. Graph text search (fallback for exact matches)
         // WHY: Ensures substring matches like "BRADLEY" still work
         let graph_results = graph_storage
-            .search_nodes(query, limit, None, self.config.tenant_id.as_deref(), self.config.workspace_id.as_deref())
+            .search_nodes(
+                query,
+                limit,
+                None,
+                self.config.tenant_id.as_deref(),
+                self.config.workspace_id.as_deref(),
+            )
             .await
             .unwrap_or_default();
 
@@ -1444,7 +1450,11 @@ impl EdgeQuake {
 
         // 5. Sort by score (descending) and limit
         let mut entities: Vec<_> = entities_map.into_values().collect();
-        entities.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        entities.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         entities.truncate(limit);
 
         Ok(entities)

@@ -117,7 +117,11 @@ pub async fn run_store(
         vectors_stored = chunk_vectors_stored,
         "Stored chunk vectors to S3 Vectors"
     );
-    bar.finish_with_message(format!("Stored {} chunks ({} vectors)", chunks.len(), chunk_vectors_stored));
+    bar.finish_with_message(format!(
+        "Stored {} chunks ({} vectors)",
+        chunks.len(),
+        chunk_vectors_stored
+    ));
 
     // Step 3: Store entities and relationships in Neptune via bulk load
     if config.neptune_endpoint.is_some()
@@ -146,7 +150,8 @@ pub async fn run_store(
     );
 
     // Use HashMap to deduplicate entities by name (same entity may appear in multiple chunks)
-    let mut entity_map: std::collections::HashMap<String, (Vec<f32>, serde_json::Value)> = std::collections::HashMap::new();
+    let mut entity_map: std::collections::HashMap<String, (Vec<f32>, serde_json::Value)> =
+        std::collections::HashMap::new();
     let mut missing_embeddings = 0;
 
     for result in extractions.values() {
@@ -174,20 +179,17 @@ pub async fn run_store(
                 if let Some(ref doc_id) = entity.source_document_id {
                     metadata.as_object_mut().unwrap().insert(
                         "source_document_id".to_string(),
-                        serde_json::Value::String(doc_id.clone())
+                        serde_json::Value::String(doc_id.clone()),
                     );
                 }
                 if let Some(ref file_path) = entity.source_file_path {
                     metadata.as_object_mut().unwrap().insert(
                         "source_file_path".to_string(),
-                        serde_json::Value::String(file_path.clone())
+                        serde_json::Value::String(file_path.clone()),
                     );
                 }
 
-                entity_map.insert(
-                    entity.name.clone(),
-                    (embedding.clone(), metadata)
-                );
+                entity_map.insert(entity.name.clone(), (embedding.clone(), metadata));
             } else {
                 missing_embeddings += 1;
                 if missing_embeddings <= 5 {
@@ -209,9 +211,7 @@ pub async fn run_store(
     // Convert deduplicated map to vector list
     let entity_vectors: Vec<(String, Vec<f32>, serde_json::Value)> = entity_map
         .into_iter()
-        .map(|(name, (embedding, metadata))| {
-            (format!("entity:{}", name), embedding, metadata)
-        })
+        .map(|(name, (embedding, metadata))| (format!("entity:{}", name), embedding, metadata))
         .collect();
 
     info!(
@@ -256,7 +256,8 @@ pub async fn run_store(
     );
 
     // Use HashMap to deduplicate relationships by (source, target) pair
-    let mut rel_map: std::collections::HashMap<(String, String), (Vec<f32>, serde_json::Value)> = std::collections::HashMap::new();
+    let mut rel_map: std::collections::HashMap<(String, String), (Vec<f32>, serde_json::Value)> =
+        std::collections::HashMap::new();
 
     for result in extractions.values() {
         for rel in &result.relationships {
@@ -281,19 +282,19 @@ pub async fn run_store(
                 if let Some(ref chunk_id) = rel.source_chunk_id {
                     metadata.as_object_mut().unwrap().insert(
                         "source_chunk_id".to_string(),
-                        serde_json::Value::String(chunk_id.clone())
+                        serde_json::Value::String(chunk_id.clone()),
                     );
                 }
                 if let Some(ref doc_id) = rel.source_document_id {
                     metadata.as_object_mut().unwrap().insert(
                         "source_document_id".to_string(),
-                        serde_json::Value::String(doc_id.clone())
+                        serde_json::Value::String(doc_id.clone()),
                     );
                 }
                 if let Some(ref file_path) = rel.source_file_path {
                     metadata.as_object_mut().unwrap().insert(
                         "source_file_path".to_string(),
-                        serde_json::Value::String(file_path.clone())
+                        serde_json::Value::String(file_path.clone()),
                     );
                 }
 

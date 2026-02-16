@@ -74,7 +74,11 @@ async fn create_batch_with_retry(
                     // Exponential backoff: double the delay each time, up to 30 minutes
                     delay_secs = (delay_secs * 2).min(1800);
 
-                    info!("🔄 Retrying batch creation (attempt {}/{})", attempt + 1, max_attempts);
+                    info!(
+                        "🔄 Retrying batch creation (attempt {}/{})",
+                        attempt + 1,
+                        max_attempts
+                    );
                 } else if is_token_limit {
                     return Err(anyhow::anyhow!(
                         "Token limit exceeded after {} retry attempts. In-progress batches are still consuming the 2M token limit. \
@@ -177,7 +181,8 @@ pub async fn run_extract(
                             let is_empty = extraction.entities.is_empty()
                                 && extraction.relationships.is_empty();
 
-                            let is_marked_empty = extraction.metadata
+                            let is_marked_empty = extraction
+                                .metadata
                                 .get("empty_response")
                                 .and_then(|v| v.as_bool())
                                 .unwrap_or(false);
@@ -264,7 +269,10 @@ pub async fn run_extract(
     if empty_count > 0 {
         info!(
             empty_count = empty_count,
-            empty_pct = format!("{:.1}%", (empty_count as f64 / results.len() as f64) * 100.0),
+            empty_pct = format!(
+                "{:.1}%",
+                (empty_count as f64 / results.len() as f64) * 100.0
+            ),
             "Note: Some chunks produced empty extractions (no entities/relationships found)"
         );
     }

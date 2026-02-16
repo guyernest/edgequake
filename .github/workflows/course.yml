@@ -45,7 +45,7 @@ jobs:
 
       - name: Install mdbook-mermaid
         run: |
-          cargo install mdbook-mermaid --locked || echo "mdbook-mermaid installation failed, continuing without mermaid support"
+          cargo install mdbook-mermaid@0.16.0 --locked || echo "mdbook-mermaid installation failed, continuing without mermaid support"
 
       - name: Install mdbook-quiz
         run: |

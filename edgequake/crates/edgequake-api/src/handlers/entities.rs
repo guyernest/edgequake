@@ -589,10 +589,14 @@ pub async fn update_entity(
                         });
 
                         // Add tenant and workspace IDs if present
-                        if let Some(tenant_id) = node.properties.get("tenant_id").and_then(|v| v.as_str()) {
+                        if let Some(tenant_id) =
+                            node.properties.get("tenant_id").and_then(|v| v.as_str())
+                        {
                             metadata["tenant_id"] = serde_json::json!(tenant_id);
                         }
-                        if let Some(workspace_id) = node.properties.get("workspace_id").and_then(|v| v.as_str()) {
+                        if let Some(workspace_id) =
+                            node.properties.get("workspace_id").and_then(|v| v.as_str())
+                        {
                             metadata["workspace_id"] = serde_json::json!(workspace_id);
                         }
 
@@ -871,10 +875,18 @@ pub async fn merge_entities(
                     });
 
                     // Add tenant and workspace IDs if present
-                    if let Some(tenant_id) = target_node.properties.get("tenant_id").and_then(|v| v.as_str()) {
+                    if let Some(tenant_id) = target_node
+                        .properties
+                        .get("tenant_id")
+                        .and_then(|v| v.as_str())
+                    {
                         metadata["tenant_id"] = serde_json::json!(tenant_id);
                     }
-                    if let Some(workspace_id) = target_node.properties.get("workspace_id").and_then(|v| v.as_str()) {
+                    if let Some(workspace_id) = target_node
+                        .properties
+                        .get("workspace_id")
+                        .and_then(|v| v.as_str())
+                    {
                         metadata["workspace_id"] = serde_json::json!(workspace_id);
                     }
 
