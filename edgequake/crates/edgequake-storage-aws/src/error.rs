@@ -56,6 +56,14 @@ pub enum AwsStorageError {
     #[error("Resource not found: {0}")]
     NotFound(String),
 
+    /// Namespace already exists (duplicate slug on create)
+    #[error("Namespace already exists: {0}")]
+    NamespaceAlreadyExists(String),
+
+    /// Namespace not found
+    #[error("Namespace not found: {0}")]
+    NamespaceNotFound(String),
+
     /// Generic error
     #[error("AWS storage error: {0}")]
     Other(String),

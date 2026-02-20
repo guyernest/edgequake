@@ -65,6 +65,9 @@ pub mod neptune_graph;
 #[cfg(feature = "dynamodb")]
 pub mod dynamodb_kv;
 
+#[cfg(feature = "dynamodb")]
+pub mod dynamodb_namespace;
+
 #[cfg(feature = "athena")]
 pub mod athena_sql;
 
@@ -80,6 +83,9 @@ pub use neptune_graph::{NeptuneConfig, NeptuneGraphStorage};
 
 #[cfg(feature = "dynamodb")]
 pub use dynamodb_kv::{DynamoKVConfig, DynamoKVStorage};
+
+#[cfg(feature = "dynamodb")]
+pub use dynamodb_namespace::{DynamoNamespaceConfig, DynamoNamespaceRegistry, NamespaceListItem};
 
 #[cfg(feature = "athena")]
 pub use athena_sql::{AthenaConfig, AthenaQueryEngine, AthenaRow, QueryBuilder, QueryStats};

@@ -20,6 +20,7 @@ full = ["s3-vectors", "s3vectors", "dynamodb", "neptune", "athena"]
 
 [dependencies]
 # Core EdgeQuake dependencies
+edgequake-core = { workspace = true }
 edgequake-storage = { workspace = true }
 
 # Async
