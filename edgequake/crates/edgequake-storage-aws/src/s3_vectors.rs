@@ -51,14 +51,40 @@ const PUT_BATCH_SIZE: usize = 500;
 const GET_BATCH_SIZE: usize = 100;
 
 /// Configuration for S3 Vectors storage.
+///
+/// ## Namespace Isolation Strategy
+///
+/// S3 Vectors does not have built-in namespace filtering. Isolation is achieved
+/// via **one index per namespace** within a shared vector bucket:
+///
+/// - `vector_bucket_name` — shared across all namespaces (one bucket per deployment)
+/// - `index_name` — namespace-scoped (convention: `{namespace}-embeddings`), one
+///   index per namespace containing all vector types (chunks, entities, relationships)
+/// - `namespace` — the namespace slug this storage instance belongs to
+///
+/// All vector types (chunks, entities, relationships) share the same namespace
+/// index, distinguished by a `type` metadata field (`"chunk"`, `"entity"`,
+/// `"relationship"`). This avoids multiplying indexes per namespace.
+///
+/// The `initialize()` method creates the index if it doesn't exist, so new
+/// namespaces get their index auto-created on first use.
 #[derive(Debug, Clone)]
 pub struct S3VectorsConfig {
-    /// Name of the S3 vector bucket.
+    /// Name of the S3 vector bucket (shared across all namespaces).
     pub vector_bucket_name: String,
     /// Name of the vector index within the bucket.
+    ///
+    /// Convention: `{namespace}-embeddings` (e.g., `epstein-files-embeddings`).
+    /// One index per namespace, containing all vector types (chunks, entities,
+    /// relationships) distinguished by the metadata `type` field.
     pub index_name: String,
     /// Expected embedding dimension.
     pub dimension: usize,
+    /// The namespace slug this storage instance belongs to.
+    ///
+    /// Used by `VectorStorage::namespace()` to identify which namespace's data
+    /// this instance manages. Must match the slug used in the index name.
+    pub namespace: String,
 }
 
 /// S3 Vectors-backed VectorStorage implementation.
@@ -142,7 +168,7 @@ impl S3VectorsStorage {
 #[async_trait]
 impl VectorStorage for S3VectorsStorage {
     fn namespace(&self) -> &str {
-        &self.config.vector_bucket_name
+        &self.config.namespace
     }
 
     fn dimension(&self) -> usize {

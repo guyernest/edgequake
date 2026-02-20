@@ -412,6 +412,7 @@ async fn create_storage_backends(
                 vector_bucket_name: bucket.clone(),
                 index_name,
                 dimension: 1536,
+                namespace: config.namespace.clone(),
             };
             let s3v_client = edgequake_storage_aws::aws_sdk_s3vectors::Client::new(&aws_config);
             std::sync::Arc::new(edgequake_storage_aws::S3VectorsStorage::new_with_client(
