@@ -40,6 +40,7 @@ pub mod config;
 pub mod conversation_service;
 pub mod error;
 pub mod keyword_extractor;
+pub mod namespace;
 #[cfg(feature = "pipeline")]
 pub mod orchestrator;
 pub mod query;
@@ -87,6 +88,9 @@ pub use conversation_service::{ConversationService, InMemoryConversationService}
 
 // Re-export token budget
 pub use token_budget::{BudgetAllocation, BudgetSource, ContextSource, TokenBudget};
+
+// Re-export namespace types
+pub use namespace::{NamespaceRecord, NamespaceSlug, PipelineConfig};
 
 // Re-export commonly used types
 pub use config::Config;

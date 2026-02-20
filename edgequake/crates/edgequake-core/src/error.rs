@@ -47,6 +47,10 @@ pub enum Error {
     /// Serialization error
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    /// Namespace error
+    #[error("Namespace error: {0}")]
+    Namespace(String),
 }
 
 impl Error {
