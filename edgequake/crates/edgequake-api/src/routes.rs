@@ -128,6 +128,22 @@ fn ollama_api_routes() -> Router<AppState> {
 /// API v1 routes.
 fn api_v1_routes() -> Router<AppState> {
     Router::new()
+        // Namespace management endpoints (Plan 01-03)
+        .route(
+            "/namespaces",
+            get(handlers::list_namespaces).post(handlers::create_namespace),
+        )
+        .route(
+            "/namespaces/{namespace}",
+            get(handlers::describe_namespace),
+        )
+        .route(
+            "/namespaces/{namespace}/config",
+            get(handlers::get_namespace_config).put(handlers::update_namespace_config),
+        )
+        // Namespace-scoped data routes (Plan 01-03)
+        // All data operations scoped to a specific namespace
+        .nest("/ns/{namespace}", namespace_scoped_routes())
         // Authentication (Phase 3)
         .route("/auth/login", post(handlers::login))
         .route("/auth/refresh", post(handlers::refresh_token))
@@ -420,6 +436,93 @@ fn api_v1_routes() -> Router<AppState> {
         .route("/models/health", get(handlers::check_providers_health))
         .route("/models/{provider}", get(handlers::get_provider))
         .route("/models/{provider}/{model}", get(handlers::get_model))
+}
+
+/// Namespace-scoped data routes.
+///
+/// These routes are nested under `/api/v1/ns/{namespace}/...` and provide
+/// namespace-isolated access to all data operations. The `{namespace}` path
+/// parameter is validated as a `NamespaceSlug` by handlers.
+///
+/// **Important:** These routes mirror the existing top-level data routes.
+/// The top-level routes continue to work for backward compatibility using
+/// the default storage backends. Namespace-scoped routes create or retrieve
+/// namespace-specific storage instances.
+fn namespace_scoped_routes() -> Router<AppState> {
+    Router::new()
+        // Query (all 6 modes: naive, local, global, hybrid, mix, bypass)
+        .route("/query", post(handlers::execute_query))
+        .route("/query/stream", post(handlers::stream_query))
+        // Documents
+        .route("/documents", post(handlers::upload_document))
+        .route("/documents", get(handlers::list_documents))
+        .route("/documents", delete(handlers::delete_all_documents))
+        .route(
+            "/documents/track/{track_id}",
+            get(handlers::get_track_status),
+        )
+        .route("/documents/upload", post(handlers::upload_file))
+        .route(
+            "/documents/upload/batch",
+            post(handlers::upload_files_batch),
+        )
+        .route("/documents/{document_id}", get(handlers::get_document))
+        .route("/documents/{document_id}", put(handlers::update_document))
+        .route(
+            "/documents/{document_id}",
+            delete(handlers::delete_document),
+        )
+        // Chat
+        .route("/chat/completions", post(handlers::chat_completion))
+        .route(
+            "/chat/completions/stream",
+            post(handlers::chat_completion_stream),
+        )
+        // Graph
+        .route("/graph", get(handlers::get_graph))
+        .route("/graph/stream", get(handlers::stream_graph))
+        .route("/graph/nodes/{node_id}", get(handlers::get_node))
+        .route("/graph/nodes/search", get(handlers::search_nodes))
+        .route("/graph/labels/search", get(handlers::search_labels))
+        .route("/graph/labels/popular", get(handlers::get_popular_labels))
+        .route("/graph/degrees/batch", post(handlers::get_degrees_batch))
+        // Entities
+        .route(
+            "/graph/entities",
+            get(handlers::list_entities).post(handlers::create_entity),
+        )
+        .route("/graph/entities/exists", get(handlers::entity_exists))
+        .route("/graph/entities/merge", post(handlers::merge_entities))
+        .route("/graph/entities/{entity_name}", get(handlers::get_entity))
+        .route(
+            "/graph/entities/{entity_name}",
+            put(handlers::update_entity),
+        )
+        .route(
+            "/graph/entities/{entity_name}",
+            delete(handlers::delete_entity),
+        )
+        .route(
+            "/graph/entities/{entity_name}/neighborhood",
+            get(handlers::get_entity_neighborhood),
+        )
+        // Relationships
+        .route(
+            "/graph/relationships",
+            get(handlers::list_relationships).post(handlers::create_relationship),
+        )
+        .route(
+            "/graph/relationships/{relationship_id}",
+            get(handlers::get_relationship),
+        )
+        .route(
+            "/graph/relationships/{relationship_id}",
+            put(handlers::update_relationship),
+        )
+        .route(
+            "/graph/relationships/{relationship_id}",
+            delete(handlers::delete_relationship),
+        )
 }
 
 #[cfg(test)]

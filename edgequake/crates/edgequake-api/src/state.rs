@@ -69,7 +69,9 @@
 //! All state components use Arc for shared ownership and are designed
 //! for concurrent access across multiple request handlers.
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use crate::cache_manager::CacheManager;
 use crate::handlers::ProgressBroadcaster;
@@ -153,6 +155,45 @@ pub type SharedWorkspaceService = Arc<dyn WorkspaceService>;
 
 /// Type alias for the shared conversation service.
 pub type SharedConversationService = Arc<dyn ConversationService>;
+
+/// A set of namespace-scoped storage backends.
+///
+/// Each namespace gets its own instances of graph, vector, and KV storage
+/// configured for data isolation (label-prefix, separate index, namespace key).
+#[derive(Clone)]
+pub struct NamespaceStorageSet {
+    /// Namespace-scoped graph storage (Neptune with label-prefix isolation).
+    pub graph_storage: Arc<dyn edgequake_storage::traits::GraphStorage>,
+    /// Namespace-scoped vector storage (S3 Vectors with per-namespace index).
+    pub vector_storage: Arc<dyn edgequake_storage::traits::VectorStorage>,
+    /// Namespace-scoped KV storage (DynamoDB with namespace composite key).
+    pub kv_storage: Arc<dyn edgequake_storage::traits::KVStorage>,
+}
+
+/// Factory for creating namespace-scoped storage instances.
+///
+/// This trait abstracts the construction of namespace-specific storage backends.
+/// The concrete implementation (in the binary crate) creates AWS-backed storage
+/// with namespace-specific configuration.
+#[async_trait::async_trait]
+pub trait NamespaceStorageFactory: Send + Sync {
+    /// Create a storage set for the given namespace.
+    ///
+    /// The implementation should configure each backend for the namespace:
+    /// - Graph: label-prefix set to namespace slug
+    /// - Vector: index name set to `{namespace}-chunks`
+    /// - KV: namespace set for composite key isolation
+    async fn create_storage(
+        &self,
+        namespace: &str,
+    ) -> Result<NamespaceStorageSet, Box<dyn std::error::Error + Send + Sync>>;
+}
+
+/// Cache for namespace-scoped storage sets.
+///
+/// Avoids re-creating AWS clients per request. The underlying AWS SDK clients
+/// share HTTP connection pools, so the main cost is config setup.
+pub type NamespaceStorageCache = Arc<RwLock<HashMap<String, Arc<NamespaceStorageSet>>>>;
 
 /// Application state shared across handlers.
 #[derive(Clone)]
@@ -248,6 +289,14 @@ pub struct AppState {
     /// Namespace registry for namespace CRUD and pipeline config management.
     /// None when namespace management is not configured (e.g., non-AWS deployments).
     pub namespace_registry: Option<edgequake_core::SharedNamespaceRegistry>,
+
+    /// Factory for creating namespace-scoped storage instances.
+    /// None when namespace storage is not configured.
+    pub namespace_storage_factory: Option<Arc<dyn NamespaceStorageFactory>>,
+
+    /// Cache of namespace-scoped storage sets.
+    /// Avoids re-creating storage instances per request.
+    pub namespace_storage_cache: NamespaceStorageCache,
 }
 
 /// Application configuration.
@@ -390,6 +439,8 @@ impl AppState {
             // Production deployments should configure allowed_paths.
             path_validation_config: crate::path_validation::PathValidationConfig::default(),
             namespace_registry: None,
+            namespace_storage_factory: None,
+            namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -531,6 +582,8 @@ impl AppState {
                 ..Default::default()
             },
             namespace_registry: None,
+            namespace_storage_factory: None,
+            namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -626,6 +679,8 @@ impl AppState {
                 ..Default::default()
             },
             namespace_registry: None,
+            namespace_storage_factory: None,
+            namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -883,6 +938,8 @@ impl AppState {
             // Administrators should configure ALLOWED_SCAN_PATHS environment variable.
             path_validation_config: Self::load_path_validation_config(),
             namespace_registry: None,
+            namespace_storage_factory: None,
+            namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -896,6 +953,62 @@ impl AppState {
     ) -> Self {
         self.namespace_registry = Some(registry);
         self
+    }
+
+    /// Set the namespace storage factory for namespace-scoped data operations.
+    ///
+    /// Call this after constructing AppState to enable namespace-scoped storage.
+    /// When not set, namespace-scoped routes use the default storage backends.
+    pub fn with_namespace_storage_factory(
+        mut self,
+        factory: Arc<dyn NamespaceStorageFactory>,
+    ) -> Self {
+        self.namespace_storage_factory = Some(factory);
+        self
+    }
+
+    /// Resolve namespace-scoped storage, with caching.
+    ///
+    /// Returns a cached `NamespaceStorageSet` for the given namespace, creating
+    /// one via the factory if not cached. Falls back to the default storage
+    /// backends if no factory is configured.
+    pub async fn resolve_namespace_storage(
+        &self,
+        namespace: &str,
+    ) -> Result<Arc<NamespaceStorageSet>, crate::error::ApiError> {
+        // Check cache first
+        {
+            let cache = self.namespace_storage_cache.read().await;
+            if let Some(storage) = cache.get(namespace) {
+                return Ok(Arc::clone(storage));
+            }
+        }
+
+        // Create via factory or fall back to defaults
+        let storage_set = if let Some(ref factory) = self.namespace_storage_factory {
+            let set = factory.create_storage(namespace).await.map_err(|e| {
+                crate::error::ApiError::Internal(format!(
+                    "Failed to create storage for namespace '{}': {}",
+                    namespace, e
+                ))
+            })?;
+            Arc::new(set)
+        } else {
+            // No factory configured -- use default storage backends
+            Arc::new(NamespaceStorageSet {
+                graph_storage: Arc::clone(&self.graph_storage),
+                vector_storage: Arc::clone(&self.vector_storage),
+                kv_storage: Arc::clone(&self.kv_storage),
+            })
+        };
+
+        // Cache the storage set
+        {
+            let mut cache = self.namespace_storage_cache.write().await;
+            cache.insert(namespace.to_string(), Arc::clone(&storage_set));
+        }
+
+        Ok(storage_set)
     }
 
     /// Initialize default tenant and workspace for non-authenticated mode.
