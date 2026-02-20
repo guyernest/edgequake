@@ -244,6 +244,10 @@ pub struct AppState {
     /// Path validation configuration for filesystem access security (OODA-248).
     /// WHY: Prevents directory traversal attacks in scan_directory endpoint.
     pub path_validation_config: crate::path_validation::PathValidationConfig,
+
+    /// Namespace registry for namespace CRUD and pipeline config management.
+    /// None when namespace management is not configured (e.g., non-AWS deployments).
+    pub namespace_registry: Option<edgequake_core::SharedNamespaceRegistry>,
 }
 
 /// Application configuration.
@@ -385,6 +389,7 @@ impl AppState {
             // SECURITY (OODA-248): Default to secure config (no paths allowed).
             // Production deployments should configure allowed_paths.
             path_validation_config: crate::path_validation::PathValidationConfig::default(),
+            namespace_registry: None,
         }
     }
 
@@ -525,6 +530,7 @@ impl AppState {
                 allow_any_path: true, // Permissive for memory/dev mode
                 ..Default::default()
             },
+            namespace_registry: None,
         }
     }
 
@@ -619,6 +625,7 @@ impl AppState {
                 allow_any_path: true,
                 ..Default::default()
             },
+            namespace_registry: None,
         }
     }
 
@@ -875,7 +882,20 @@ impl AppState {
             // SECURITY (OODA-248): PostgreSQL mode defaults to secure config.
             // Administrators should configure ALLOWED_SCAN_PATHS environment variable.
             path_validation_config: Self::load_path_validation_config(),
+            namespace_registry: None,
         })
+    }
+
+    /// Set the namespace registry for namespace management.
+    ///
+    /// Call this after constructing AppState to enable namespace CRUD
+    /// endpoints. When not set, namespace endpoints return 501 Not Implemented.
+    pub fn with_namespace_registry(
+        mut self,
+        registry: edgequake_core::SharedNamespaceRegistry,
+    ) -> Self {
+        self.namespace_registry = Some(registry);
+        self
     }
 
     /// Initialize default tenant and workspace for non-authenticated mode.

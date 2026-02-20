@@ -90,7 +90,10 @@ pub use conversation_service::{ConversationService, InMemoryConversationService}
 pub use token_budget::{BudgetAllocation, BudgetSource, ContextSource, TokenBudget};
 
 // Re-export namespace types
-pub use namespace::{NamespaceRecord, NamespaceSlug, PipelineConfig};
+pub use namespace::{
+    NamespaceListItem, NamespaceRecord, NamespaceRegistry, NamespaceRegistryError, NamespaceSlug,
+    PipelineConfig, SharedNamespaceRegistry,
+};
 
 // Re-export commonly used types
 pub use config::Config;

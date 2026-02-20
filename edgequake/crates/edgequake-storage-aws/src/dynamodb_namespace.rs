@@ -33,7 +33,10 @@ use aws_sdk_dynamodb::Client as DynamoDbClient;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use edgequake_core::{NamespaceRecord, NamespaceSlug, PipelineConfig};
+use edgequake_core::{
+    NamespaceListItem as CoreNamespaceListItem, NamespaceRecord, NamespaceRegistry,
+    NamespaceRegistryError, NamespaceSlug, PipelineConfig,
+};
 
 use crate::error::{AwsStorageError, Result};
 
@@ -425,5 +428,70 @@ impl DynamoNamespaceRegistry {
             }
             Err(e) => Err(dynamo_err(e)),
         }
+    }
+}
+
+/// Map AwsStorageError to NamespaceRegistryError.
+fn to_registry_error(err: AwsStorageError) -> NamespaceRegistryError {
+    match err {
+        AwsStorageError::NamespaceAlreadyExists(slug) => {
+            NamespaceRegistryError::AlreadyExists(slug)
+        }
+        AwsStorageError::NamespaceNotFound(slug) => NamespaceRegistryError::NotFound(slug),
+        other => NamespaceRegistryError::Internal(other.to_string()),
+    }
+}
+
+#[async_trait::async_trait]
+impl NamespaceRegistry for DynamoNamespaceRegistry {
+    async fn create_namespace(
+        &self,
+        slug: &NamespaceSlug,
+        description: Option<String>,
+    ) -> std::result::Result<NamespaceRecord, NamespaceRegistryError> {
+        self.create_namespace(slug, description)
+            .await
+            .map_err(to_registry_error)
+    }
+
+    async fn list_namespaces(
+        &self,
+    ) -> std::result::Result<Vec<CoreNamespaceListItem>, NamespaceRegistryError> {
+        let items = self.list_namespaces().await.map_err(to_registry_error)?;
+        Ok(items
+            .into_iter()
+            .map(|item| CoreNamespaceListItem {
+                slug: item.slug,
+                created_at: item.created_at,
+                entity_count: item.entity_count,
+                document_count: item.document_count,
+            })
+            .collect())
+    }
+
+    async fn describe_namespace(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> std::result::Result<Option<NamespaceRecord>, NamespaceRegistryError> {
+        self.describe_namespace(slug)
+            .await
+            .map_err(to_registry_error)
+    }
+
+    async fn get_config(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> std::result::Result<Option<PipelineConfig>, NamespaceRegistryError> {
+        self.get_config(slug).await.map_err(to_registry_error)
+    }
+
+    async fn update_config(
+        &self,
+        slug: &NamespaceSlug,
+        config: &PipelineConfig,
+    ) -> std::result::Result<(), NamespaceRegistryError> {
+        self.update_config(slug, config)
+            .await
+            .map_err(to_registry_error)
     }
 }

@@ -412,10 +412,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     });
 
-    info!("🐘 PostgreSQL storage mode (DATABASE_URL detected)");
+    info!("PostgreSQL storage mode (DATABASE_URL detected)");
     let state = AppState::new_postgres(&database_url, &api_key)
         .await
         .expect("Failed to initialize PostgreSQL storage");
+
+    // Construct namespace registry if NAMESPACE_TABLE is set (or use default)
+    let namespace_table = std::env::var("NAMESPACE_TABLE")
+        .unwrap_or_else(|_| "edgequake-namespaces".to_string());
+    let state = {
+        use edgequake_storage_aws::{DynamoNamespaceConfig, DynamoNamespaceRegistry};
+        let aws_config = edgequake_storage_aws::aws_config::load_defaults(
+            edgequake_storage_aws::aws_config::BehaviorVersion::latest(),
+        )
+        .await;
+        let dynamo_client = edgequake_storage_aws::aws_sdk_dynamodb::Client::new(&aws_config);
+        let ns_config = DynamoNamespaceConfig {
+            table_name: namespace_table.clone(),
+        };
+        let registry = DynamoNamespaceRegistry::new(ns_config, dynamo_client);
+        info!(
+            table = %namespace_table,
+            "Namespace registry configured (DynamoDB)"
+        );
+        state.with_namespace_registry(std::sync::Arc::new(registry))
+    };
 
     // Initialize default tenant and workspace for non-authenticated mode
     if let Err(e) = state.initialize_defaults().await {

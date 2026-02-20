@@ -7,8 +7,10 @@
 //! - [`NamespaceRecord`] — Immutable namespace metadata (created once)
 //! - [`PipelineConfig`] — Mutable per-namespace pipeline configuration
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::sync::Arc;
 
 /// A validated namespace slug (DNS-safe identifier).
 ///
@@ -176,6 +178,80 @@ impl Default for PipelineConfig {
         }
     }
 }
+
+/// An item in the namespace listing.
+///
+/// Contains the slug and creation timestamp plus optional stats fields.
+/// The `entity_count` and `document_count` are always `None` from the
+/// registry layer -- they are enriched by the API handler using
+/// namespace-scoped `get_graph_stats`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NamespaceListItem {
+    /// The namespace slug.
+    pub slug: String,
+    /// Creation timestamp (epoch milliseconds).
+    pub created_at: i64,
+    /// Number of entities in this namespace (populated by API layer, not registry).
+    pub entity_count: Option<u64>,
+    /// Number of documents in this namespace (populated by API layer, not registry).
+    pub document_count: Option<u64>,
+}
+
+/// Namespace registry errors.
+#[derive(Debug, thiserror::Error)]
+pub enum NamespaceRegistryError {
+    /// Namespace already exists.
+    #[error("Namespace already exists: {0}")]
+    AlreadyExists(String),
+    /// Namespace not found.
+    #[error("Namespace not found: {0}")]
+    NotFound(String),
+    /// Internal error (storage backend failure).
+    #[error("Registry error: {0}")]
+    Internal(String),
+}
+
+/// Trait for namespace registry operations.
+///
+/// Abstracts the DynamoDB-backed namespace registry so the API crate does
+/// not depend on `edgequake-storage-aws`. Concrete implementation lives in
+/// `edgequake_storage_aws::DynamoNamespaceRegistry`.
+#[async_trait]
+pub trait NamespaceRegistry: Send + Sync {
+    /// Create a new namespace.
+    ///
+    /// Returns `AlreadyExists` if the slug is taken.
+    async fn create_namespace(
+        &self,
+        slug: &NamespaceSlug,
+        description: Option<String>,
+    ) -> Result<NamespaceRecord, NamespaceRegistryError>;
+
+    /// List all namespaces.
+    async fn list_namespaces(&self) -> Result<Vec<NamespaceListItem>, NamespaceRegistryError>;
+
+    /// Describe a single namespace by slug.
+    async fn describe_namespace(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<Option<NamespaceRecord>, NamespaceRegistryError>;
+
+    /// Get the pipeline configuration for a namespace.
+    async fn get_config(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<Option<PipelineConfig>, NamespaceRegistryError>;
+
+    /// Update the pipeline configuration for an existing namespace.
+    async fn update_config(
+        &self,
+        slug: &NamespaceSlug,
+        config: &PipelineConfig,
+    ) -> Result<(), NamespaceRegistryError>;
+}
+
+/// Type alias for a shared namespace registry.
+pub type SharedNamespaceRegistry = Arc<dyn NamespaceRegistry>;
 
 #[cfg(test)]
 mod tests {
