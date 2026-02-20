@@ -2,6 +2,8 @@
 //!
 //! This is the main entry point for the EdgeQuake server.
 
+mod namespace_factory;
+
 use chrono::{Duration, Utc};
 use edgequake_api::{AppState, DocumentTaskProcessor, Server, ServerConfig, StorageMode};
 use edgequake_tasks::{
@@ -435,7 +437,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             table = %namespace_table,
             "Namespace registry configured (DynamoDB)"
         );
-        state.with_namespace_registry(std::sync::Arc::new(registry))
+
+        // Construct namespace storage factory for namespace-scoped data operations
+        let neptune_endpoint = std::env::var("NEPTUNE_ENDPOINT")
+            .unwrap_or_else(|_| "localhost:8182".to_string());
+        let vector_bucket = std::env::var("VECTOR_BUCKET")
+            .unwrap_or_else(|_| "edgequake-vectors".to_string());
+        let embedding_dim: usize = std::env::var("EMBEDDING_DIMENSION")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1536);
+        let kv_table = std::env::var("DYNAMODB_TABLE")
+            .unwrap_or_else(|_| "edgequake-kv".to_string());
+
+        let factory = namespace_factory::AwsNamespaceStorageFactory::new(
+            neptune_endpoint.clone(),
+            vector_bucket.clone(),
+            embedding_dim,
+            kv_table.clone(),
+        );
+        info!(
+            neptune_endpoint = %neptune_endpoint,
+            vector_bucket = %vector_bucket,
+            embedding_dim = embedding_dim,
+            kv_table = %kv_table,
+            "Namespace storage factory configured (AWS)"
+        );
+
+        state
+            .with_namespace_registry(std::sync::Arc::new(registry))
+            .with_namespace_storage_factory(std::sync::Arc::new(factory))
     };
 
     // Initialize default tenant and workspace for non-authenticated mode

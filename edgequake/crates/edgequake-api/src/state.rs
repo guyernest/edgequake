@@ -181,7 +181,7 @@ pub trait NamespaceStorageFactory: Send + Sync {
     ///
     /// The implementation should configure each backend for the namespace:
     /// - Graph: label-prefix set to namespace slug
-    /// - Vector: index name set to `{namespace}-chunks`
+    /// - Vector: index name set to `{namespace}-embeddings`
     /// - KV: namespace set for composite key isolation
     async fn create_storage(
         &self,
