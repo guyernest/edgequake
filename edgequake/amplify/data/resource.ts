@@ -277,6 +277,14 @@ const schema = a.schema({
         entry: './resolvers/approve-schema-write.js',
         dataSource: 'NamespaceTableDataSource',
       }),
+      a.handler.custom({
+        entry: './resolvers/approve-schema-config.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/approve-schema-config-write.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
     ]),
 
   rejectSchema: a
