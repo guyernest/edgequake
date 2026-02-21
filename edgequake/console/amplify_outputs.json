@@ -1,0 +1,16 @@
+{
+  "$schema": "https://docs.amplify.aws/cli/project/schema.json",
+  "version": "1.4",
+  "auth": {
+    "user_pool_id": "PLACEHOLDER_USER_POOL_ID",
+    "user_pool_client_id": "PLACEHOLDER_CLIENT_ID",
+    "identity_pool_id": "PLACEHOLDER_IDENTITY_POOL_ID",
+    "aws_region": "us-east-1"
+  },
+  "data": {
+    "url": "https://placeholder.appsync-api.us-east-1.amazonaws.com/graphql",
+    "aws_region": "us-east-1",
+    "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
+    "authorization_types": ["AWS_IAM"]
+  }
+}
