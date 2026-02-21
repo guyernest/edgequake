@@ -1,9 +1,11 @@
 /**
- * AppSync JS pipeline resolver (step 1 of 2): triggerIngestion - Read/Validate
+ * AppSync JS pipeline resolver (step 2 of 3): triggerIngestion - Read/Validate
  *
  * Gets the LATEST_RUN record for a namespace to check if a pipeline run
- * is currently active. If active, returns a ConflictError.
- * If idle/completed/failed/null, prepares a run request for step 2 to write.
+ * is currently active (concurrent run guard). If active, returns a ConflictError.
+ * If idle/completed/failed/null, prepares a run request for step 3 to write.
+ *
+ * Step 1 (schema gate) has already verified an approved schema exists.
  */
 import { util } from '@aws-appsync/utils';
 

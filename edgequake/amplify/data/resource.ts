@@ -240,6 +240,10 @@ const schema = a.schema({
     .authorization((allow) => [allow.authenticated()])
     .handler([
       a.handler.custom({
+        entry: './resolvers/trigger-ingestion-schema-gate.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
         entry: './resolvers/trigger-ingestion.js',
         dataSource: 'NamespaceTableDataSource',
       }),

@@ -42,6 +42,10 @@ const STATUS_CONFIG: Record<
     label: 'Completed',
     className: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800',
   },
+  completed_with_warnings: {
+    label: 'Completed with warnings',
+    className: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800',
+  },
   failed: {
     label: 'Error',
     className: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-800',
