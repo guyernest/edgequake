@@ -27,6 +27,7 @@ use crate::context::{QueryContext, RetrievedChunk, RetrievedEntity, RetrievedRel
 use crate::error::{QueryError, Result};
 use crate::keywords::KeywordExtractor;
 use crate::modes::QueryMode;
+use crate::retrieval_mode::RetrievalMode;
 use crate::tokenizer::{SimpleTokenizer, Tokenizer};
 use crate::truncation::{balance_context, TruncationConfig};
 
@@ -131,6 +132,13 @@ pub struct QueryRequest {
     /// Override: enable or disable chunk content hydration from KV storage.
     #[serde(default)]
     pub enable_chunk_content: Option<bool>,
+
+    /// Retrieval ranking mode: vector (default), bm25, or hybrid.
+    /// Per user decision: vector-only remains default for backward compatibility.
+    /// BM25 and hybrid are opt-in.
+    /// @implements RET-02, RET-03
+    #[serde(default)]
+    pub retrieval_mode: Option<RetrievalMode>,
 }
 
 /// A single message in conversation history.
@@ -159,6 +167,7 @@ impl QueryRequest {
             llm_provider: None,
             llm_model: None,
             enable_chunk_content: None,
+            retrieval_mode: None,
         }
     }
 
@@ -263,6 +272,13 @@ impl QueryRequest {
     /// Override chunk content hydration for this request.
     pub fn with_chunk_content(mut self, enable: bool) -> Self {
         self.enable_chunk_content = Some(enable);
+        self
+    }
+
+    /// Set the retrieval ranking mode (vector, bm25, or hybrid).
+    /// @implements RET-02, RET-03
+    pub fn with_retrieval_mode(mut self, mode: RetrievalMode) -> Self {
+        self.retrieval_mode = Some(mode);
         self
     }
 }

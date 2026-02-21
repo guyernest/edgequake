@@ -91,7 +91,7 @@ use crate::vector_filter::{filter_by_type, VectorType};
 
 use edgequake_llm::traits::{EmbeddingProvider, LLMProvider};
 use edgequake_llm::Reranker;
-use edgequake_storage::traits::{GraphStorage, KVStorage, VectorStorage};
+use edgequake_storage::traits::{Bm25Storage, GraphStorage, KVStorage, VectorStorage};
 
 /// Configuration for the SOTA query engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -264,6 +264,8 @@ pub struct SOTAQueryEngine {
     reranker: Option<Arc<dyn Reranker>>,
     /// Optional KV storage for chunk content hydration.
     kv_storage: Option<Arc<dyn KVStorage>>,
+    /// Optional BM25 storage for keyword search (BM25/hybrid retrieval modes).
+    bm25_storage: Option<Arc<dyn Bm25Storage>>,
     /// Cache for keyword validation (keyword -> exists_in_graph).
     /// WHY: Avoids repeated graph lookups for the same keywords.
     keyword_validation_cache: Arc<tokio::sync::RwLock<std::collections::HashMap<String, bool>>>,
@@ -297,6 +299,7 @@ impl SOTAQueryEngine {
             tokenizer: Arc::new(SimpleTokenizer),
             reranker: None,
             kv_storage: None,
+            bm25_storage: None,
             keyword_validation_cache: Arc::new(tokio::sync::RwLock::new(
                 std::collections::HashMap::new(),
             )),
@@ -312,6 +315,13 @@ impl SOTAQueryEngine {
     /// Set KV storage for chunk content hydration.
     pub fn with_kv_storage(mut self, kv: Arc<dyn KVStorage>) -> Self {
         self.kv_storage = Some(kv);
+        self
+    }
+
+    /// Set BM25 storage for keyword search (enables BM25 and hybrid retrieval modes).
+    /// @implements RET-02, RET-03
+    pub fn with_bm25_storage(mut self, bm25: Arc<dyn Bm25Storage>) -> Self {
+        self.bm25_storage = Some(bm25);
         self
     }
 
@@ -335,6 +345,7 @@ impl SOTAQueryEngine {
             tokenizer: Arc::new(SimpleTokenizer),
             reranker: None,
             kv_storage: None,
+            bm25_storage: None,
             keyword_validation_cache: Arc::new(tokio::sync::RwLock::new(
                 std::collections::HashMap::new(),
             )),
@@ -676,55 +687,99 @@ impl SOTAQueryEngine {
 
         tracing::debug!(mode = %mode, "Selected query mode");
 
-        // Step 3: Compute embeddings
+        // Determine effective retrieval mode (vector is default for backward compatibility)
+        let retrieval_mode = request
+            .retrieval_mode
+            .unwrap_or(crate::retrieval_mode::RetrievalMode::Vector);
+        tracing::debug!(retrieval_mode = %retrieval_mode, "Selected retrieval mode");
+
+        // Step 3: Compute embeddings (skip if BM25-only -- no embeddings needed)
         let embed_start = std::time::Instant::now();
-        let embeddings =
-            QueryEmbeddings::compute(&request.query, &keywords, self.embedding_provider.as_ref())
-                .await?;
+        let embeddings = if retrieval_mode.uses_vector() {
+            QueryEmbeddings::compute(
+                &request.query,
+                &keywords,
+                self.embedding_provider.as_ref(),
+            )
+            .await?
+        } else {
+            // BM25-only: still need a dummy embedding for the match arms
+            // but the vector search won't be called
+            QueryEmbeddings::uniform(vec![])
+        };
         stats.embedding_time_ms += embed_start.elapsed().as_millis() as u64;
 
-        // Step 4: Mode-specific retrieval
+        // Step 4: Mode-specific retrieval + retrieval mode dispatch
         let retrieval_start = std::time::Instant::now();
-        let context = match mode {
-            QueryMode::Local => {
-                self.query_local(
+        let context = match retrieval_mode {
+            crate::retrieval_mode::RetrievalMode::Vector => {
+                // Existing vector-only path -- no changes
+                match mode {
+                    QueryMode::Local => {
+                        self.query_local(
+                            &keywords,
+                            &embeddings,
+                            request.tenant_id(),
+                            request.workspace_id(),
+                        )
+                        .await?
+                    }
+                    QueryMode::Global => {
+                        self.query_global(
+                            &keywords,
+                            &embeddings,
+                            request.tenant_id(),
+                            request.workspace_id(),
+                        )
+                        .await?
+                    }
+                    QueryMode::Hybrid => {
+                        self.query_hybrid(
+                            &keywords,
+                            &embeddings,
+                            request.tenant_id(),
+                            request.workspace_id(),
+                        )
+                        .await?
+                    }
+                    QueryMode::Mix => {
+                        self.query_mix(
+                            &keywords,
+                            &embeddings,
+                            request.tenant_id(),
+                            request.workspace_id(),
+                        )
+                        .await?
+                    }
+                    QueryMode::Naive => {
+                        self.query_naive(&embeddings, request.tenant_id(), request.workspace_id())
+                            .await?
+                    }
+                }
+            }
+            crate::retrieval_mode::RetrievalMode::Bm25 => {
+                // BM25-only retrieval path
+                self.query_bm25_retrieval(
+                    &request.query,
                     &keywords,
                     &embeddings,
+                    mode,
                     request.tenant_id(),
                     request.workspace_id(),
                 )
                 .await?
             }
-            QueryMode::Global => {
-                self.query_global(
+            crate::retrieval_mode::RetrievalMode::Hybrid => {
+                // Hybrid: fuse BM25 + vector results via RRF
+                self.query_hybrid_retrieval(
+                    &request.query,
                     &keywords,
                     &embeddings,
+                    mode,
                     request.tenant_id(),
                     request.workspace_id(),
                 )
                 .await?
-            }
-            QueryMode::Hybrid => {
-                self.query_hybrid(
-                    &keywords,
-                    &embeddings,
-                    request.tenant_id(),
-                    request.workspace_id(),
-                )
-                .await?
-            }
-            QueryMode::Mix => {
-                self.query_mix(
-                    &keywords,
-                    &embeddings,
-                    request.tenant_id(),
-                    request.workspace_id(),
-                )
-                .await?
-            }
-            QueryMode::Naive => {
-                self.query_naive(&embeddings, request.tenant_id(), request.workspace_id())
-                    .await?
             }
         };
         stats.retrieval_time_ms = retrieval_start.elapsed().as_millis() as u64;
@@ -867,55 +922,89 @@ impl SOTAQueryEngine {
 
         tracing::debug!(mode = %mode, "Selected query mode (workspace embedding)");
 
+        // Determine effective retrieval mode
+        let retrieval_mode = request
+            .retrieval_mode
+            .unwrap_or(crate::retrieval_mode::RetrievalMode::Vector);
+
         // Step 3: Compute embeddings using WORKSPACE-SPECIFIC provider
         let embed_start = std::time::Instant::now();
-        let embeddings =
+        let embeddings = if retrieval_mode.uses_vector() {
             QueryEmbeddings::compute(&request.query, &keywords, embedding_provider.as_ref())
-                .await?;
+                .await?
+        } else {
+            QueryEmbeddings::uniform(vec![])
+        };
         stats.embedding_time_ms += embed_start.elapsed().as_millis() as u64;
 
-        // Step 4: Mode-specific retrieval (same as query method)
+        // Step 4: Mode-specific retrieval + retrieval mode dispatch
         let retrieval_start = std::time::Instant::now();
-        let context = match mode {
-            QueryMode::Local => {
-                self.query_local(
+        let context = match retrieval_mode {
+            crate::retrieval_mode::RetrievalMode::Vector => {
+                match mode {
+                    QueryMode::Local => {
+                        self.query_local(
+                            &keywords,
+                            &embeddings,
+                            request.tenant_id(),
+                            request.workspace_id(),
+                        )
+                        .await?
+                    }
+                    QueryMode::Global => {
+                        self.query_global(
+                            &keywords,
+                            &embeddings,
+                            request.tenant_id(),
+                            request.workspace_id(),
+                        )
+                        .await?
+                    }
+                    QueryMode::Hybrid => {
+                        self.query_hybrid(
+                            &keywords,
+                            &embeddings,
+                            request.tenant_id(),
+                            request.workspace_id(),
+                        )
+                        .await?
+                    }
+                    QueryMode::Mix => {
+                        self.query_mix(
+                            &keywords,
+                            &embeddings,
+                            request.tenant_id(),
+                            request.workspace_id(),
+                        )
+                        .await?
+                    }
+                    QueryMode::Naive => {
+                        self.query_naive(&embeddings, request.tenant_id(), request.workspace_id())
+                            .await?
+                    }
+                }
+            }
+            crate::retrieval_mode::RetrievalMode::Bm25 => {
+                self.query_bm25_retrieval(
+                    &request.query,
                     &keywords,
                     &embeddings,
+                    mode,
                     request.tenant_id(),
                     request.workspace_id(),
                 )
                 .await?
             }
-            QueryMode::Global => {
-                self.query_global(
+            crate::retrieval_mode::RetrievalMode::Hybrid => {
+                self.query_hybrid_retrieval(
+                    &request.query,
                     &keywords,
                     &embeddings,
+                    mode,
                     request.tenant_id(),
                     request.workspace_id(),
                 )
                 .await?
-            }
-            QueryMode::Hybrid => {
-                self.query_hybrid(
-                    &keywords,
-                    &embeddings,
-                    request.tenant_id(),
-                    request.workspace_id(),
-                )
-                .await?
-            }
-            QueryMode::Mix => {
-                self.query_mix(
-                    &keywords,
-                    &embeddings,
-                    request.tenant_id(),
-                    request.workspace_id(),
-                )
-                .await?
-            }
-            QueryMode::Naive => {
-                self.query_naive(&embeddings, request.tenant_id(), request.workspace_id())
-                    .await?
             }
         };
         stats.retrieval_time_ms = retrieval_start.elapsed().as_millis() as u64;
@@ -2804,6 +2893,307 @@ impl SOTAQueryEngine {
                 context.add_chunk(build_chunk_from_result(result));
             }
         }
+
+        Ok(context)
+    }
+
+    /// BM25-only retrieval mode.
+    ///
+    /// Uses BM25 keyword search instead of vector similarity for chunk retrieval.
+    /// Graph-based retrieval (entities, relationships) still uses the QueryMode
+    /// dispatch if BM25 storage is available. Falls back to vector-only retrieval
+    /// if BM25 storage is not configured.
+    ///
+    /// @implements RET-02
+    async fn query_bm25_retrieval(
+        &self,
+        query_text: &str,
+        keywords: &ExtractedKeywords,
+        embeddings: &QueryEmbeddings,
+        mode: QueryMode,
+        tenant_id: Option<String>,
+        workspace_id: Option<String>,
+    ) -> Result<QueryContext> {
+        let bm25 = match &self.bm25_storage {
+            Some(bm25) => bm25,
+            None => {
+                tracing::warn!(
+                    "BM25 retrieval requested but BM25 storage not configured, falling back to vector"
+                );
+                return match mode {
+                    QueryMode::Local => {
+                        self.query_local(keywords, embeddings, tenant_id, workspace_id)
+                            .await
+                    }
+                    QueryMode::Global => {
+                        self.query_global(keywords, embeddings, tenant_id, workspace_id)
+                            .await
+                    }
+                    QueryMode::Hybrid => {
+                        self.query_hybrid(keywords, embeddings, tenant_id, workspace_id)
+                            .await
+                    }
+                    QueryMode::Mix => {
+                        self.query_mix(keywords, embeddings, tenant_id, workspace_id)
+                            .await
+                    }
+                    QueryMode::Naive => {
+                        self.query_naive(embeddings, tenant_id, workspace_id).await
+                    }
+                };
+            }
+        };
+
+        // Get BM25-ranked doc_ids
+        let bm25_doc_ids = crate::bm25_scorer::Bm25QueryCoordinator::query_bm25(
+            bm25.as_ref(),
+            query_text,
+            self.config.max_chunks,
+        )
+        .await?;
+
+        tracing::debug!(
+            bm25_results = bm25_doc_ids.len(),
+            "BM25-only retrieval results"
+        );
+
+        // Build context from BM25 results
+        let mut context = QueryContext::new();
+
+        // Hydrate BM25 doc_ids into chunks via KV storage
+        if let Some(ref kv) = self.kv_storage {
+            for (rank, doc_id) in bm25_doc_ids.iter().enumerate() {
+                // Use rank-based score (normalized to 0-1 range for display)
+                let score = 1.0 / (1.0 + rank as f32);
+                let kv_key = format!("chunk:{}", doc_id);
+                if let Ok(Some(val)) = kv.get_by_id(&kv_key).await {
+                    let content_str = val
+                        .get("content")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    context.add_chunk(crate::context::RetrievedChunk::new(
+                        doc_id,
+                        content_str,
+                        score,
+                    ));
+                } else {
+                    // No content in KV -- still add with empty content for ID tracking
+                    context.add_chunk(crate::context::RetrievedChunk::new(doc_id, "", score));
+                }
+            }
+        } else {
+            // No KV storage -- add chunks with IDs only
+            for (rank, doc_id) in bm25_doc_ids.iter().enumerate() {
+                let score = 1.0 / (1.0 + rank as f32);
+                context.add_chunk(crate::context::RetrievedChunk::new(doc_id, "", score));
+            }
+        }
+
+        // If graph mode requested, also fetch graph context
+        if mode.uses_graph() && !embeddings.query.is_empty() {
+            let graph_context = match mode {
+                QueryMode::Local => {
+                    self.query_local(keywords, embeddings, tenant_id, workspace_id)
+                        .await?
+                }
+                QueryMode::Global => {
+                    self.query_global(keywords, embeddings, tenant_id, workspace_id)
+                        .await?
+                }
+                QueryMode::Hybrid => {
+                    self.query_hybrid(keywords, embeddings, tenant_id, workspace_id)
+                        .await?
+                }
+                QueryMode::Mix => {
+                    self.query_mix(keywords, embeddings, tenant_id, workspace_id)
+                        .await?
+                }
+                _ => QueryContext::new(),
+            };
+            // Merge graph context (entities and relationships only)
+            for entity in graph_context.entities {
+                context.add_entity(entity);
+            }
+            for rel in graph_context.relationships {
+                context.add_relationship(rel);
+            }
+        }
+
+        Ok(context)
+    }
+
+    /// Hybrid retrieval mode: fuse BM25 and vector results via RRF.
+    ///
+    /// Runs both BM25 keyword search and vector similarity search,
+    /// then fuses the ranked results using Reciprocal Rank Fusion (RRF).
+    /// Falls back to vector-only if BM25 storage is not configured.
+    ///
+    /// @implements RET-03
+    async fn query_hybrid_retrieval(
+        &self,
+        query_text: &str,
+        keywords: &ExtractedKeywords,
+        embeddings: &QueryEmbeddings,
+        mode: QueryMode,
+        tenant_id: Option<String>,
+        workspace_id: Option<String>,
+    ) -> Result<QueryContext> {
+        let bm25 = match &self.bm25_storage {
+            Some(bm25) => bm25,
+            None => {
+                tracing::warn!(
+                    "Hybrid retrieval requested but BM25 storage not configured, falling back to vector"
+                );
+                return match mode {
+                    QueryMode::Local => {
+                        self.query_local(keywords, embeddings, tenant_id, workspace_id)
+                            .await
+                    }
+                    QueryMode::Global => {
+                        self.query_global(keywords, embeddings, tenant_id, workspace_id)
+                            .await
+                    }
+                    QueryMode::Hybrid => {
+                        self.query_hybrid(keywords, embeddings, tenant_id, workspace_id)
+                            .await
+                    }
+                    QueryMode::Mix => {
+                        self.query_mix(keywords, embeddings, tenant_id, workspace_id)
+                            .await
+                    }
+                    QueryMode::Naive => {
+                        self.query_naive(embeddings, tenant_id, workspace_id).await
+                    }
+                };
+            }
+        };
+
+        // 1. Get BM25 ranked doc_ids
+        let bm25_ranked = crate::bm25_scorer::Bm25QueryCoordinator::query_bm25(
+            bm25.as_ref(),
+            query_text,
+            self.config.max_chunks,
+        )
+        .await?;
+
+        // 2. Get vector results via the existing mode-specific retrieval
+        let vector_context = match mode {
+            QueryMode::Local => {
+                self.query_local(
+                    keywords,
+                    embeddings,
+                    tenant_id.clone(),
+                    workspace_id.clone(),
+                )
+                .await?
+            }
+            QueryMode::Global => {
+                self.query_global(
+                    keywords,
+                    embeddings,
+                    tenant_id.clone(),
+                    workspace_id.clone(),
+                )
+                .await?
+            }
+            QueryMode::Hybrid => {
+                self.query_hybrid(
+                    keywords,
+                    embeddings,
+                    tenant_id.clone(),
+                    workspace_id.clone(),
+                )
+                .await?
+            }
+            QueryMode::Mix => {
+                self.query_mix(
+                    keywords,
+                    embeddings,
+                    tenant_id.clone(),
+                    workspace_id.clone(),
+                )
+                .await?
+            }
+            QueryMode::Naive => {
+                self.query_naive(embeddings, tenant_id.clone(), workspace_id.clone())
+                    .await?
+            }
+        };
+
+        // Extract vector-ranked chunk IDs (preserving original order)
+        let vector_ranked: Vec<String> =
+            vector_context.chunks.iter().map(|c| c.id.clone()).collect();
+
+        tracing::debug!(
+            bm25_results = bm25_ranked.len(),
+            vector_results = vector_ranked.len(),
+            "Hybrid retrieval: fusing BM25 and vector results via RRF"
+        );
+
+        // 3. Fuse with RRF
+        let fused = crate::bm25_scorer::reciprocal_rank_fusion(
+            &bm25_ranked,
+            &vector_ranked,
+            crate::bm25_scorer::DEFAULT_RRF_K,
+            self.config.max_chunks,
+        );
+
+        // Build a map of existing chunk content from vector results
+        let chunk_content: HashMap<String, crate::context::RetrievedChunk> = vector_context
+            .chunks
+            .into_iter()
+            .map(|c| (c.id.clone(), c))
+            .collect();
+
+        // 4. Build final context with fused ranking
+        let mut context = QueryContext::new();
+
+        // Preserve entities and relationships from the vector/graph context
+        for entity in vector_context.entities {
+            context.add_entity(entity);
+        }
+        for rel in vector_context.relationships {
+            context.add_relationship(rel);
+        }
+
+        for (doc_id, rrf_score) in &fused {
+            if let Some(chunk) = chunk_content.get(doc_id) {
+                // Chunk exists in vector results -- use its content but update score
+                let mut reranked_chunk = chunk.clone();
+                reranked_chunk.score = *rrf_score as f32;
+                context.add_chunk(reranked_chunk);
+            } else {
+                // BM25-only result -- hydrate from KV storage
+                let score = *rrf_score as f32;
+                if let Some(ref kv) = self.kv_storage {
+                    let kv_key = format!("chunk:{}", doc_id);
+                    if let Ok(Some(val)) = kv.get_by_id(&kv_key).await {
+                        let content_str = val
+                            .get("content")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        context.add_chunk(crate::context::RetrievedChunk::new(
+                            doc_id,
+                            content_str,
+                            score,
+                        ));
+                    } else {
+                        context.add_chunk(crate::context::RetrievedChunk::new(doc_id, "", score));
+                    }
+                } else {
+                    context.add_chunk(crate::context::RetrievedChunk::new(doc_id, "", score));
+                }
+            }
+        }
+
+        tracing::debug!(
+            fused_chunks = context.chunks.len(),
+            entities = context.entities.len(),
+            relationships = context.relationships.len(),
+            "Hybrid retrieval: RRF fusion complete"
+        );
 
         Ok(context)
     }
