@@ -1,0 +1,54 @@
+[package]
+name = "edgequake-schema"
+description = "Schema suggestion via LLM-based document sampling and analysis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Workspace crates
+edgequake-core = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["full"] }
+async-trait = { workspace = true }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# Random sampling
+rand = { workspace = true }
+
+# OpenAI API
+async-openai = { workspace = true }
+
+# Parquet reading
+parquet = { version = "53.2", features = ["async"] }
+arrow = { version = "53.2" }
+
+# AWS SDK (for S3 dataset access)
+aws-config = "1.5"
+aws-sdk-s3 = "1"
+
+# Temp files (for S3 parquet download)
+tempfile = "3.13"
+
+# Glob for local parquet discovery
+glob = "0.3"
+
+[dev-dependencies]
+tokio-test = { workspace = true }

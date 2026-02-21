@@ -45,6 +45,7 @@ pub mod mcp_descriptor;
 pub mod namespace;
 #[cfg(feature = "pipeline")]
 pub mod orchestrator;
+pub mod schema;
 pub mod query;
 #[cfg(feature = "pipeline")]
 pub mod tenant_manager;
@@ -96,6 +97,9 @@ pub use namespace::{
     NamespaceListItem, NamespaceRecord, NamespaceRegistry, NamespaceRegistryError, NamespaceSlug,
     PipelineConfig, SharedNamespaceRegistry,
 };
+
+// Re-export schema proposal types
+pub use schema::{EntityTypeProposal, RelationTypeProposal, SchemaProposal, SchemaStatus};
 
 // Re-export MCP descriptor types
 pub use mcp_descriptor::{
