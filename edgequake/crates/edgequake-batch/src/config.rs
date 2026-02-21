@@ -68,6 +68,18 @@ pub struct BatchConfig {
 
     /// Initial retry delay in seconds (doubles with each attempt).
     pub retry_delay_secs: u64,
+
+    /// Athena database for BM25 index (optional -- when set, BM25 indexing is enabled).
+    pub athena_bm25_database: Option<String>,
+
+    /// S3 bucket for BM25 Iceberg table data (required when athena_bm25_database is set).
+    pub bm25_s3_bucket: Option<String>,
+
+    /// Athena workgroup for BM25 queries.
+    pub athena_workgroup: String,
+
+    /// S3 location for Athena query results (required when athena_bm25_database is set).
+    pub athena_output_location: Option<String>,
 }
 
 impl BatchConfig {

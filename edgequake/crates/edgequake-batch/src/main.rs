@@ -83,6 +83,10 @@ async fn main() -> anyhow::Result<()> {
         offset: cli.offset,
         max_retries: cli.max_retries,
         retry_delay_secs: cli.retry_delay_secs,
+        athena_bm25_database: cli.athena_bm25_database.clone(),
+        bm25_s3_bucket: cli.bm25_s3_bucket.clone(),
+        athena_workgroup: cli.athena_workgroup.clone(),
+        athena_output_location: cli.athena_output_location.clone(),
     };
 
     // Create work directory
@@ -235,12 +239,13 @@ async fn main() -> anyhow::Result<()> {
 
             // Run store to persist to Neptune/S3/DynamoDB/BM25
             let (vectors, kv) = create_storage_backends(&config).await?;
+            let bm25 = create_bm25_storage(&config).await?;
             stages::store::run_store(
                 &config,
                 &aws_config,
                 vectors,
                 kv,
-                None, // BM25 storage wired when Athena is configured
+                bm25,
                 &state_mgr,
                 &mut job,
                 &prepare_result.documents,
@@ -359,12 +364,13 @@ async fn run_full_pipeline(
 
     // Phase 4: Store
     let (vectors, kv) = create_storage_backends(config).await?;
+    let bm25 = create_bm25_storage(config).await?;
     stages::store::run_store(
         config,
         aws_config,
         vectors,
         kv,
-        None, // BM25 storage wired when Athena is configured
+        bm25,
         state_mgr,
         job,
         &prepare_result.documents,
@@ -438,6 +444,61 @@ async fn create_storage_backends(
     );
 
     Ok((vectors, kv))
+}
+
+/// Create BM25 storage backend if Athena BM25 configuration is present.
+///
+/// Returns None when env vars are absent -- BM25 indexing is skipped.
+/// Returns Some when ATHENA_BM25_DATABASE is set.
+async fn create_bm25_storage(
+    config: &BatchConfig,
+) -> anyhow::Result<Option<std::sync::Arc<dyn edgequake_storage::Bm25Storage>>> {
+    let Some(ref database) = config.athena_bm25_database else {
+        info!("ATHENA_BM25_DATABASE not set, BM25 indexing disabled");
+        return Ok(None);
+    };
+
+    let bm25_bucket = config.bm25_s3_bucket.as_ref().ok_or_else(|| {
+        anyhow::anyhow!("BM25_S3_BUCKET is required when ATHENA_BM25_DATABASE is set")
+    })?;
+
+    let output_location = config.athena_output_location.as_ref().ok_or_else(|| {
+        anyhow::anyhow!("ATHENA_OUTPUT_LOCATION is required when ATHENA_BM25_DATABASE is set")
+    })?;
+
+    // Create AthenaQueryEngine (reuses existing athena_sql module)
+    let athena_config = edgequake_storage_aws::AthenaConfig::new(
+        database.clone(),
+        output_location.clone(),
+    )
+    .with_workgroup(config.athena_workgroup.clone());
+
+    let athena_engine = edgequake_storage_aws::AthenaQueryEngine::new(athena_config).await?;
+
+    // Create S3 client for Parquet staging
+    let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    let s3_client = aws_sdk_s3::Client::new(&aws_config);
+
+    // Create AthenaBm25Config
+    let bm25_config = edgequake_storage_aws::AthenaBm25Config {
+        database: database.clone(),
+        s3_bucket: bm25_bucket.clone(),
+        s3_prefix: "bm25".to_string(),
+        workgroup: config.athena_workgroup.clone(),
+        output_location: output_location.clone(),
+    };
+
+    let bm25_storage = edgequake_storage_aws::AthenaBm25Storage::new(
+        bm25_config,
+        config.namespace.clone(),
+        std::sync::Arc::new(athena_engine),
+        s3_client,
+    );
+
+    info!(database = %database, bucket = %bm25_bucket, "BM25 storage configured");
+    Ok(Some(
+        std::sync::Arc::new(bm25_storage) as std::sync::Arc<dyn edgequake_storage::Bm25Storage>
+    ))
 }
 
 /// Print job status to terminal.

@@ -109,6 +109,22 @@ pub struct Cli {
     #[arg(long, default_value = "60", env = "BATCH_RETRY_DELAY")]
     pub retry_delay_secs: u64,
 
+    /// Athena database name for BM25 index (enables BM25 indexing when set)
+    #[arg(long, env = "ATHENA_BM25_DATABASE")]
+    pub athena_bm25_database: Option<String>,
+
+    /// S3 bucket for BM25 Iceberg table data
+    #[arg(long, env = "BM25_S3_BUCKET")]
+    pub bm25_s3_bucket: Option<String>,
+
+    /// Athena workgroup (should be v3 for Iceberg support)
+    #[arg(long, default_value = "primary", env = "ATHENA_WORKGROUP")]
+    pub athena_workgroup: String,
+
+    /// S3 location for Athena query results
+    #[arg(long, env = "ATHENA_OUTPUT_LOCATION")]
+    pub athena_output_location: Option<String>,
+
     #[command(subcommand)]
     pub command: Command,
 }
