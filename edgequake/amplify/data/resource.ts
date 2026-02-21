@@ -69,6 +69,34 @@ const schema = a.schema({
     generated_at: a.integer().required(),
   }),
 
+  // --- Schema Proposal Types ---
+
+  SchemaEntityType: a.customType({
+    name: a.string().required(),
+    description: a.string().required(),
+    frequency: a.integer().required(),
+    is_baseline: a.boolean().required(),
+  }),
+
+  SchemaRelationType: a.customType({
+    name: a.string().required(),
+    description: a.string().required(),
+    source_type: a.string().required(),
+    target_type: a.string().required(),
+    frequency: a.integer().required(),
+  }),
+
+  SchemaProposal: a.customType({
+    status: a.string().required(),
+    entity_types: a.json().required(),
+    relation_types: a.json().required(),
+    sample_size: a.integer().required(),
+    total_documents: a.integer().required(),
+    domain_hint: a.string(),
+    proposed_at: a.integer().required(),
+    reviewed_at: a.integer(),
+  }),
+
   // --- Custom Queries (stubs for Phase 5 GraphQL API) ---
 
   getNamespace: a
@@ -121,6 +149,72 @@ const schema = a.schema({
         dataSource: 'NamespaceTableDataSource',
       })
     ),
+
+  // --- Schema Proposal Operations ---
+
+  getSchemaProposal: a
+    .query()
+    .arguments({ slug: a.string().required() })
+    .returns(a.ref('SchemaProposal'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(
+      a.handler.custom({
+        entry: './resolvers/get-schema-proposal.js',
+        dataSource: 'NamespaceTableDataSource',
+      })
+    ),
+
+  approveSchema: a
+    .mutation()
+    .arguments({ slug: a.string().required() })
+    .returns(a.ref('SchemaProposal'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler([
+      a.handler.custom({
+        entry: './resolvers/approve-schema.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/approve-schema-write.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+    ]),
+
+  rejectSchema: a
+    .mutation()
+    .arguments({ slug: a.string().required() })
+    .returns(a.ref('SchemaProposal'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler([
+      a.handler.custom({
+        entry: './resolvers/reject-schema.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/reject-schema-write.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+    ]),
+
+  updateSchemaTypes: a
+    .mutation()
+    .arguments({
+      slug: a.string().required(),
+      entity_types: a.json(),
+      relation_types: a.json(),
+    })
+    .returns(a.ref('SchemaProposal'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler([
+      a.handler.custom({
+        entry: './resolvers/update-schema-types.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/update-schema-types-write.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+    ]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
