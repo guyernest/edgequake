@@ -451,9 +451,11 @@ fn api_v1_routes() -> Router<AppState> {
 fn namespace_scoped_routes() -> Router<AppState> {
     Router::new()
         // Query (all 6 modes: naive, local, global, hybrid, mix, bypass)
-        .route("/query", post(handlers::execute_query))
-        .route("/query/stream", post(handlers::stream_query))
-        // Documents
+        // Uses namespace-aware handlers that extract {namespace} from path,
+        // resolve namespace-scoped storage, and construct a namespace-scoped query engine.
+        .route("/query", post(handlers::ns_execute_query))
+        .route("/query/stream", post(handlers::ns_stream_query))
+        // Documents (still using global handlers -- namespace scoping deferred to Phase 2)
         .route("/documents", post(handlers::upload_document))
         .route("/documents", get(handlers::list_documents))
         .route("/documents", delete(handlers::delete_all_documents))
@@ -472,21 +474,24 @@ fn namespace_scoped_routes() -> Router<AppState> {
             "/documents/{document_id}",
             delete(handlers::delete_document),
         )
-        // Chat
+        // Chat (still using global handlers -- namespace scoping deferred to Phase 2)
         .route("/chat/completions", post(handlers::chat_completion))
         .route(
             "/chat/completions/stream",
             post(handlers::chat_completion_stream),
         )
-        // Graph
-        .route("/graph", get(handlers::get_graph))
-        .route("/graph/stream", get(handlers::stream_graph))
-        .route("/graph/nodes/{node_id}", get(handlers::get_node))
-        .route("/graph/nodes/search", get(handlers::search_nodes))
-        .route("/graph/labels/search", get(handlers::search_labels))
-        .route("/graph/labels/popular", get(handlers::get_popular_labels))
-        .route("/graph/degrees/batch", post(handlers::get_degrees_batch))
-        // Entities
+        // Graph (namespace-aware handlers)
+        .route("/graph", get(handlers::ns_get_graph))
+        .route("/graph/stream", get(handlers::ns_stream_graph))
+        .route("/graph/nodes/{node_id}", get(handlers::ns_get_node))
+        .route("/graph/nodes/search", get(handlers::ns_search_nodes))
+        .route("/graph/labels/search", get(handlers::ns_search_labels))
+        .route("/graph/labels/popular", get(handlers::ns_get_popular_labels))
+        .route("/graph/degrees/batch", post(handlers::ns_get_degrees_batch))
+        // Entities (using global handlers -- namespace-aware entity handlers deferred)
+        // NOTE: Entity operations through this route still use global storage.
+        // Full namespace-scoped entity handlers will be added when document
+        // namespace scoping is implemented (Phase 2).
         .route(
             "/graph/entities",
             get(handlers::list_entities).post(handlers::create_entity),
@@ -506,7 +511,7 @@ fn namespace_scoped_routes() -> Router<AppState> {
             "/graph/entities/{entity_name}/neighborhood",
             get(handlers::get_entity_neighborhood),
         )
-        // Relationships
+        // Relationships (using global handlers -- namespace-aware relationship handlers deferred)
         .route(
             "/graph/relationships",
             get(handlers::list_relationships).post(handlers::create_relationship),
