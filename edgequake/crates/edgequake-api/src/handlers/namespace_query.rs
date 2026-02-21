@@ -15,7 +15,7 @@ use axum::{
 };
 use futures::StreamExt;
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use edgequake_core::NamespaceSlug;
 use edgequake_query::{QueryMode, QueryRequest as EngineQueryRequest, SOTAQueryConfig, SOTAQueryEngine};
@@ -39,7 +39,7 @@ async fn resolve_ns_engine(
     // Construct a namespace-scoped SOTAQueryEngine sharing the global LLM
     // and embedding providers. The engine is lightweight (config + Arc refs);
     // the expensive AWS clients are already shared through storage instances.
-    let engine = SOTAQueryEngine::new(
+    let mut engine = SOTAQueryEngine::new(
         SOTAQueryConfig::default(),
         ns_storage.vector_storage.clone(),
         ns_storage.graph_storage.clone(),
@@ -47,6 +47,23 @@ async fn resolve_ns_engine(
         state.llm_provider.clone(),
     )
     .with_kv_storage(ns_storage.kv_storage.clone());
+
+    // Inject BM25 storage if a factory is configured (enables hybrid/BM25 retrieval modes).
+    // When the factory is None, queries fall back to vector-only (backward compatible).
+    if let Some(ref bm25_factory) = state.bm25_storage_factory {
+        match bm25_factory.create_bm25_storage(namespace).await {
+            Ok(bm25_storage) => {
+                engine = engine.with_bm25_storage(bm25_storage);
+            }
+            Err(e) => {
+                warn!(
+                    namespace = %namespace,
+                    error = %e,
+                    "Failed to create BM25 storage, falling back to vector-only retrieval"
+                );
+            }
+        }
+    }
 
     Ok(Arc::new(engine))
 }

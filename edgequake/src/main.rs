@@ -480,9 +480,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Namespace storage factory configured (AWS)"
         );
 
-        state
+        let state = state
             .with_namespace_registry(std::sync::Arc::new(registry))
-            .with_namespace_storage_factory(std::sync::Arc::new(factory))
+            .with_namespace_storage_factory(std::sync::Arc::new(factory));
+
+        // Construct BM25 storage factory if Athena BM25 env vars are set.
+        // When ATHENA_BM25_DATABASE is present, hybrid/BM25 retrieval modes are
+        // enabled. When absent, queries fall back to vector-only (backward compatible).
+        if let Ok(athena_bm25_database) = std::env::var("ATHENA_BM25_DATABASE") {
+            let bm25_s3_bucket = std::env::var("BM25_S3_BUCKET")
+                .expect("BM25_S3_BUCKET required when ATHENA_BM25_DATABASE is set");
+            let athena_workgroup = std::env::var("ATHENA_WORKGROUP")
+                .unwrap_or_else(|_| "primary".to_string());
+            let athena_output_location = std::env::var("ATHENA_OUTPUT_LOCATION")
+                .expect("ATHENA_OUTPUT_LOCATION required when ATHENA_BM25_DATABASE is set");
+
+            let bm25_factory = namespace_factory::AwsBm25StorageFactory::new(
+                athena_bm25_database.clone(),
+                bm25_s3_bucket.clone(),
+                athena_workgroup.clone(),
+                athena_output_location.clone(),
+            );
+            info!(
+                database = %athena_bm25_database,
+                s3_bucket = %bm25_s3_bucket,
+                workgroup = %athena_workgroup,
+                "BM25 storage factory configured (Athena/Iceberg)"
+            );
+            state.with_bm25_storage_factory(std::sync::Arc::new(bm25_factory))
+        } else {
+            info!("ATHENA_BM25_DATABASE not set, BM25/hybrid retrieval disabled");
+            state
+        }
     };
 
     // Initialize default tenant and workspace for non-authenticated mode

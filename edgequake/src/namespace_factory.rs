@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use edgequake_api::state::{NamespaceStorageFactory, NamespaceStorageSet};
+use edgequake_api::state::{Bm25StorageFactory, NamespaceStorageFactory, NamespaceStorageSet};
 use edgequake_storage::traits::VectorStorage;
 use edgequake_storage_aws::{
     DynamoKVConfig, DynamoKVStorage, NeptuneConfig, NeptuneGraphStorage, S3VectorsConfig,
@@ -105,5 +105,100 @@ impl NamespaceStorageFactory for AwsNamespaceStorageFactory {
             vector_storage: Arc::new(vector_storage),
             kv_storage: Arc::new(kv_storage),
         })
+    }
+}
+
+/// Factory for creating namespace-scoped BM25 storage instances using Athena.
+///
+/// Holds the base Athena/S3 configuration. When `create_bm25_storage` is called
+/// with a namespace slug, it creates an `AthenaBm25Storage` configured for that
+/// namespace's Iceberg tables ({ns}_postings, {ns}_docs, etc.).
+pub struct AwsBm25StorageFactory {
+    /// Athena/Glue database name for BM25 index tables.
+    database: String,
+    /// S3 bucket for BM25 Iceberg table data.
+    s3_bucket: String,
+    /// Athena workgroup (should be v3 for Iceberg support).
+    workgroup: String,
+    /// S3 location for Athena query results.
+    output_location: String,
+}
+
+impl AwsBm25StorageFactory {
+    /// Create a new BM25 storage factory.
+    ///
+    /// # Arguments
+    ///
+    /// * `database` - Athena/Glue database name
+    /// * `s3_bucket` - S3 bucket for Iceberg table data
+    /// * `workgroup` - Athena workgroup (typically "primary" or a v3 workgroup)
+    /// * `output_location` - S3 path for Athena query results
+    pub fn new(
+        database: String,
+        s3_bucket: String,
+        workgroup: String,
+        output_location: String,
+    ) -> Self {
+        Self {
+            database,
+            s3_bucket,
+            workgroup,
+            output_location,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Bm25StorageFactory for AwsBm25StorageFactory {
+    async fn create_bm25_storage(
+        &self,
+        namespace: &str,
+    ) -> Result<Arc<dyn edgequake_storage::Bm25Storage>, Box<dyn std::error::Error + Send + Sync>>
+    {
+        info!(
+            namespace = %namespace,
+            database = %self.database,
+            s3_bucket = %self.s3_bucket,
+            "Creating namespace-scoped BM25 storage"
+        );
+
+        // Create AthenaQueryEngine with database and output location
+        let athena_config = edgequake_storage_aws::AthenaConfig::new(
+            self.database.clone(),
+            self.output_location.clone(),
+        )
+        .with_workgroup(self.workgroup.clone());
+
+        let athena_engine = edgequake_storage_aws::AthenaQueryEngine::new(athena_config).await?;
+
+        // Create S3 client for Parquet staging
+        let aws_config = edgequake_storage_aws::aws_config::load_defaults(
+            edgequake_storage_aws::aws_config::BehaviorVersion::latest(),
+        )
+        .await;
+        let s3_client = edgequake_storage_aws::aws_sdk_s3::Client::new(&aws_config);
+
+        // Create AthenaBm25Config
+        let bm25_config = edgequake_storage_aws::AthenaBm25Config {
+            database: self.database.clone(),
+            s3_bucket: self.s3_bucket.clone(),
+            s3_prefix: "bm25".to_string(),
+            workgroup: self.workgroup.clone(),
+            output_location: self.output_location.clone(),
+        };
+
+        let bm25_storage = edgequake_storage_aws::AthenaBm25Storage::new(
+            bm25_config,
+            namespace.to_string(),
+            Arc::new(athena_engine),
+            s3_client,
+        );
+
+        info!(
+            namespace = %namespace,
+            "BM25 storage created successfully"
+        );
+
+        Ok(Arc::new(bm25_storage))
     }
 }

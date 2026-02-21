@@ -189,6 +189,27 @@ pub trait NamespaceStorageFactory: Send + Sync {
     ) -> Result<NamespaceStorageSet, Box<dyn std::error::Error + Send + Sync>>;
 }
 
+/// Factory for creating namespace-scoped BM25 storage instances.
+///
+/// This trait abstracts the construction of namespace-specific BM25 storage
+/// backends. The concrete implementation (in the binary crate) creates
+/// `AthenaBm25Storage` with namespace-specific Iceberg tables.
+///
+/// Follows the same pattern as `NamespaceStorageFactory` -- the API crate
+/// depends on the `Bm25Storage` trait from `edgequake-storage`, while the
+/// concrete AWS implementation lives in the binary crate.
+#[async_trait::async_trait]
+pub trait Bm25StorageFactory: Send + Sync {
+    /// Create a BM25 storage instance for the given namespace.
+    ///
+    /// Each namespace gets its own Iceberg tables ({ns}_postings, {ns}_docs, etc.)
+    /// so BM25 storage must be constructed per-namespace.
+    async fn create_bm25_storage(
+        &self,
+        namespace: &str,
+    ) -> Result<Arc<dyn edgequake_storage::Bm25Storage>, Box<dyn std::error::Error + Send + Sync>>;
+}
+
 /// Cache for namespace-scoped storage sets.
 ///
 /// Avoids re-creating AWS clients per request. The underlying AWS SDK clients
@@ -297,6 +318,10 @@ pub struct AppState {
     /// Cache of namespace-scoped storage sets.
     /// Avoids re-creating storage instances per request.
     pub namespace_storage_cache: NamespaceStorageCache,
+
+    /// Factory for creating namespace-scoped BM25 storage instances.
+    /// None when BM25/Athena is not configured (hybrid retrieval falls back to vector-only).
+    pub bm25_storage_factory: Option<Arc<dyn Bm25StorageFactory>>,
 }
 
 /// Application configuration.
@@ -441,6 +466,7 @@ impl AppState {
             namespace_registry: None,
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
+            bm25_storage_factory: None,
         }
     }
 
@@ -584,6 +610,7 @@ impl AppState {
             namespace_registry: None,
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
+            bm25_storage_factory: None,
         }
     }
 
@@ -681,6 +708,7 @@ impl AppState {
             namespace_registry: None,
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
+            bm25_storage_factory: None,
         }
     }
 
@@ -940,6 +968,7 @@ impl AppState {
             namespace_registry: None,
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
+            bm25_storage_factory: None,
         })
     }
 
@@ -952,6 +981,18 @@ impl AppState {
         registry: edgequake_core::SharedNamespaceRegistry,
     ) -> Self {
         self.namespace_registry = Some(registry);
+        self
+    }
+
+    /// Set the BM25 storage factory for namespace-scoped BM25/hybrid retrieval.
+    ///
+    /// Call this after constructing AppState to enable BM25 and hybrid retrieval
+    /// modes. When not set, query engines fall back to vector-only retrieval.
+    pub fn with_bm25_storage_factory(
+        mut self,
+        factory: Arc<dyn Bm25StorageFactory>,
+    ) -> Self {
+        self.bm25_storage_factory = Some(factory);
         self
     }
 

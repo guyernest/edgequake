@@ -56,7 +56,7 @@ edgequake-llm = { workspace = true }
 edgequake-pipeline = { workspace = true }
 edgequake-query = { workspace = true }
 edgequake-api = { workspace = true }
-edgequake-storage-aws = { workspace = true, features = ["dynamodb", "neptune", "s3vectors"] }
+edgequake-storage-aws = { workspace = true, features = ["dynamodb", "neptune", "s3vectors", "athena"] }
 edgequake-tasks = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
