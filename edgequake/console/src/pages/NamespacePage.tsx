@@ -1,9 +1,12 @@
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { NamespaceStatusBadge } from '@/components/namespace/NamespaceStatusBadge';
+import { LlmConfigForm } from '@/components/config/LlmConfigForm';
+import { ExtractionConfigForm } from '@/components/config/ExtractionConfigForm';
 import { PipelineTimeline } from '@/components/pipeline/PipelineTimeline';
 import { useNamespace, useSchemaProposal } from '@/hooks/useNamespaceDetail';
 import { useNamespaceStatus } from '@/hooks/useNamespaceStatus';
@@ -135,11 +138,10 @@ export function NamespacePage() {
         </TabsContent>
 
         <TabsContent value="configuration" className="mt-4">
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-            <h3 className="text-base font-semibold">Configuration</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Configuration coming in Plan 04
-            </p>
+          <div className="space-y-8">
+            <LlmConfigForm slug={slug} />
+            <Separator />
+            <ExtractionConfigForm slug={slug} />
           </div>
         </TabsContent>
 
