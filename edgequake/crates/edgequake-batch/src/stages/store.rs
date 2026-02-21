@@ -5,7 +5,7 @@ use crate::jsonl::PreparedChunk;
 use crate::parquet_reader::ReconstructedDocument;
 use crate::progress::BatchProgress;
 use crate::stages::embed::EmbedResult;
-use crate::state::{JobState, Phase, StateManager};
+use crate::state::{JobState, LatestRunStatus, Phase, StateManager};
 use edgequake_pipeline::extractor::ExtractionResult;
 use edgequake_storage::traits::{KVStorage, VectorStorage};
 use edgequake_storage::Bm25Storage;
@@ -42,6 +42,26 @@ pub async fn run_store(
     job.phase = Phase::Storing;
     job.updated_at = chrono::Utc::now().to_rfc3339();
     state_mgr.save_job(job).await?;
+
+    // Record phase start time and write LATEST_RUN for UI visibility
+    let now_millis = chrono::Utc::now().timestamp_millis();
+    job.phase_started_at
+        .insert("storing".to_string(), now_millis);
+    let run_started_at = job.run_started_at.unwrap_or(now_millis);
+
+    let latest = LatestRunStatus {
+        status: "storing".to_string(),
+        phase: Some("storing".to_string()),
+        job_id: Some(job.job_id.clone()),
+        total_documents: Some(job.total_documents),
+        processed_documents: Some(job.processed_documents),
+        total_chunks: Some(job.total_chunks),
+        started_at: Some(run_started_at),
+        updated_at: Some(now_millis),
+        phase_started_at: Some(now_millis),
+        ..Default::default()
+    };
+    state_mgr.write_latest_run(&latest).await?;
 
     // Step 1: Store document metadata in KV
     let bar = progress.document_bar(documents.len() as u64, "Storing documents");
@@ -383,10 +403,74 @@ pub async fn run_store(
     job.updated_at = chrono::Utc::now().to_rfc3339();
     state_mgr.save_job(job).await?;
 
+    // Compute per-phase durations from phase_started_at timestamps
+    let completion_millis = chrono::Utc::now().timestamp_millis();
+    let phase_order = ["preparing", "extracting", "embedding", "storing"];
+    let mut per_phase_durations = std::collections::HashMap::new();
+    for (i, phase_name) in phase_order.iter().enumerate() {
+        if let Some(&start) = job.phase_started_at.get(*phase_name) {
+            // Duration = next phase start - this phase start, or completion time for last phase
+            let end = if i + 1 < phase_order.len() {
+                job.phase_started_at
+                    .get(phase_order[i + 1])
+                    .copied()
+                    .unwrap_or(completion_millis)
+            } else {
+                completion_millis
+            };
+            per_phase_durations.insert(phase_name.to_string(), end - start);
+        }
+    }
+
+    // Compute total error count across all phases
+    let total_error_count: usize = job.errors_per_phase.values().sum();
+
+    // Determine completion status: amber for partial failures, green for clean runs
+    let completed_status = if total_error_count > 0 {
+        "completed_with_warnings"
+    } else {
+        "completed"
+    };
+
+    // Build error_count_per_phase only if there were errors
+    let error_count_per_phase = if !job.errors_per_phase.is_empty() {
+        Some(job.errors_per_phase.clone())
+    } else {
+        None
+    };
+
+    // Write final run report to LATEST_RUN
+    let run_report = LatestRunStatus {
+        status: completed_status.to_string(),
+        phase: None,
+        job_id: Some(job.job_id.clone()),
+        total_documents: Some(job.total_documents),
+        processed_documents: Some(job.processed_documents),
+        total_chunks: Some(job.total_chunks),
+        started_at: job.run_started_at,
+        updated_at: Some(completion_millis),
+        completed_at: Some(completion_millis),
+        total_entities: Some(job.total_entities),
+        total_relationships: Some(job.total_relationships),
+        per_phase_durations: Some(per_phase_durations),
+        error_count_per_phase,
+        error_summary: if total_error_count > 0 {
+            Some(format!(
+                "{} document errors across phases",
+                total_error_count
+            ))
+        } else {
+            None
+        },
+        ..Default::default()
+    };
+    state_mgr.write_latest_run(&run_report).await?;
+
     info!(
         documents = documents.len(),
         entities = total_entities,
         relationships = total_rels,
+        status = completed_status,
         "Phase 4: STORE complete - pipeline finished!"
     );
 

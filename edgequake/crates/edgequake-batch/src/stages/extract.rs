@@ -6,7 +6,7 @@ use crate::config::BatchConfig;
 use crate::domain_config::DomainConfig;
 use crate::jsonl::PreparedChunk;
 use crate::progress::BatchProgress;
-use crate::state::{JobState, Phase, StateManager};
+use crate::state::{JobState, LatestRunStatus, Phase, StateManager};
 use edgequake_llm::providers::openai_batch::OpenAIBatchClient;
 use edgequake_pipeline::extractor::ExtractionResult;
 use edgequake_pipeline::prompts::HybridExtractionParser;
@@ -110,7 +110,7 @@ pub async fn run_extract(
 ) -> anyhow::Result<ExtractResult> {
     info!("Phase 2: EXTRACT starting");
     info!(
-        "💡 Automatic retry enabled: Will retry up to {} times if token limits are hit (exponential backoff: {}s → {}s → ...)",
+        "Automatic retry enabled: Will retry up to {} times if token limits are hit (exponential backoff: {}s -> {}s -> ...)",
         config.max_retries,
         config.retry_delay_secs,
         config.retry_delay_secs * 2
@@ -118,6 +118,27 @@ pub async fn run_extract(
     job.phase = Phase::Extracting;
     job.updated_at = chrono::Utc::now().to_rfc3339();
     state_mgr.save_job(job).await?;
+
+    // Record phase start time and write LATEST_RUN for UI visibility
+    let now_millis = chrono::Utc::now().timestamp_millis();
+    job.phase_started_at
+        .insert("extracting".to_string(), now_millis);
+    let run_started_at = job.run_started_at.unwrap_or(now_millis);
+
+    let latest = LatestRunStatus {
+        status: "extracting".to_string(),
+        phase: Some("extracting".to_string()),
+        job_id: Some(job.job_id.clone()),
+        total_documents: Some(job.total_documents),
+        processed_documents: Some(job.processed_documents),
+        total_chunks: Some(job.total_chunks),
+        total_batches: Some(jsonl_paths.len()),
+        started_at: Some(run_started_at),
+        updated_at: Some(now_millis),
+        phase_started_at: Some(now_millis),
+        ..Default::default()
+    };
+    state_mgr.write_latest_run(&latest).await?;
 
     let client = OpenAIBatchClient::new(api_key);
     let parser = HybridExtractionParser::new(true);
@@ -253,6 +274,13 @@ pub async fn run_extract(
     job.total_relationships = total_relationships;
     job.phase = Phase::Extracted;
     job.updated_at = chrono::Utc::now().to_rfc3339();
+
+    // Track extraction errors per phase
+    if error_count > 0 {
+        job.errors_per_phase
+            .insert("extracting".to_string(), error_count);
+    }
+
     state_mgr.save_job(job).await?;
 
     info!(

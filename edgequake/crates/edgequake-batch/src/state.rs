@@ -57,6 +57,20 @@ pub struct JobState {
 
     /// Error message if job failed.
     pub error: Option<String>,
+
+    /// Run start timestamp (epoch millis). Set once at the beginning of a run
+    /// and carried through all phases for LATEST_RUN tracking.
+    #[serde(default)]
+    pub run_started_at: Option<i64>,
+
+    /// Per-phase error counts, accumulated during pipeline execution.
+    /// Used to build the run report at completion.
+    #[serde(default)]
+    pub errors_per_phase: HashMap<String, usize>,
+
+    /// Per-phase start timestamps (epoch millis) for duration computation.
+    #[serde(default)]
+    pub phase_started_at: HashMap<String, i64>,
 }
 
 /// Pipeline phase.
@@ -392,6 +406,9 @@ impl StateManager {
             created_at: now.clone(),
             updated_at: now,
             error: None,
+            run_started_at: None,
+            errors_per_phase: HashMap::new(),
+            phase_started_at: HashMap::new(),
         }
     }
 }

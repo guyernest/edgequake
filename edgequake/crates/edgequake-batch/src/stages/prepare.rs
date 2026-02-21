@@ -6,7 +6,7 @@ use crate::domain_prompts::DomainExtractionPrompts;
 use crate::jsonl::{build_jsonl_files, make_custom_id, JsonlBuildResult, PreparedChunk};
 use crate::parquet_reader::{read_parquet_documents, ReconstructedDocument};
 use crate::progress::BatchProgress;
-use crate::state::{DocumentState, DocumentStatus, JobState, Phase, StateManager};
+use crate::state::{DocumentState, DocumentStatus, JobState, LatestRunStatus, Phase, StateManager};
 use edgequake_pipeline::chunker::{Chunker, ChunkerConfig, TextChunk};
 use tracing::{info, warn};
 
@@ -41,6 +41,42 @@ pub async fn run_prepare(
     job.phase = Phase::Preparing;
     job.updated_at = chrono::Utc::now().to_rfc3339();
     state_mgr.save_job(job).await?;
+
+    // Determine run_started_at: if UI triggered ingestion (status=requested),
+    // preserve the original started_at timestamp. Otherwise use current time.
+    let now_millis = chrono::Utc::now().timestamp_millis();
+    let run_started_at = if job.run_started_at.is_none() {
+        let started_at = match state_mgr.read_latest_run().await? {
+            Some(existing) if existing.status == "requested" => {
+                info!("Preserving started_at from UI-triggered 'requested' status");
+                existing.started_at.unwrap_or(now_millis)
+            }
+            _ => now_millis,
+        };
+        job.run_started_at = Some(started_at);
+        started_at
+    } else {
+        job.run_started_at.unwrap()
+    };
+
+    // Record phase start time for duration tracking
+    job.phase_started_at
+        .insert("preparing".to_string(), now_millis);
+
+    // Write LATEST_RUN for UI visibility
+    let latest = LatestRunStatus {
+        status: "preparing".to_string(),
+        phase: Some("preparing".to_string()),
+        job_id: Some(job.job_id.clone()),
+        total_documents: Some(job.total_documents),
+        processed_documents: Some(job.processed_documents),
+        total_chunks: Some(job.total_chunks),
+        started_at: Some(run_started_at),
+        updated_at: Some(now_millis),
+        phase_started_at: Some(now_millis),
+        ..Default::default()
+    };
+    state_mgr.write_latest_run(&latest).await?;
 
     // Step 1: Read parquet file
     let spinner = progress.spinner("Reading parquet file...");
@@ -168,6 +204,16 @@ pub async fn run_prepare(
         documents.len(),
         all_chunks.len()
     ));
+
+    // Track document-level errors in prepare phase
+    let prepare_errors: usize = doc_states
+        .iter()
+        .filter(|d| d.status == DocumentStatus::Failed)
+        .count();
+    if prepare_errors > 0 {
+        job.errors_per_phase
+            .insert("preparing".to_string(), prepare_errors);
+    }
 
     // Step 3: Build JSONL files
     let spinner = progress.spinner("Building JSONL files...");

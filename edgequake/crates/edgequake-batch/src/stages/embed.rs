@@ -8,7 +8,7 @@
 use crate::config::BatchConfig;
 use crate::jsonl::PreparedChunk;
 use crate::progress::BatchProgress;
-use crate::state::{JobState, Phase, StateManager};
+use crate::state::{JobState, LatestRunStatus, Phase, StateManager};
 use edgequake_llm::traits::EmbeddingProvider;
 use edgequake_pipeline::extractor::ExtractionResult;
 use serde::{Deserialize, Serialize};
@@ -90,6 +90,26 @@ pub async fn run_embed(
     job.phase = Phase::Embedding;
     job.updated_at = chrono::Utc::now().to_rfc3339();
     state_mgr.save_job(job).await?;
+
+    // Record phase start time and write LATEST_RUN for UI visibility
+    let now_millis = chrono::Utc::now().timestamp_millis();
+    job.phase_started_at
+        .insert("embedding".to_string(), now_millis);
+    let run_started_at = job.run_started_at.unwrap_or(now_millis);
+
+    let latest = LatestRunStatus {
+        status: "embedding".to_string(),
+        phase: Some("embedding".to_string()),
+        job_id: Some(job.job_id.clone()),
+        total_documents: Some(job.total_documents),
+        processed_documents: Some(job.processed_documents),
+        total_chunks: Some(job.total_chunks),
+        started_at: Some(run_started_at),
+        updated_at: Some(now_millis),
+        phase_started_at: Some(now_millis),
+        ..Default::default()
+    };
+    state_mgr.write_latest_run(&latest).await?;
 
     let batch_size = config.embedding_batch_size;
 

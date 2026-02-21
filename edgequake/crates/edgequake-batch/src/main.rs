@@ -228,163 +228,208 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    match cli.command {
-        Command::Run => {
-            run_full_pipeline(
-                &config,
-                &cli.api_key,
-                &aws_config,
-                &domain_config,
-                &state_mgr,
-                &mut job,
-                &progress,
-            )
-            .await?;
-        }
-        Command::Prepare => {
-            stages::prepare::run_prepare(&config, &domain_config, &state_mgr, &mut job, &progress)
+    // Execute pipeline command, catching fatal errors to write LATEST_RUN "failed" status.
+    let pipeline_result: anyhow::Result<()> = async {
+        match cli.command {
+            Command::Run => {
+                run_full_pipeline(
+                    &config,
+                    &cli.api_key,
+                    &aws_config,
+                    &domain_config,
+                    &state_mgr,
+                    &mut job,
+                    &progress,
+                )
                 .await?;
-        }
-        Command::Extract => {
-            // Extract requires prepare results; load from state
-            let prepare_result = stages::prepare::run_prepare(
-                &config,
-                &domain_config,
-                &state_mgr,
-                &mut job,
-                &progress,
-            )
-            .await?;
-            stages::extract::run_extract(
-                &config,
-                &cli.api_key,
-                &domain_config,
-                &state_mgr,
-                &mut job,
-                &prepare_result.jsonl_result.file_paths,
-                &prepare_result.chunks,
-                &progress,
-            )
-            .await?;
-        }
-        Command::Embed => {
-            // Re-run prepare (fast, local only) to get chunks in memory
-            let prepare_result = stages::prepare::run_prepare(
-                &config,
-                &domain_config,
-                &state_mgr,
-                &mut job,
-                &progress,
-            )
-            .await?;
+            }
+            Command::Prepare => {
+                stages::prepare::run_prepare(
+                    &config,
+                    &domain_config,
+                    &state_mgr,
+                    &mut job,
+                    &progress,
+                )
+                .await?;
+            }
+            Command::Extract => {
+                // Extract requires prepare results; load from state
+                let prepare_result = stages::prepare::run_prepare(
+                    &config,
+                    &domain_config,
+                    &state_mgr,
+                    &mut job,
+                    &progress,
+                )
+                .await?;
+                stages::extract::run_extract(
+                    &config,
+                    &cli.api_key,
+                    &domain_config,
+                    &state_mgr,
+                    &mut job,
+                    &prepare_result.jsonl_result.file_paths,
+                    &prepare_result.chunks,
+                    &progress,
+                )
+                .await?;
+            }
+            Command::Embed => {
+                // Re-run prepare (fast, local only) to get chunks in memory
+                let prepare_result = stages::prepare::run_prepare(
+                    &config,
+                    &domain_config,
+                    &state_mgr,
+                    &mut job,
+                    &progress,
+                )
+                .await?;
 
-            // Load cached extraction results from disk (avoids re-submitting to OpenAI)
-            let extract_results = stages::extract::load_cached_results(&config, &domain_config)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "No cached extraction results found. Run 'extract' first, then 'embed'."
-                    )
-                })?;
+                // Load cached extraction results from disk (avoids re-submitting to OpenAI)
+                let extract_results =
+                    stages::extract::load_cached_results(&config, &domain_config).ok_or_else(
+                        || {
+                            anyhow::anyhow!(
+                            "No cached extraction results found. Run 'extract' first, then 'embed'."
+                        )
+                        },
+                    )?;
 
-            let embedding_provider =
-                create_embedding_provider(&cli.api_key, &config.embedding_model)?;
-            stages::embed::run_embed(
-                &config,
-                embedding_provider,
-                &state_mgr,
-                &mut job,
-                &prepare_result.chunks,
-                &extract_results,
-                &progress,
-            )
-            .await?;
-        }
-        Command::Store => {
-            // Re-run prepare (fast, local only) to get chunks/documents in memory
-            let prepare_result = stages::prepare::run_prepare(
-                &config,
-                &domain_config,
-                &state_mgr,
-                &mut job,
-                &progress,
-            )
-            .await?;
+                let embedding_provider =
+                    create_embedding_provider(&cli.api_key, &config.embedding_model)?;
+                stages::embed::run_embed(
+                    &config,
+                    embedding_provider,
+                    &state_mgr,
+                    &mut job,
+                    &prepare_result.chunks,
+                    &extract_results,
+                    &progress,
+                )
+                .await?;
+            }
+            Command::Store => {
+                // Re-run prepare (fast, local only) to get chunks/documents in memory
+                let prepare_result = stages::prepare::run_prepare(
+                    &config,
+                    &domain_config,
+                    &state_mgr,
+                    &mut job,
+                    &progress,
+                )
+                .await?;
 
-            // Load cached extraction results from disk
-            let extract_results = stages::extract::load_cached_results(&config, &domain_config)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "No cached extraction results found. Run 'extract' first, then 'store'."
-                    )
-                })?;
+                // Load cached extraction results from disk
+                let extract_results =
+                    stages::extract::load_cached_results(&config, &domain_config).ok_or_else(
+                        || {
+                            anyhow::anyhow!(
+                            "No cached extraction results found. Run 'extract' first, then 'store'."
+                        )
+                        },
+                    )?;
 
-            // Load cached embed results, or re-run embed if not cached
-            let embed_result =
-                if let Some(cached) = stages::embed::load_cached_embed_results(&config) {
-                    info!("Using cached embed results");
-                    cached
-                } else {
-                    info!("No cached embed results, running embed phase");
-                    let embedding_provider =
-                        create_embedding_provider(&cli.api_key, &config.embedding_model)?;
-                    stages::embed::run_embed(
-                        &config,
-                        embedding_provider,
-                        &state_mgr,
-                        &mut job,
-                        &prepare_result.chunks,
-                        &extract_results,
-                        &progress,
-                    )
-                    .await?
-                };
+                // Load cached embed results, or re-run embed if not cached
+                let embed_result =
+                    if let Some(cached) = stages::embed::load_cached_embed_results(&config) {
+                        info!("Using cached embed results");
+                        cached
+                    } else {
+                        info!("No cached embed results, running embed phase");
+                        let embedding_provider =
+                            create_embedding_provider(&cli.api_key, &config.embedding_model)?;
+                        stages::embed::run_embed(
+                            &config,
+                            embedding_provider,
+                            &state_mgr,
+                            &mut job,
+                            &prepare_result.chunks,
+                            &extract_results,
+                            &progress,
+                        )
+                        .await?
+                    };
 
-            // Run store to persist to Neptune/S3/DynamoDB/BM25
-            let (vectors, kv) = create_storage_backends(&config).await?;
-            let bm25 = create_bm25_storage(&config).await?;
-            stages::store::run_store(
-                &config,
-                &aws_config,
-                vectors,
-                kv,
-                bm25,
-                &state_mgr,
-                &mut job,
-                &prepare_result.documents,
-                &prepare_result.chunks,
-                &extract_results,
-                &embed_result,
-                &progress,
-            )
-            .await?;
+                // Run store to persist to Neptune/S3/DynamoDB/BM25
+                let (vectors, kv) = create_storage_backends(&config).await?;
+                let bm25 = create_bm25_storage(&config).await?;
+                stages::store::run_store(
+                    &config,
+                    &aws_config,
+                    vectors,
+                    kv,
+                    bm25,
+                    &state_mgr,
+                    &mut job,
+                    &prepare_result.documents,
+                    &prepare_result.chunks,
+                    &extract_results,
+                    &embed_result,
+                    &progress,
+                )
+                .await?;
+            }
+            Command::Status => {
+                print_status(&job);
+            }
+            Command::Resume => {
+                info!(phase = %job.phase, "Resuming from checkpoint");
+                run_full_pipeline(
+                    &config,
+                    &cli.api_key,
+                    &aws_config,
+                    &domain_config,
+                    &state_mgr,
+                    &mut job,
+                    &progress,
+                )
+                .await?;
+            }
+            Command::ListBatches { .. } => {
+                // Handled earlier before DynamoDB initialization
+                unreachable!()
+            }
+            Command::SuggestSchema { .. } => {
+                // Handled earlier before DynamoDB state initialization
+                unreachable!()
+            }
         }
-        Command::Status => {
-            print_status(&job);
-        }
-        Command::Resume => {
-            info!(phase = %job.phase, "Resuming from checkpoint");
-            run_full_pipeline(
-                &config,
-                &cli.api_key,
-                &aws_config,
-                &domain_config,
-                &state_mgr,
-                &mut job,
-                &progress,
-            )
-            .await?;
-        }
-        Command::ListBatches { .. } => {
-            // Handled earlier before DynamoDB initialization
-            unreachable!()
-        }
-        Command::SuggestSchema { .. } => {
-            // Handled earlier before DynamoDB state initialization
-            unreachable!()
+        Ok(())
+    }
+    .await;
+
+    // On fatal pipeline failure, write LATEST_RUN with status "failed" so the UI
+    // shows a red status badge with the top-level error message.
+    if let Err(ref e) = pipeline_result {
+        let error_msg = format!("{}", e);
+        tracing::error!(error = %error_msg, "Pipeline failed");
+
+        let failed_status = state::LatestRunStatus {
+            status: "failed".to_string(),
+            phase: Some(job.phase.to_string()),
+            job_id: Some(job.job_id.clone()),
+            total_documents: Some(job.total_documents),
+            processed_documents: Some(job.processed_documents),
+            total_chunks: Some(job.total_chunks),
+            started_at: job.run_started_at,
+            updated_at: Some(chrono::Utc::now().timestamp_millis()),
+            error_summary: Some(error_msg),
+            error_count_per_phase: if !job.errors_per_phase.is_empty() {
+                Some(job.errors_per_phase.clone())
+            } else {
+                None
+            },
+            ..Default::default()
+        };
+
+        // Best-effort write: if this fails too, we still want the original error
+        if let Err(write_err) = state_mgr.write_latest_run(&failed_status).await {
+            tracing::error!(error = %write_err, "Failed to write LATEST_RUN failure status");
         }
     }
 
-    Ok(())
+    pipeline_result
 }
 
 /// Run the full 4-phase pipeline.
