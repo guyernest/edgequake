@@ -129,7 +129,13 @@ async fn main() -> anyhow::Result<()> {
     use edgequake_storage::KVStorage;
     dynamo_kv.initialize().await?;
 
-    let state_mgr = StateManager::new(Box::new(dynamo_kv));
+    // The namespace registry table is the same DynamoDB table used for KV storage
+    // (single-table design). LATEST_RUN writes go to PK=NS#{slug}, SK=LATEST_RUN.
+    let state_mgr = StateManager::new(Box::new(dynamo_kv)).with_latest_run_config(
+        dynamo_client.clone(),
+        config.dynamo_table.clone(),
+        cli.namespace.clone(),
+    );
     let progress = BatchProgress::new();
 
     // --- Schema Approval Gate ---

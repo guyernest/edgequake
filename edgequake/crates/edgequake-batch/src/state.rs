@@ -10,6 +10,8 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
+use tracing::warn;
 
 /// Job-level state persisted to DynamoDB.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,15 +140,182 @@ pub enum DocumentStatus {
     Failed,
 }
 
+/// Pipeline run status written to `NS#{slug}/LATEST_RUN` in the namespace
+/// registry table so the management UI can display real-time pipeline progress.
+///
+/// This is a separate write path from the `__batch_jobs__/{job_id}` KVStorage
+/// records -- the UI reads LATEST_RUN, not __batch_jobs__.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct LatestRunStatus {
+    /// Pipeline status: "requested", "preparing", "extracting", "embedding",
+    /// "storing", "completed", "completed_with_warnings", "failed".
+    pub status: String,
+
+    /// Current phase name (lowercase).
+    pub phase: Option<String>,
+
+    /// Batch job identifier.
+    pub job_id: Option<String>,
+
+    /// Total documents in the dataset.
+    pub total_documents: Option<usize>,
+
+    /// Documents successfully processed so far.
+    pub processed_documents: Option<usize>,
+
+    /// Total chunks generated.
+    pub total_chunks: Option<usize>,
+
+    /// Current batch file being processed (extract phase).
+    pub current_batch: Option<usize>,
+
+    /// Total batch files to process (extract phase).
+    pub total_batches: Option<usize>,
+
+    /// Run start timestamp (epoch millis). Set once at beginning of run.
+    pub started_at: Option<i64>,
+
+    /// Last update timestamp (epoch millis).
+    pub updated_at: Option<i64>,
+
+    /// Phase start timestamp (epoch millis) for computing per-phase duration.
+    pub phase_started_at: Option<i64>,
+
+    /// Human-readable error summary on failure or partial failure.
+    pub error_summary: Option<String>,
+
+    /// Run completion timestamp (epoch millis).
+    pub completed_at: Option<i64>,
+
+    /// Per-phase duration in milliseconds (populated on completion).
+    pub per_phase_durations: Option<HashMap<String, i64>>,
+
+    /// Total entities extracted across all documents.
+    pub total_entities: Option<usize>,
+
+    /// Total relationships extracted across all documents.
+    pub total_relationships: Option<usize>,
+
+    /// Error count per phase (populated on completion).
+    pub error_count_per_phase: Option<HashMap<String, usize>>,
+}
+
 /// State manager backed by DynamoDB.
+///
+/// Manages job state in KVStorage (`__batch_jobs__/{job_id}`) and optionally
+/// writes pipeline status to the namespace registry table (`NS#{slug}/LATEST_RUN`)
+/// for UI visibility.
 pub struct StateManager {
     kv: Box<dyn edgequake_storage::KVStorage>,
+    /// Direct DynamoDB client for LATEST_RUN writes to the namespace registry table.
+    dynamo_client: Option<aws_sdk_dynamodb::Client>,
+    /// Namespace registry table name (e.g. `edgequake-namespaces` or shared table).
+    namespace_table: Option<String>,
+    /// Namespace slug for PK construction (`NS#{slug}`).
+    namespace: Option<String>,
 }
 
 impl StateManager {
     /// Create a new state manager with the given KV storage.
+    ///
+    /// LATEST_RUN support is disabled by default. Call [`with_latest_run_config`]
+    /// to enable writes to the namespace registry table.
     pub fn new(kv: Box<dyn edgequake_storage::KVStorage>) -> Self {
-        Self { kv }
+        Self {
+            kv,
+            dynamo_client: None,
+            namespace_table: None,
+            namespace: None,
+        }
+    }
+
+    /// Enable LATEST_RUN writes to the namespace registry table.
+    ///
+    /// When configured, `write_latest_run()` writes to `PK=NS#{namespace},
+    /// SK=LATEST_RUN` in the specified table. Without this config, writes
+    /// are silently skipped (graceful degradation for tests / non-namespace runs).
+    pub fn with_latest_run_config(
+        mut self,
+        dynamo_client: aws_sdk_dynamodb::Client,
+        namespace_table: String,
+        namespace: String,
+    ) -> Self {
+        self.dynamo_client = Some(dynamo_client);
+        self.namespace_table = Some(namespace_table);
+        self.namespace = Some(namespace);
+        self
+    }
+
+    /// Write pipeline status to `NS#{slug}/LATEST_RUN` in the namespace registry table.
+    ///
+    /// If LATEST_RUN config is not set (no dynamo_client/namespace_table/namespace),
+    /// logs a warning and returns Ok -- this allows tests and non-namespace runs
+    /// to work without modification.
+    pub async fn write_latest_run(&self, status: &LatestRunStatus) -> anyhow::Result<()> {
+        let (client, table, ns) = match (&self.dynamo_client, &self.namespace_table, &self.namespace)
+        {
+            (Some(c), Some(t), Some(n)) => (c, t, n),
+            _ => {
+                warn!("LATEST_RUN config not set, skipping write");
+                return Ok(());
+            }
+        };
+
+        let pk = format!("NS#{}", ns);
+        let data = serde_json::to_string(status)?;
+
+        client
+            .put_item()
+            .table_name(table)
+            .item("PK", aws_sdk_dynamodb::types::AttributeValue::S(pk))
+            .item(
+                "SK",
+                aws_sdk_dynamodb::types::AttributeValue::S("LATEST_RUN".to_string()),
+            )
+            .item("data", aws_sdk_dynamodb::types::AttributeValue::S(data))
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to write LATEST_RUN: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Read the current LATEST_RUN record for this namespace, if it exists.
+    ///
+    /// Used by the Prepare phase to check if the UI set `status=requested`
+    /// (preserving the `started_at` timestamp from the UI trigger).
+    pub async fn read_latest_run(&self) -> anyhow::Result<Option<LatestRunStatus>> {
+        let (client, table, ns) = match (&self.dynamo_client, &self.namespace_table, &self.namespace)
+        {
+            (Some(c), Some(t), Some(n)) => (c, t, n),
+            _ => return Ok(None),
+        };
+
+        let pk = format!("NS#{}", ns);
+
+        let result = client
+            .get_item()
+            .table_name(table)
+            .key("PK", aws_sdk_dynamodb::types::AttributeValue::S(pk))
+            .key(
+                "SK",
+                aws_sdk_dynamodb::types::AttributeValue::S("LATEST_RUN".to_string()),
+            )
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to read LATEST_RUN: {}", e))?;
+
+        match result.item() {
+            Some(item) => {
+                if let Some(aws_sdk_dynamodb::types::AttributeValue::S(data)) = item.get("data") {
+                    let status: LatestRunStatus = serde_json::from_str(data)?;
+                    Ok(Some(status))
+                } else {
+                    Ok(None)
+                }
+            }
+            None => Ok(None),
+        }
     }
 
     /// Save job state.
