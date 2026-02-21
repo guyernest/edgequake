@@ -1,6 +1,7 @@
 import { FileQuestion } from 'lucide-react';
 import { PipelinePhaseEntry, type PhaseStatus } from './PipelinePhaseEntry';
 import { BatchProgress } from './BatchProgress';
+import { DocumentErrorEntry, DocumentErrorSummary } from './DocumentErrorEntry';
 
 /**
  * Pipeline phase names matching the batch pipeline's Phase enum:
@@ -89,11 +90,24 @@ export function PipelineTimeline({ status }: PipelineTimelineProps) {
 
   const phaseData = derivePhaseStatuses(status);
   const isActive = ['running', 'preparing', 'extracting', 'embedding', 'storing'].includes(status.status);
+  const isFailed = status.status === 'failed' || status.status === 'error';
+  const failedPhaseIdx = status.phase ? PHASE_INDEX[status.phase] ?? 0 : 0;
+
+  // Parse structured errors if available (future enhancement), otherwise use error_summary
+  const errors: { documentId?: string; message: string; phase?: string | null }[] = [];
+  if (isFailed && status.error_summary) {
+    errors.push({
+      message: status.error_summary,
+      phase: status.phase,
+    });
+  }
 
   return (
     <div className="space-y-1">
       {PIPELINE_PHASES.map((phaseName, i) => {
         const data = phaseData[i]!;
+        const showErrorsAfter = isFailed && i === failedPhaseIdx && errors.length > 0;
+
         return (
           <div key={phaseName}>
             <PipelinePhaseEntry
@@ -101,8 +115,32 @@ export function PipelineTimeline({ status }: PipelineTimelineProps) {
               status={data.status}
               startedAt={data.startedAt}
               completedAt={data.completedAt}
-              isLast={i === PIPELINE_PHASES.length - 1}
+              isLast={i === PIPELINE_PHASES.length - 1 && !showErrorsAfter}
             />
+
+            {/* Error entries after the failed phase */}
+            {showErrorsAfter && (
+              <div className="ml-0 mt-1">
+                {errors.length === 1 && errors[0] ? (
+                  <DocumentErrorEntry error={errors[0]} />
+                ) : (
+                  <>
+                    {errors.map((err, errIdx) => (
+                      <DocumentErrorEntry key={errIdx} error={err} />
+                    ))}
+                    {status.processed_documents != null &&
+                      status.total_documents != null &&
+                      status.total_documents - status.processed_documents > 0 && (
+                        <DocumentErrorSummary
+                          errorCount={status.total_documents - status.processed_documents}
+                          errorSummary={`${status.total_documents - status.processed_documents} documents were not processed`}
+                          phase={status.phase}
+                        />
+                      )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
