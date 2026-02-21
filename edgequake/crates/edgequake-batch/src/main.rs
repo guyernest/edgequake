@@ -32,6 +32,7 @@ mod state;
 use clap::Parser;
 use cli::{Cli, Command};
 use config::BatchConfig;
+use edgequake_core::schema::SchemaStatus;
 use progress::BatchProgress;
 use state::StateManager;
 use tracing::info;
@@ -122,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
     let dynamo_config =
         edgequake_storage_aws::DynamoKVConfig::new(&config.dynamo_table, &config.namespace);
     let dynamo_kv =
-        edgequake_storage_aws::DynamoKVStorage::new_with_client(dynamo_config, dynamo_client);
+        edgequake_storage_aws::DynamoKVStorage::new_with_client(dynamo_config, dynamo_client.clone());
 
     // Verify table exists before proceeding (gives clear error on misconfiguration)
     use edgequake_storage::KVStorage;
@@ -130,6 +131,83 @@ async fn main() -> anyhow::Result<()> {
 
     let state_mgr = StateManager::new(Box::new(dynamo_kv));
     let progress = BatchProgress::new();
+
+    // --- Schema Approval Gate ---
+    // Ingestion is blocked unless an approved schema exists for the namespace.
+    // This gate runs for all ingestion commands (Run, Prepare, Extract, Embed, Store, Resume).
+    // Status is exempt since it only reads existing job state.
+    let is_ingestion_command = matches!(
+        cli.command,
+        Command::Run
+            | Command::Prepare
+            | Command::Extract
+            | Command::Embed
+            | Command::Store
+            | Command::Resume
+    );
+
+    if is_ingestion_command {
+        let registry_config = edgequake_storage_aws::DynamoNamespaceConfig {
+            table_name: config.dynamo_table.clone(),
+        };
+        let ns_registry =
+            edgequake_storage_aws::DynamoNamespaceRegistry::new(registry_config, dynamo_client);
+        let namespace_slug = edgequake_core::NamespaceSlug::parse(&config.namespace)?;
+
+        // Call approve_schema which is idempotent: if already approved, returns the
+        // proposal unchanged; if newly approved, copies entity/relation type names
+        // into PipelineConfig atomically.
+        match ns_registry.get_schema(&namespace_slug).await {
+            Ok(Some(proposal)) => match proposal.status {
+                SchemaStatus::Approved => {
+                    info!(
+                        namespace = %config.namespace,
+                        entity_types = proposal.entity_types.len(),
+                        relation_types = proposal.relation_types.len(),
+                        "Using approved schema for namespace '{}' with {} entity types and {} relation types",
+                        config.namespace,
+                        proposal.entity_types.len(),
+                        proposal.relation_types.len(),
+                    );
+                }
+                SchemaStatus::Proposed => {
+                    anyhow::bail!(
+                        "Schema has been proposed but not yet approved for namespace '{}'. \
+                         Review and approve the schema before running ingestion.",
+                        config.namespace
+                    );
+                }
+                SchemaStatus::Rejected => {
+                    anyhow::bail!(
+                        "Schema was rejected for namespace '{}'. \
+                         Run schema suggestion again or approve the existing proposal.",
+                        config.namespace
+                    );
+                }
+                SchemaStatus::None => {
+                    anyhow::bail!(
+                        "No schema found for namespace '{}'. \
+                         Run schema suggestion first using: edgequake-batch suggest-schema",
+                        config.namespace
+                    );
+                }
+            },
+            Ok(None) => {
+                anyhow::bail!(
+                    "No schema found for namespace '{}'. \
+                     Run schema suggestion first using: edgequake-batch suggest-schema",
+                    config.namespace
+                );
+            }
+            Err(e) => {
+                anyhow::bail!(
+                    "Failed to check schema status for namespace '{}': {}",
+                    config.namespace,
+                    e
+                );
+            }
+        }
+    }
 
     // Load or create job state
     let mut job = match state_mgr.load_job(&job_id).await? {
