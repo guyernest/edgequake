@@ -97,7 +97,7 @@ const schema = a.schema({
     reviewed_at: a.integer(),
   }),
 
-  // --- Custom Queries (stubs for Phase 5 GraphQL API) ---
+  // --- Namespace Queries ---
 
   getNamespace: a
     .query()
@@ -105,9 +105,8 @@ const schema = a.schema({
     .returns(a.ref('Namespace'))
     .authorization((allow) => [allow.authenticated()])
     .handler(
-      // Must match addDynamoDbDataSource name in backend.ts
       a.handler.custom({
-        entry: './resolvers/placeholder.js',
+        entry: './resolvers/get-namespace.js',
         dataSource: 'NamespaceTableDataSource',
       })
     ),
@@ -117,9 +116,8 @@ const schema = a.schema({
     .returns(a.ref('Namespace').array())
     .authorization((allow) => [allow.authenticated()])
     .handler(
-      // Must match addDynamoDbDataSource name in backend.ts
       a.handler.custom({
-        entry: './resolvers/placeholder.js',
+        entry: './resolvers/list-namespaces.js',
         dataSource: 'NamespaceTableDataSource',
       })
     ),
@@ -130,7 +128,7 @@ const schema = a.schema({
     .returns(a.ref('McpDescriptor'))
     .authorization((allow) => [allow.authenticated()])
     .handler(
-      // Must match addDynamoDbDataSource name in backend.ts
+      // Placeholder — descriptor viewing not in PIPE requirements
       a.handler.custom({
         entry: './resolvers/placeholder.js',
         dataSource: 'NamespaceTableDataSource',
@@ -143,12 +141,52 @@ const schema = a.schema({
     .returns(a.ref('PipelineConfig'))
     .authorization((allow) => [allow.authenticated()])
     .handler(
-      // Must match addDynamoDbDataSource name in backend.ts
       a.handler.custom({
-        entry: './resolvers/placeholder.js',
+        entry: './resolvers/get-pipeline-config.js',
         dataSource: 'NamespaceTableDataSource',
       })
     ),
+
+  // --- Namespace Mutations ---
+
+  createNamespace: a
+    .mutation()
+    .arguments({
+      slug: a.string().required(),
+      description: a.string(),
+      domain_hint: a.string(),
+    })
+    .returns(a.ref('Namespace'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler([
+      a.handler.custom({
+        entry: './resolvers/create-namespace.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/create-namespace-write.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+    ]),
+
+  updatePipelineConfig: a
+    .mutation()
+    .arguments({
+      slug: a.string().required(),
+      config: a.json().required(),
+    })
+    .returns(a.ref('PipelineConfig'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler([
+      a.handler.custom({
+        entry: './resolvers/update-pipeline-config.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/update-pipeline-config-write.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+    ]),
 
   // --- Schema Proposal Operations ---
 
