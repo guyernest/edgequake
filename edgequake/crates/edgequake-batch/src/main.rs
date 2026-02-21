@@ -233,13 +233,14 @@ async fn main() -> anyhow::Result<()> {
                     .await?
                 };
 
-            // Run store to persist to Neptune/S3/DynamoDB
+            // Run store to persist to Neptune/S3/DynamoDB/BM25
             let (vectors, kv) = create_storage_backends(&config).await?;
             stages::store::run_store(
                 &config,
                 &aws_config,
                 vectors,
                 kv,
+                None, // BM25 storage wired when Athena is configured
                 &state_mgr,
                 &mut job,
                 &prepare_result.documents,
@@ -363,6 +364,7 @@ async fn run_full_pipeline(
         aws_config,
         vectors,
         kv,
+        None, // BM25 storage wired when Athena is configured
         state_mgr,
         job,
         &prepare_result.documents,

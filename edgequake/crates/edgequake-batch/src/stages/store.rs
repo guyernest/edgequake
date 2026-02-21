@@ -1,4 +1,4 @@
-//! Phase 4: Store - Write extracted data to Neptune, S3, and DynamoDB.
+//! Phase 4: Store - Write extracted data to Neptune, S3, DynamoDB, and BM25 index.
 
 use crate::config::BatchConfig;
 use crate::jsonl::PreparedChunk;
@@ -8,21 +8,28 @@ use crate::stages::embed::EmbedResult;
 use crate::state::{JobState, Phase, StateManager};
 use edgequake_pipeline::extractor::ExtractionResult;
 use edgequake_storage::traits::{KVStorage, VectorStorage};
+use edgequake_storage::Bm25Storage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, warn};
 
 /// Run Phase 4: Store.
 ///
-/// Writes to three storage backends:
-/// 1. Neptune graph: entities as nodes, relationships as edges (via bulk load)
+/// Writes to up to four storage backends:
+/// 1. DynamoDB KV: document metadata, chunk content, processing stats
 /// 2. S3 vectors: chunk, entity, and relationship embeddings with HNSW index
-/// 3. DynamoDB KV: document metadata, chunk content, processing stats
+/// 3. Neptune graph: entities as nodes, relationships as edges (via bulk load)
+/// 4. BM25 inverted index: keyword search data in Iceberg tables (if configured)
+///
+/// BM25 indexing is optional (`bm25` parameter is `Option`). When `None`,
+/// the pipeline behaves identically to pre-BM25 behavior for backward
+/// compatibility with deployments that do not have Athena configured.
 pub async fn run_store(
     config: &BatchConfig,
     aws_config: &aws_config::SdkConfig,
     vectors: Arc<dyn VectorStorage>,
     kv: Arc<dyn KVStorage>,
+    bm25: Option<Arc<dyn Bm25Storage>>,
     state_mgr: &StateManager,
     job: &mut JobState,
     documents: &[ReconstructedDocument],
@@ -344,6 +351,32 @@ pub async fn run_store(
         "Stored {} relationship vectors to S3 Vectors",
         rel_vectors_stored
     ));
+
+    // Step 5: Populate BM25 inverted index (if configured)
+    if let Some(bm25_storage) = &bm25 {
+        info!("Populating BM25 inverted index");
+
+        // Ensure Iceberg tables exist (lazy DDL -- creates on first ingestion)
+        bm25_storage.ensure_tables().await?;
+
+        // Preprocess chunks into BM25 documents using shared tantivy analyzer
+        let bm25_docs = super::bm25_index::build_bm25_documents(chunks);
+        info!(
+            chunks = chunks.len(),
+            bm25_documents = bm25_docs.len(),
+            "BM25 preprocessed chunks into documents"
+        );
+
+        // Index the batch into Iceberg tables
+        bm25_storage.index_batch(&bm25_docs).await?;
+
+        // Recalculate corpus statistics (N, avgdl) -- MUST be last BM25 step
+        // so scoring uses up-to-date document counts and average length.
+        bm25_storage.update_corpus_stats().await?;
+        info!("BM25 corpus stats updated");
+    } else {
+        info!("BM25 storage not configured, skipping BM25 indexing");
+    }
 
     // Finalize
     job.phase = Phase::Completed;
