@@ -35,6 +35,7 @@
 //! assert_eq!(doc.status, DocumentStatus::Pending);
 //! ```
 
+pub mod bm25_text;
 pub mod cache;
 pub mod config;
 pub mod conversation_service;

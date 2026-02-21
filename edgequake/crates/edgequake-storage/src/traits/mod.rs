@@ -22,11 +22,13 @@
 //! - **Flexibility**: Multiple backend support (Postgres, Memory, SurrealDB)
 //! - **Modularity**: Storage can be swapped without changing business logic
 
+mod bm25;
 mod graph;
 mod kv;
 mod vector;
 mod workspace_vector;
 
+pub use bm25::{Bm25Document, Bm25SearchResult, Bm25Storage};
 pub use graph::{GraphEdge, GraphNode, GraphStorage, KnowledgeGraph};
 pub use kv::KVStorage;
 pub use vector::{VectorSearchResult, VectorStorage};

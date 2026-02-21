@@ -23,6 +23,7 @@ uuid = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tiktoken-rs = { workspace = true }
+tantivy = { workspace = true }
 edgequake-llm.workspace = true
 edgequake-storage = { path = "../edgequake-storage", default-features = false }
 edgequake-pipeline = { workspace = true, optional = true }
