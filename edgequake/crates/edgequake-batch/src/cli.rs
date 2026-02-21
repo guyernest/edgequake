@@ -159,4 +159,15 @@ pub enum Command {
         #[arg(short, long, default_value = "20")]
         limit: usize,
     },
+
+    /// Analyze a dataset sample and propose entity/relation types for the namespace
+    SuggestSchema {
+        /// Sample percentage of documents to analyze (default: 10)
+        #[arg(long, default_value = "10.0")]
+        sample_percentage: f64,
+
+        /// Optional domain hint to guide schema extraction (e.g. "legal", "healthcare", "finance")
+        #[arg(long)]
+        domain_hint: Option<String>,
+    },
 }

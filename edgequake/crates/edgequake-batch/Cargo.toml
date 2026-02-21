@@ -16,6 +16,7 @@ path = "src/main.rs"
 # Workspace crates
 edgequake-core = { workspace = true }
 edgequake-pipeline = { workspace = true }
+edgequake-schema = { workspace = true }
 edgequake-storage = { workspace = true }
 edgequake-storage-aws = { workspace = true, features = ["full"] }
 edgequake-llm = { workspace = true }

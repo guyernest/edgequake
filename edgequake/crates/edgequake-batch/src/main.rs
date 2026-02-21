@@ -48,7 +48,30 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    // Load domain configuration (CLI flag → env → ./domain.toml → ~/.edgequake/ → built-in)
+    // Handle commands that don't need full pipeline infrastructure early
+    // (before BatchConfig consumes the CLI fields by move)
+    if let Command::ListBatches { limit } = cli.command {
+        return list_openai_batches(&cli.api_key, limit).await;
+    }
+
+    if let Command::SuggestSchema {
+        sample_percentage,
+        ref domain_hint,
+    } = cli.command
+    {
+        return handle_suggest_schema(
+            &cli.data,
+            &cli.api_key,
+            &cli.model,
+            &cli.namespace,
+            &cli.dynamo_table,
+            sample_percentage,
+            domain_hint.as_deref(),
+        )
+        .await;
+    }
+
+    // Load domain configuration (CLI flag -> env -> ./domain.toml -> ~/.edgequake/ -> built-in)
     let domain_config = domain_config::DomainConfig::load(cli.domain_config.as_deref())?;
     info!(domain = %domain_config.domain.name, "Loaded domain config");
     let domain_config = std::sync::Arc::new(domain_config);
@@ -91,11 +114,6 @@ async fn main() -> anyhow::Result<()> {
 
     // Create work directory
     std::fs::create_dir_all(&config.work_dir)?;
-
-    // ListBatches doesn't need DynamoDB - handle it early
-    if let Command::ListBatches { limit } = cli.command {
-        return list_openai_batches(&cli.api_key, limit).await;
-    }
 
     // Initialize state manager with DynamoDB for other commands
     let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
@@ -274,6 +292,10 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::ListBatches { .. } => {
             // Handled earlier before DynamoDB initialization
+            unreachable!()
+        }
+        Command::SuggestSchema { .. } => {
+            // Handled earlier before DynamoDB state initialization
             unreachable!()
         }
     }
@@ -634,6 +656,76 @@ async fn list_openai_batches(api_key: &str, limit: usize) -> anyhow::Result<()> 
         println!("   Wait for them to complete before submitting new batches.");
     }
     println!("====================\n");
+
+    Ok(())
+}
+
+/// Handle the suggest-schema subcommand.
+///
+/// Samples documents from the dataset, analyzes them with OpenAI to propose
+/// entity/relation types, and stores the proposal in DynamoDB.
+async fn handle_suggest_schema(
+    data: &std::path::Path,
+    api_key: &str,
+    model: &str,
+    namespace: &str,
+    dynamo_table: &str,
+    sample_percentage: f64,
+    domain_hint: Option<&str>,
+) -> anyhow::Result<()> {
+    info!(
+        data = %data.display(),
+        namespace = namespace,
+        sample_percentage = sample_percentage,
+        domain_hint = domain_hint,
+        "Starting schema suggestion"
+    );
+
+    // Determine location string: if it looks like s3://, pass as-is; otherwise use local path
+    let location = data.to_string_lossy().to_string();
+
+    // Build OpenAI config
+    let openai_config = edgequake_schema::OpenAiConfig::new(api_key).with_model(model);
+
+    // Run schema suggestion
+    let proposal = edgequake_schema::suggest_schema(
+        &location,
+        sample_percentage,
+        domain_hint,
+        &openai_config,
+    )
+    .await?;
+
+    // Store in DynamoDB
+    let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    let dynamo_client = aws_sdk_dynamodb::Client::new(&aws_config);
+    let registry_config = edgequake_storage_aws::DynamoNamespaceConfig {
+        table_name: dynamo_table.to_string(),
+    };
+    let registry = edgequake_storage_aws::DynamoNamespaceRegistry::new(registry_config, dynamo_client);
+
+    let slug = edgequake_core::NamespaceSlug::parse(namespace)?;
+
+    // Use the inherent method directly (not the trait method) to avoid needing the trait import.
+    // DynamoNamespaceRegistry has store_schema as both an inherent method and a trait implementation.
+    registry.store_schema(&slug, &proposal).await.map_err(|e| {
+        anyhow::anyhow!("Failed to store schema proposal: {}", e)
+    })?;
+
+    info!(
+        namespace = namespace,
+        entity_types = proposal.entity_types.len(),
+        relation_types = proposal.relation_types.len(),
+        sample_size = proposal.sample_size,
+        total_documents = proposal.total_documents,
+        "Schema proposed for namespace"
+    );
+
+    // Print proposal as formatted JSON for partner review
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&proposal)?
+    );
 
     Ok(())
 }
