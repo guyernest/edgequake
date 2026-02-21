@@ -40,6 +40,7 @@ pub mod config;
 pub mod conversation_service;
 pub mod error;
 pub mod keyword_extractor;
+pub mod mcp_descriptor;
 pub mod namespace;
 #[cfg(feature = "pipeline")]
 pub mod orchestrator;
@@ -93,6 +94,13 @@ pub use token_budget::{BudgetAllocation, BudgetSource, ContextSource, TokenBudge
 pub use namespace::{
     NamespaceListItem, NamespaceRecord, NamespaceRegistry, NamespaceRegistryError, NamespaceSlug,
     PipelineConfig, SharedNamespaceRegistry,
+};
+
+// Re-export MCP descriptor types
+pub use mcp_descriptor::{
+    default_mcp_tools, InfrastructureConfig, McpAuthConfig, McpDescriptor, McpDynamoDbConfig,
+    McpNamespaceInfo, McpNeptuneConfig, McpPipelineConfig, McpS3VectorsConfig, McpStorageConfig,
+    McpToolDefinition,
 };
 
 // Re-export commonly used types
