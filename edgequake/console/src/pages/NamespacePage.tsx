@@ -8,7 +8,9 @@ import { NamespaceStatusBadge } from '@/components/namespace/NamespaceStatusBadg
 import { LlmConfigForm } from '@/components/config/LlmConfigForm';
 import { ExtractionConfigForm } from '@/components/config/ExtractionConfigForm';
 import { PipelineTimeline } from '@/components/pipeline/PipelineTimeline';
+import { TriggerIngestionDialog } from '@/components/ingestion/TriggerIngestionDialog';
 import { useNamespace, useSchemaProposal } from '@/hooks/useNamespaceDetail';
+import { usePipelineConfig } from '@/hooks/usePipelineConfig';
 import { useNamespaceStatus } from '@/hooks/useNamespaceStatus';
 
 function SchemaTabContent({ slug }: { slug: string }) {
@@ -79,6 +81,7 @@ export function NamespacePage() {
   } = useNamespace(slug ?? '');
 
   const { data: status } = useNamespaceStatus(slug ?? '');
+  const { data: pipelineConfig } = usePipelineConfig(slug ?? '');
 
   if (!slug) {
     return (
@@ -114,6 +117,14 @@ export function NamespacePage() {
               {namespace?.slug ?? slug}
             </h1>
             <NamespaceStatusBadge status={status?.status} />
+            <div className="ml-auto">
+              <TriggerIngestionDialog
+                slug={slug}
+                pipelineStatus={status?.status}
+                llmModel={pipelineConfig?.llm_model ?? undefined}
+                embeddingModel={pipelineConfig?.embedding_model ?? undefined}
+              />
+            </div>
           </div>
         )}
 
