@@ -12,6 +12,7 @@
 //! NS#{slug}            META            { NamespaceRecord JSON }
 //! NS#{slug}            CONFIG          { PipelineConfig JSON }
 //! NS#{slug}            DESCRIPTOR      { McpDescriptor JSON }  -- MCP descriptor
+//! NS#{slug}            SCHEMA          { SchemaProposal JSON } -- schema proposal
 //! ```
 //!
 //! ## Example
@@ -38,7 +39,7 @@ use edgequake_core::{
     default_mcp_tools, InfrastructureConfig, McpAuthConfig, McpDescriptor, McpDynamoDbConfig,
     McpNamespaceInfo, McpNeptuneConfig, McpPipelineConfig, McpS3VectorsConfig, McpStorageConfig,
     NamespaceListItem as CoreNamespaceListItem, NamespaceRecord, NamespaceRegistry,
-    NamespaceRegistryError, NamespaceSlug, PipelineConfig,
+    NamespaceRegistryError, NamespaceSlug, PipelineConfig, SchemaProposal, SchemaStatus,
 };
 
 use crate::error::{AwsStorageError, Result};
@@ -634,6 +635,222 @@ impl DynamoNamespaceRegistry {
             None => Ok(None),
         }
     }
+
+    /// Store a schema proposal in DynamoDB.
+    ///
+    /// Writes the proposal as SK=SCHEMA alongside the namespace's META, CONFIG,
+    /// and DESCRIPTOR records. Overwrites any existing proposal.
+    ///
+    /// Also clears `entity_types` and `relation_types` from PipelineConfig to
+    /// prevent stale approved types from being used after a re-run.
+    ///
+    /// # Arguments
+    ///
+    /// * `slug` - Validated namespace slug
+    /// * `proposal` - The schema proposal to store
+    pub async fn store_schema(
+        &self,
+        slug: &NamespaceSlug,
+        proposal: &SchemaProposal,
+    ) -> Result<()> {
+        let pk = format!("NS#{}", slug.as_str());
+        let proposal_json = serde_json::to_string(proposal)?;
+
+        self.client
+            .put_item()
+            .table_name(&self.config.table_name)
+            .item("PK", AttributeValue::S(pk))
+            .item("SK", AttributeValue::S("SCHEMA".to_string()))
+            .item("data", AttributeValue::S(proposal_json))
+            .item(
+                "proposed_at",
+                AttributeValue::N(proposal.proposed_at.to_string()),
+            )
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
+        // Clear entity_types and relation_types from PipelineConfig to force re-approval
+        if let Some(mut config) = self.get_config(slug).await? {
+            if !config.entity_types.is_empty() || !config.relation_types.is_empty() {
+                config.entity_types.clear();
+                config.relation_types.clear();
+                config.updated_at = chrono::Utc::now().timestamp_millis();
+                self.update_config(slug, &config).await?;
+                debug!(
+                    namespace = slug.as_str(),
+                    "Cleared PipelineConfig entity/relation types on schema re-proposal"
+                );
+            }
+        }
+
+        debug!(namespace = slug.as_str(), "Stored schema proposal");
+        Ok(())
+    }
+
+    /// Get the schema proposal for a namespace.
+    ///
+    /// Returns the stored [`SchemaProposal`] if one exists, or `None` if
+    /// no schema has been proposed yet.
+    ///
+    /// # Arguments
+    ///
+    /// * `slug` - Validated namespace slug
+    pub async fn get_schema(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<Option<SchemaProposal>> {
+        let pk = format!("NS#{}", slug.as_str());
+
+        let result = self
+            .client
+            .get_item()
+            .table_name(&self.config.table_name)
+            .key("PK", AttributeValue::S(pk))
+            .key("SK", AttributeValue::S("SCHEMA".to_string()))
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
+        match result.item {
+            Some(item) => {
+                let data = item
+                    .get("data")
+                    .ok_or_else(|| {
+                        AwsStorageError::DynamoDbError(
+                            "Missing 'data' attribute on namespace SCHEMA record".into(),
+                        )
+                    })?
+                    .as_s()
+                    .map_err(|_| {
+                        AwsStorageError::DynamoDbError(
+                            "'data' attribute is not a string".into(),
+                        )
+                    })?;
+
+                let proposal: SchemaProposal = serde_json::from_str(data)?;
+                Ok(Some(proposal))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Approve the current schema proposal.
+    ///
+    /// 1. Read current schema, error if not found or not in `Proposed` state
+    /// 2. Set status to `Approved`, `reviewed_at` to now
+    /// 3. Store updated schema
+    /// 4. Copy entity/relation type names into PipelineConfig
+    /// 5. Return updated proposal
+    pub async fn approve_schema(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<SchemaProposal> {
+        let mut proposal = self
+            .get_schema(slug)
+            .await?
+            .ok_or_else(|| AwsStorageError::SchemaNotFound(slug.as_str().to_string()))?;
+
+        if proposal.status != SchemaStatus::Proposed {
+            return Err(AwsStorageError::InvalidSchemaState(format!(
+                "Cannot approve schema in state {:?}",
+                proposal.status
+            )));
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        proposal.status = SchemaStatus::Approved;
+        proposal.reviewed_at = Some(now);
+        self.store_schema_raw(slug, &proposal).await?;
+
+        // Copy entity/relation type names into PipelineConfig
+        let mut config = self.get_config(slug).await?.unwrap_or_default();
+        config.entity_types = proposal
+            .entity_types
+            .iter()
+            .map(|e| e.name.clone())
+            .collect();
+        config.relation_types = proposal
+            .relation_types
+            .iter()
+            .map(|r| r.name.clone())
+            .collect();
+        config.updated_at = now;
+        self.update_config(slug, &config).await?;
+
+        info!(
+            namespace = slug.as_str(),
+            entity_types = config.entity_types.len(),
+            relation_types = config.relation_types.len(),
+            "Schema approved, PipelineConfig updated"
+        );
+
+        Ok(proposal)
+    }
+
+    /// Reject the current schema proposal.
+    ///
+    /// 1. Read current schema, error if not found or not in `Proposed` state
+    /// 2. Set status to `Rejected`, `reviewed_at` to now
+    /// 3. Store updated schema
+    /// 4. Return updated proposal
+    pub async fn reject_schema(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<SchemaProposal> {
+        let mut proposal = self
+            .get_schema(slug)
+            .await?
+            .ok_or_else(|| AwsStorageError::SchemaNotFound(slug.as_str().to_string()))?;
+
+        if proposal.status != SchemaStatus::Proposed {
+            return Err(AwsStorageError::InvalidSchemaState(format!(
+                "Cannot reject schema in state {:?}",
+                proposal.status
+            )));
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        proposal.status = SchemaStatus::Rejected;
+        proposal.reviewed_at = Some(now);
+        self.store_schema_raw(slug, &proposal).await?;
+
+        info!(
+            namespace = slug.as_str(),
+            "Schema rejected"
+        );
+
+        Ok(proposal)
+    }
+
+    /// Internal: store schema without clearing PipelineConfig types.
+    ///
+    /// Used by approve/reject to update the schema without triggering
+    /// the re-proposal config clearing logic.
+    async fn store_schema_raw(
+        &self,
+        slug: &NamespaceSlug,
+        proposal: &SchemaProposal,
+    ) -> Result<()> {
+        let pk = format!("NS#{}", slug.as_str());
+        let proposal_json = serde_json::to_string(proposal)?;
+
+        self.client
+            .put_item()
+            .table_name(&self.config.table_name)
+            .item("PK", AttributeValue::S(pk))
+            .item("SK", AttributeValue::S("SCHEMA".to_string()))
+            .item("data", AttributeValue::S(proposal_json))
+            .item(
+                "proposed_at",
+                AttributeValue::N(proposal.proposed_at.to_string()),
+            )
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
+        Ok(())
+    }
 }
 
 /// Map AwsStorageError to NamespaceRegistryError.
@@ -643,6 +860,10 @@ fn to_registry_error(err: AwsStorageError) -> NamespaceRegistryError {
             NamespaceRegistryError::AlreadyExists(slug)
         }
         AwsStorageError::NamespaceNotFound(slug) => NamespaceRegistryError::NotFound(slug),
+        AwsStorageError::SchemaNotFound(slug) => NamespaceRegistryError::SchemaNotFound(slug),
+        AwsStorageError::InvalidSchemaState(msg) => {
+            NamespaceRegistryError::InvalidSchemaState(msg)
+        }
         other => NamespaceRegistryError::Internal(other.to_string()),
     }
 }
@@ -705,6 +926,41 @@ impl NamespaceRegistry for DynamoNamespaceRegistry {
         slug: &NamespaceSlug,
     ) -> std::result::Result<Option<McpDescriptor>, NamespaceRegistryError> {
         self.get_descriptor(slug)
+            .await
+            .map_err(to_registry_error)
+    }
+
+    async fn get_schema(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> std::result::Result<Option<SchemaProposal>, NamespaceRegistryError> {
+        self.get_schema(slug).await.map_err(to_registry_error)
+    }
+
+    async fn store_schema(
+        &self,
+        slug: &NamespaceSlug,
+        proposal: &SchemaProposal,
+    ) -> std::result::Result<(), NamespaceRegistryError> {
+        self.store_schema(slug, proposal)
+            .await
+            .map_err(to_registry_error)
+    }
+
+    async fn approve_schema(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> std::result::Result<SchemaProposal, NamespaceRegistryError> {
+        self.approve_schema(slug)
+            .await
+            .map_err(to_registry_error)
+    }
+
+    async fn reject_schema(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> std::result::Result<SchemaProposal, NamespaceRegistryError> {
+        self.reject_schema(slug)
             .await
             .map_err(to_registry_error)
     }

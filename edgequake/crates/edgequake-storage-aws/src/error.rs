@@ -64,6 +64,14 @@ pub enum AwsStorageError {
     #[error("Namespace not found: {0}")]
     NamespaceNotFound(String),
 
+    /// Schema not found for namespace
+    #[error("Schema not found for namespace: {0}")]
+    SchemaNotFound(String),
+
+    /// Invalid schema state for requested operation
+    #[error("Invalid schema state: {0}")]
+    InvalidSchemaState(String),
+
     /// Generic error
     #[error("AWS storage error: {0}")]
     Other(String),

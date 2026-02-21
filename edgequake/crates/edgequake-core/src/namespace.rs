@@ -13,6 +13,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::mcp_descriptor::McpDescriptor;
+use crate::schema::SchemaProposal;
 
 /// A validated namespace slug (DNS-safe identifier).
 ///
@@ -208,6 +209,12 @@ pub enum NamespaceRegistryError {
     /// Namespace not found.
     #[error("Namespace not found: {0}")]
     NotFound(String),
+    /// Schema not found for namespace.
+    #[error("Schema not found for namespace: {0}")]
+    SchemaNotFound(String),
+    /// Schema is in an invalid state for the requested operation.
+    #[error("Invalid schema state: {0}")]
+    InvalidSchemaState(String),
     /// Internal error (storage backend failure).
     #[error("Registry error: {0}")]
     Internal(String),
@@ -259,6 +266,52 @@ pub trait NamespaceRegistry: Send + Sync {
         &self,
         slug: &NamespaceSlug,
     ) -> Result<Option<McpDescriptor>, NamespaceRegistryError>;
+
+    /// Get the schema proposal for a namespace.
+    ///
+    /// Returns the [`SchemaProposal`] if one exists, or `None` if no schema
+    /// has been proposed yet.
+    async fn get_schema(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<Option<SchemaProposal>, NamespaceRegistryError>;
+
+    /// Store a schema proposal for a namespace.
+    ///
+    /// Replaces any existing proposal. Also clears `entity_types` and
+    /// `relation_types` from the `PipelineConfig` to force re-approval.
+    async fn store_schema(
+        &self,
+        slug: &NamespaceSlug,
+        proposal: &SchemaProposal,
+    ) -> Result<(), NamespaceRegistryError>;
+
+    /// Approve the current schema proposal.
+    ///
+    /// Sets status to `Approved`, copies entity/relation type names into
+    /// `PipelineConfig`, and returns the updated proposal.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SchemaNotFound` if no proposal exists, or `InvalidSchemaState`
+    /// if the proposal is not in `Proposed` status.
+    async fn approve_schema(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<SchemaProposal, NamespaceRegistryError>;
+
+    /// Reject the current schema proposal.
+    ///
+    /// Sets status to `Rejected` and returns the updated proposal.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SchemaNotFound` if no proposal exists, or `InvalidSchemaState`
+    /// if the proposal is not in `Proposed` status.
+    async fn reject_schema(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<SchemaProposal, NamespaceRegistryError>;
 }
 
 /// Type alias for a shared namespace registry.
