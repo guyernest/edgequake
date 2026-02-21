@@ -97,6 +97,32 @@ const schema = a.schema({
     reviewed_at: a.integer(),
   }),
 
+  // --- Pipeline Status Types ---
+
+  NamespaceStatus: a.customType({
+    status: a.string().required(),
+    phase: a.string(),
+    job_id: a.string(),
+    total_documents: a.integer(),
+    processed_documents: a.integer(),
+    total_chunks: a.integer(),
+    current_batch: a.integer(),
+    total_batches: a.integer(),
+    started_at: a.integer(),
+    updated_at: a.integer(),
+    error_summary: a.string(),
+  }),
+
+  IngestionRequest: a.customType({
+    namespace: a.string().required(),
+    batch_size: a.integer().required(),
+    offset: a.integer().required(),
+    data_path: a.string().required(),
+    requested_at: a.integer().required(),
+    status: a.string().required(),
+    cli_command: a.string(),
+  }),
+
   // --- Namespace Queries ---
 
   getNamespace: a
@@ -184,6 +210,41 @@ const schema = a.schema({
       }),
       a.handler.custom({
         entry: './resolvers/update-pipeline-config-write.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+    ]),
+
+  // --- Pipeline Status and Ingestion ---
+
+  getNamespaceStatus: a
+    .query()
+    .arguments({ slug: a.string().required() })
+    .returns(a.ref('NamespaceStatus'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(
+      a.handler.custom({
+        entry: './resolvers/get-namespace-status.js',
+        dataSource: 'NamespaceTableDataSource',
+      })
+    ),
+
+  triggerIngestion: a
+    .mutation()
+    .arguments({
+      slug: a.string().required(),
+      batch_size: a.integer().required(),
+      offset: a.integer().required(),
+      data_path: a.string().required(),
+    })
+    .returns(a.ref('IngestionRequest'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler([
+      a.handler.custom({
+        entry: './resolvers/trigger-ingestion.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/trigger-ingestion-write.js',
         dataSource: 'NamespaceTableDataSource',
       }),
     ]),
