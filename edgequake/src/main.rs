@@ -432,12 +432,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ns_config = DynamoNamespaceConfig {
             table_name: namespace_table.clone(),
         };
-        let registry = DynamoNamespaceRegistry::new(ns_config, dynamo_client);
-        info!(
-            table = %namespace_table,
-            "Namespace registry configured (DynamoDB)"
-        );
-
         // Construct namespace storage factory for namespace-scoped data operations
         let neptune_endpoint = std::env::var("NEPTUNE_ENDPOINT")
             .unwrap_or_else(|_| "localhost:8182".to_string());
@@ -449,6 +443,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or(1536);
         let kv_table = std::env::var("DYNAMODB_TABLE")
             .unwrap_or_else(|_| "edgequake-kv".to_string());
+
+        // Build InfrastructureConfig for MCP descriptor auto-generation
+        let infra_config = edgequake_core::InfrastructureConfig {
+            neptune_endpoint: neptune_endpoint.clone(),
+            vector_bucket_name: vector_bucket.clone(),
+            dynamodb_table_name: kv_table.clone(),
+            account_id: std::env::var("AWS_ACCOUNT_ID")
+                .unwrap_or_else(|_| "000000000000".to_string()),
+            region: std::env::var("AWS_REGION")
+                .unwrap_or_else(|_| "us-east-1".to_string()),
+            environment: std::env::var("ENVIRONMENT")
+                .unwrap_or_else(|_| "dev".to_string()),
+            external_id_suffix: std::env::var("EXTERNAL_ID_SUFFIX")
+                .unwrap_or_else(|_| "default".to_string()),
+        };
+
+        let registry = DynamoNamespaceRegistry::new(ns_config, dynamo_client)
+            .with_infra(infra_config);
+        info!(
+            table = %namespace_table,
+            "Namespace registry configured (DynamoDB, MCP descriptor auto-generation enabled)"
+        );
 
         let factory = namespace_factory::AwsNamespaceStorageFactory::new(
             neptune_endpoint.clone(),

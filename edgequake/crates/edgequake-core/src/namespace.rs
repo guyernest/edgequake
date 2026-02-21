@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Arc;
 
+use crate::mcp_descriptor::McpDescriptor;
+
 /// A validated namespace slug (DNS-safe identifier).
 ///
 /// Format: lowercase alphanumeric characters and hyphens only, 1-63 characters.
@@ -248,6 +250,15 @@ pub trait NamespaceRegistry: Send + Sync {
         slug: &NamespaceSlug,
         config: &PipelineConfig,
     ) -> Result<(), NamespaceRegistryError>;
+
+    /// Get the MCP descriptor for a namespace.
+    ///
+    /// Returns the self-contained [`McpDescriptor`] if the namespace has one,
+    /// or `None` if the descriptor has not been generated yet.
+    async fn get_descriptor(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<Option<McpDescriptor>, NamespaceRegistryError>;
 }
 
 /// Type alias for a shared namespace registry.

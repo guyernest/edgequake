@@ -11,6 +11,7 @@
 //! NAMESPACES           {slug}          { created_at }          -- list entry
 //! NS#{slug}            META            { NamespaceRecord JSON }
 //! NS#{slug}            CONFIG          { PipelineConfig JSON }
+//! NS#{slug}            DESCRIPTOR      { McpDescriptor JSON }  -- MCP descriptor
 //! ```
 //!
 //! ## Example
@@ -31,9 +32,11 @@
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client as DynamoDbClient;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use edgequake_core::{
+    default_mcp_tools, InfrastructureConfig, McpAuthConfig, McpDescriptor, McpDynamoDbConfig,
+    McpNamespaceInfo, McpNeptuneConfig, McpPipelineConfig, McpS3VectorsConfig, McpStorageConfig,
     NamespaceListItem as CoreNamespaceListItem, NamespaceRecord, NamespaceRegistry,
     NamespaceRegistryError, NamespaceSlug, PipelineConfig,
 };
@@ -111,9 +114,13 @@ pub struct NamespaceListItem {
 /// Provides create, list, describe operations for namespace metadata and
 /// per-namespace pipeline configuration persistence. Uses conditional puts
 /// for slug uniqueness enforcement.
+///
+/// When `infra` is set via [`with_infra`](Self::with_infra), MCP descriptors
+/// are auto-generated and stored on namespace creation.
 pub struct DynamoNamespaceRegistry {
     client: DynamoDbClient,
     config: DynamoNamespaceConfig,
+    infra: Option<InfrastructureConfig>,
 }
 
 impl DynamoNamespaceRegistry {
@@ -124,7 +131,21 @@ impl DynamoNamespaceRegistry {
     /// * `config` - Registry configuration (table name)
     /// * `client` - Pre-configured DynamoDB client
     pub fn new(config: DynamoNamespaceConfig, client: DynamoDbClient) -> Self {
-        Self { client, config }
+        Self {
+            client,
+            config,
+            infra: None,
+        }
+    }
+
+    /// Set the infrastructure config for auto-generating MCP descriptors
+    /// on namespace creation.
+    ///
+    /// When set, `create_namespace` will automatically generate and store
+    /// an MCP descriptor after writing the namespace record and config.
+    pub fn with_infra(mut self, infra: InfrastructureConfig) -> Self {
+        self.infra = Some(infra);
+        self
     }
 
     /// Create a new namespace.
@@ -221,6 +242,35 @@ impl DynamoNamespaceRegistry {
             .map_err(dynamo_err)?;
 
         info!(namespace = slug.as_str(), "Created namespace");
+
+        // 4. Auto-generate and store MCP descriptor if infra config is available
+        if let Some(ref infra) = self.infra {
+            match self.generate_descriptor(slug, infra).await {
+                Ok(descriptor) => match self.store_descriptor(slug, &descriptor).await {
+                    Ok(()) => {
+                        info!(
+                            namespace = slug.as_str(),
+                            "Auto-generated and stored MCP descriptor"
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            namespace = slug.as_str(),
+                            error = %e,
+                            "Failed to store MCP descriptor (namespace created successfully)"
+                        );
+                    }
+                },
+                Err(e) => {
+                    warn!(
+                        namespace = slug.as_str(),
+                        error = %e,
+                        "Failed to generate MCP descriptor (namespace created successfully)"
+                    );
+                }
+            }
+        }
+
         Ok(record)
     }
 
@@ -429,6 +479,161 @@ impl DynamoNamespaceRegistry {
             Err(e) => Err(dynamo_err(e)),
         }
     }
+
+    /// Generate an MCP descriptor for a namespace.
+    ///
+    /// Reads the namespace record and pipeline config from DynamoDB,
+    /// combines them with the infrastructure config to produce a
+    /// self-contained [`McpDescriptor`].
+    ///
+    /// # Arguments
+    ///
+    /// * `slug` - Validated namespace slug
+    /// * `infra` - Infrastructure configuration (endpoints, account, region)
+    ///
+    /// # Errors
+    ///
+    /// Returns `NamespaceNotFound` if the namespace does not exist.
+    pub async fn generate_descriptor(
+        &self,
+        slug: &NamespaceSlug,
+        infra: &InfrastructureConfig,
+    ) -> Result<McpDescriptor> {
+        // Fetch namespace record (must exist)
+        let record = self
+            .describe_namespace(slug)
+            .await?
+            .ok_or_else(|| AwsStorageError::NamespaceNotFound(slug.as_str().to_string()))?;
+
+        // Fetch pipeline config (use defaults if not set)
+        let config = self
+            .get_config(slug)
+            .await?
+            .unwrap_or_default();
+
+        let descriptor = McpDescriptor {
+            schema_version: "1.0".to_string(),
+            namespace: McpNamespaceInfo {
+                slug: slug.as_str().to_string(),
+                description: record.description,
+            },
+            storage: McpStorageConfig {
+                neptune: McpNeptuneConfig {
+                    endpoint: infra.neptune_endpoint.clone(),
+                    label_prefix: slug.as_str().to_string(),
+                },
+                s3_vectors: McpS3VectorsConfig {
+                    bucket_name: infra.vector_bucket_name.clone(),
+                    index_name: format!("{}-embeddings", slug.as_str()),
+                },
+                dynamodb: McpDynamoDbConfig {
+                    table_name: infra.dynamodb_table_name.clone(),
+                    namespace_key: slug.as_str().to_string(),
+                },
+            },
+            auth: McpAuthConfig {
+                role_arn: format!(
+                    "arn:aws:iam::{}:role/edgequake-mcp-{}-{}",
+                    infra.account_id,
+                    slug.as_str(),
+                    infra.environment
+                ),
+                external_id: format!("eq-{}-{}", slug.as_str(), infra.external_id_suffix),
+                region: infra.region.clone(),
+            },
+            pipeline_config: McpPipelineConfig {
+                embedding_model: config.embedding_model,
+                embedding_dimension: config.embedding_dimension,
+                llm_model: config.llm_model,
+            },
+            tools: default_mcp_tools(),
+            generated_at: chrono::Utc::now().timestamp_millis(),
+        };
+
+        Ok(descriptor)
+    }
+
+    /// Store an MCP descriptor in DynamoDB.
+    ///
+    /// Writes the descriptor as SK=DESCRIPTOR alongside the namespace's
+    /// META and CONFIG records. Overwrites any existing descriptor.
+    ///
+    /// # Arguments
+    ///
+    /// * `slug` - Validated namespace slug
+    /// * `descriptor` - The MCP descriptor to store
+    pub async fn store_descriptor(
+        &self,
+        slug: &NamespaceSlug,
+        descriptor: &McpDescriptor,
+    ) -> Result<()> {
+        let pk = format!("NS#{}", slug.as_str());
+        let descriptor_json = serde_json::to_string(descriptor)?;
+
+        self.client
+            .put_item()
+            .table_name(&self.config.table_name)
+            .item("PK", AttributeValue::S(pk))
+            .item("SK", AttributeValue::S("DESCRIPTOR".to_string()))
+            .item("data", AttributeValue::S(descriptor_json))
+            .item(
+                "generated_at",
+                AttributeValue::N(descriptor.generated_at.to_string()),
+            )
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
+        debug!(namespace = slug.as_str(), "Stored MCP descriptor");
+        Ok(())
+    }
+
+    /// Get the MCP descriptor for a namespace.
+    ///
+    /// Returns the stored [`McpDescriptor`] if one exists, or `None` if
+    /// the descriptor has not been generated yet.
+    ///
+    /// # Arguments
+    ///
+    /// * `slug` - Validated namespace slug
+    pub async fn get_descriptor(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<Option<McpDescriptor>> {
+        let pk = format!("NS#{}", slug.as_str());
+
+        let result = self
+            .client
+            .get_item()
+            .table_name(&self.config.table_name)
+            .key("PK", AttributeValue::S(pk))
+            .key("SK", AttributeValue::S("DESCRIPTOR".to_string()))
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
+        match result.item {
+            Some(item) => {
+                let data = item
+                    .get("data")
+                    .ok_or_else(|| {
+                        AwsStorageError::DynamoDbError(
+                            "Missing 'data' attribute on namespace DESCRIPTOR record".into(),
+                        )
+                    })?
+                    .as_s()
+                    .map_err(|_| {
+                        AwsStorageError::DynamoDbError(
+                            "'data' attribute is not a string".into(),
+                        )
+                    })?;
+
+                let descriptor: McpDescriptor = serde_json::from_str(data)?;
+                Ok(Some(descriptor))
+            }
+            None => Ok(None),
+        }
+    }
 }
 
 /// Map AwsStorageError to NamespaceRegistryError.
@@ -491,6 +696,15 @@ impl NamespaceRegistry for DynamoNamespaceRegistry {
         config: &PipelineConfig,
     ) -> std::result::Result<(), NamespaceRegistryError> {
         self.update_config(slug, config)
+            .await
+            .map_err(to_registry_error)
+    }
+
+    async fn get_descriptor(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> std::result::Result<Option<McpDescriptor>, NamespaceRegistryError> {
+        self.get_descriptor(slug)
             .await
             .map_err(to_registry_error)
     }
