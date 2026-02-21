@@ -14,10 +14,14 @@ path = "src/main.rs"
 
 [dependencies]
 # Workspace crates
+edgequake-core = { workspace = true }
 edgequake-pipeline = { workspace = true }
 edgequake-storage = { workspace = true }
 edgequake-storage-aws = { workspace = true, features = ["full"] }
 edgequake-llm = { workspace = true }
+
+# BM25 text preprocessing (shared tokenizer pipeline)
+tantivy = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true, features = ["full"] }

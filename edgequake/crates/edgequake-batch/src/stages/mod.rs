@@ -6,6 +6,7 @@
 //! - `embed`:   Phase 3 - Generate embeddings via standard API
 //! - `store`:   Phase 4 - Write to Neptune, S3, and DynamoDB
 
+pub mod bm25_index;
 pub mod bulk_load;
 pub mod embed;
 pub mod extract;
