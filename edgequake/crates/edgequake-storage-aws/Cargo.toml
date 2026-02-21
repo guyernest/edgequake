@@ -14,7 +14,7 @@ s3-vectors = ["dep:parquet", "dep:arrow"]
 s3vectors = ["dep:aws-sdk-s3vectors"]
 dynamodb = ["dep:aws-sdk-dynamodb"]
 neptune = ["dep:aws-sdk-neptunedata"]
-athena = ["dep:aws-sdk-athena"]
+athena = ["dep:aws-sdk-athena", "dep:parquet", "dep:arrow"]
 # Enable all AWS storage backends
 full = ["s3-vectors", "s3vectors", "dynamodb", "neptune", "athena"]
 

@@ -69,7 +69,13 @@ pub mod dynamodb_kv;
 pub mod dynamodb_namespace;
 
 #[cfg(feature = "athena")]
+pub mod athena_bm25;
+
+#[cfg(feature = "athena")]
 pub mod athena_sql;
+
+#[cfg(feature = "athena")]
+pub mod bm25_parquet;
 
 // Re-export main types
 pub use error::{AwsStorageError, Result};
@@ -86,6 +92,9 @@ pub use dynamodb_kv::{DynamoKVConfig, DynamoKVStorage};
 
 #[cfg(feature = "dynamodb")]
 pub use dynamodb_namespace::{DynamoNamespaceConfig, DynamoNamespaceRegistry, NamespaceListItem};
+
+#[cfg(feature = "athena")]
+pub use athena_bm25::{AthenaBm25Config, AthenaBm25Storage};
 
 #[cfg(feature = "athena")]
 pub use athena_sql::{AthenaConfig, AthenaQueryEngine, AthenaRow, QueryBuilder, QueryStats};
