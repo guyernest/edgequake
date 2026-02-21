@@ -1,0 +1,3 @@
+node_modules/
+.amplify/
+ampx_outputs.json
