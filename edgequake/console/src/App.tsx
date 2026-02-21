@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { NamespacePage } from '@/pages/NamespacePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -12,15 +13,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-function NamespacePage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold">Namespace Detail</h1>
-      <p className="text-muted-foreground mt-2">Namespace detail coming in Plan 03</p>
-    </div>
-  );
-}
 
 export default function App() {
   return (
