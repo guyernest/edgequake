@@ -51,6 +51,7 @@
 //! - [`crate::keywords`] for keyword extraction
 //! - [`crate::truncation`] for token budgeting
 
+pub mod bm25_scorer;
 pub mod chunk_retrieval;
 pub mod context;
 pub mod engine;
@@ -58,12 +59,14 @@ pub mod error;
 pub mod helpers;
 pub mod keywords;
 pub mod modes;
+pub mod retrieval_mode;
 pub mod sota_engine;
 pub mod strategies;
 pub mod tokenizer;
 pub mod truncation;
 pub mod vector_filter;
 
+pub use bm25_scorer::{reciprocal_rank_fusion, Bm25QueryCoordinator, DEFAULT_RRF_K};
 pub use chunk_retrieval::{
     merge_chunks, retrieve_chunks_from_entities, retrieve_chunks_from_relationships,
     ChunkSelectionMethod,
@@ -81,6 +84,7 @@ pub use keywords::{
     KeywordExtractor, Keywords, LLMKeywordExtractor, MockKeywordExtractor, QueryIntent,
 };
 pub use modes::QueryMode;
+pub use retrieval_mode::RetrievalMode;
 pub use sota_engine::{QueryEmbeddings, SOTAQueryConfig, SOTAQueryEngine};
 pub use strategies::{
     create_strategy, GlobalStrategy, HybridStrategy, LocalStrategy, MixStrategy, NaiveStrategy,

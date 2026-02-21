@@ -16,6 +16,9 @@ edgequake-core = { path = "../edgequake-core", default-features = false }
 edgequake-storage = { path = "../edgequake-storage", default-features = false }
 edgequake-llm = { path = "../edgequake-llm" }
 
+# BM25 query-time text preprocessing (same analyzer as index time)
+tantivy = { workspace = true }
+
 async-trait.workspace = true
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
