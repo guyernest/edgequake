@@ -7,6 +7,7 @@ const ACTIVE_STATUSES = new Set([
   'extracting',
   'embedding',
   'storing',
+  'requested',
 ]);
 
 const ACTIVE_POLL_INTERVAL = 5_000;

@@ -84,6 +84,12 @@ pub struct QueryRequest {
     /// @implements SPEC-032: Full model selection in query interface
     #[serde(default)]
     pub llm_model: Option<String>,
+
+    /// Retrieval mode: "vector" (default), "bm25", or "hybrid".
+    /// Controls ranking strategy — orthogonal to query mode.
+    /// @implements RET-03: Hybrid retrieval mode configurable per query
+    #[serde(default)]
+    pub retrieval_mode: Option<String>,
 }
 
 /// Streaming query request.

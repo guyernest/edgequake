@@ -18,7 +18,7 @@ use std::sync::Arc;
 use tracing::{debug, warn};
 
 use edgequake_core::NamespaceSlug;
-use edgequake_query::{QueryMode, QueryRequest as EngineQueryRequest, SOTAQueryConfig, SOTAQueryEngine};
+use edgequake_query::{QueryMode, QueryRequest as EngineQueryRequest, RetrievalMode, SOTAQueryConfig, SOTAQueryEngine};
 
 use crate::error::{ApiError, ApiResult};
 use crate::middleware::TenantContext;
@@ -120,6 +120,18 @@ pub async fn ns_execute_query(
     engine_request = engine_request.with_rerank(request.enable_rerank);
     if let Some(top_k) = request.rerank_top_k {
         engine_request = engine_request.with_rerank_top_k(top_k);
+    }
+
+    // Add retrieval mode (vector/bm25/hybrid) — RET-03
+    if let Some(ref rm) = request.retrieval_mode {
+        match rm.parse::<RetrievalMode>() {
+            Ok(mode) => {
+                engine_request = engine_request.with_retrieval_mode(mode);
+            }
+            Err(e) => {
+                return Err(ApiError::BadRequest(format!("Invalid retrieval_mode: {}", e)));
+            }
+        }
     }
 
     // Add conversation history if provided

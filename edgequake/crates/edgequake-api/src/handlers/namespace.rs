@@ -38,6 +38,12 @@ fn map_registry_error(err: NamespaceRegistryError) -> ApiError {
             ApiError::NotFound(format!("Namespace not found: {}", slug))
         }
         NamespaceRegistryError::Internal(msg) => ApiError::Internal(msg),
+        NamespaceRegistryError::SchemaNotFound(slug) => {
+            ApiError::NotFound(format!("Schema not found for namespace: {}", slug))
+        }
+        NamespaceRegistryError::InvalidSchemaState(msg) => {
+            ApiError::BadRequest(format!("Invalid schema state: {}", msg))
+        }
     }
 }
 

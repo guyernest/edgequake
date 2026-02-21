@@ -154,9 +154,8 @@ const schema = a.schema({
     .returns(a.ref('McpDescriptor'))
     .authorization((allow) => [allow.authenticated()])
     .handler(
-      // Placeholder — descriptor viewing not in PIPE requirements
       a.handler.custom({
-        entry: './resolvers/placeholder.js',
+        entry: './resolvers/get-namespace-descriptor.js',
         dataSource: 'NamespaceTableDataSource',
       })
     ),
