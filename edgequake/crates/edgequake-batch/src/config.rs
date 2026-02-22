@@ -80,6 +80,21 @@ pub struct BatchConfig {
 
     /// S3 location for Athena query results (required when athena_bm25_database is set).
     pub athena_output_location: Option<String>,
+
+    /// Document delimiter for splitting single files into multiple documents.
+    pub delimiter: Option<String>,
+
+    /// Disable automatic document splitting.
+    pub no_split: bool,
+
+    /// Disable recursive directory traversal.
+    pub no_recurse: bool,
+
+    /// Include glob patterns for directory scanning.
+    pub include_patterns: Vec<String>,
+
+    /// Exclude glob patterns for directory scanning.
+    pub exclude_patterns: Vec<String>,
 }
 
 impl BatchConfig {

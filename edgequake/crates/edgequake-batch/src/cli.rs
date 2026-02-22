@@ -10,9 +10,29 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(name = "edgequake-batch", version, about)]
 pub struct Cli {
-    /// Path to the parquet data file
+    /// Path to input data (parquet file, text/markdown file, or directory)
     #[arg(short, long, env = "BATCH_DATA_PATH")]
     pub data: PathBuf,
+
+    /// Document delimiter for splitting a single file into multiple documents (literal string match)
+    #[arg(long, env = "BATCH_DELIMITER")]
+    pub delimiter: Option<String>,
+
+    /// Disable automatic document splitting (treat each file as a single document)
+    #[arg(long, default_value = "false")]
+    pub no_split: bool,
+
+    /// Disable recursive directory traversal (process only top-level files)
+    #[arg(long, default_value = "false")]
+    pub no_recurse: bool,
+
+    /// Include only files matching these glob patterns (e.g., '*.md')
+    #[arg(long)]
+    pub include: Vec<String>,
+
+    /// Exclude files matching these glob patterns (e.g., 'drafts/**')
+    #[arg(long)]
+    pub exclude: Vec<String>,
 
     /// OpenAI API key
     #[arg(long, env = "OPENAI_API_KEY")]

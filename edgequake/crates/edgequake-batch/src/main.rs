@@ -114,6 +114,11 @@ async fn main() -> anyhow::Result<()> {
         bm25_s3_bucket: cli.bm25_s3_bucket.clone(),
         athena_workgroup: cli.athena_workgroup.clone(),
         athena_output_location: cli.athena_output_location.clone(),
+        delimiter: cli.delimiter.clone(),
+        no_split: cli.no_split,
+        no_recurse: cli.no_recurse,
+        include_patterns: cli.include.clone(),
+        exclude_patterns: cli.exclude.clone(),
     };
 
     // Create work directory
