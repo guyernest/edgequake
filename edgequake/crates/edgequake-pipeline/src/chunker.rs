@@ -30,6 +30,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::sync::Arc;
 
 use crate::error::Result;
@@ -43,6 +44,9 @@ pub struct ChunkResult {
     pub tokens: usize,
     /// Zero-based index indicating the chunk's order in the document.
     pub chunk_order_index: usize,
+    /// Optional metadata for strategy-specific context (e.g. heading breadcrumbs).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 /// Trait for custom chunking strategies.
@@ -262,6 +266,7 @@ impl ChunkingStrategy for TokenBasedChunking {
                         content: s.to_string(),
                         tokens: estimate_tokens(s),
                         chunk_order_index: idx,
+                        metadata: None,
                     })
                     .collect());
             }
@@ -286,6 +291,7 @@ impl ChunkingStrategy for TokenBasedChunking {
                 content: text.clone(),
                 tokens: estimate_tokens(&text),
                 chunk_order_index: idx,
+                metadata: None,
             })
             .collect())
     }
@@ -335,6 +341,7 @@ impl ChunkingStrategy for CharacterBasedChunking {
                 content: s.to_string(),
                 tokens: estimate_tokens(s),
                 chunk_order_index: idx,
+                metadata: None,
             })
             .collect())
     }
@@ -412,6 +419,7 @@ impl ChunkingStrategy for SentenceBoundaryChunking {
                     content: current_chunk.trim().to_string(),
                     tokens: current_tokens,
                     chunk_order_index: chunk_index,
+                    metadata: None,
                 });
                 chunk_index += 1;
 
@@ -437,6 +445,7 @@ impl ChunkingStrategy for SentenceBoundaryChunking {
                 content: current_chunk.trim().to_string(),
                 tokens: current_tokens,
                 chunk_order_index: chunk_index,
+                metadata: None,
             });
         }
 
@@ -539,6 +548,7 @@ fn chunk_paragraphs(paragraphs: &[&str], config: &ChunkerConfig) -> Result<Vec<C
                     content: current_chunk.trim().to_string(),
                     tokens: current_tokens,
                     chunk_order_index: chunk_index,
+                    metadata: None,
                 });
                 chunk_index += 1;
                 current_chunk = String::new();
@@ -550,6 +560,7 @@ fn chunk_paragraphs(paragraphs: &[&str], config: &ChunkerConfig) -> Result<Vec<C
                 content: para.to_string(),
                 tokens: para_tokens,
                 chunk_order_index: chunk_index,
+                metadata: None,
             });
             chunk_index += 1;
             continue;
@@ -561,6 +572,7 @@ fn chunk_paragraphs(paragraphs: &[&str], config: &ChunkerConfig) -> Result<Vec<C
                 content: current_chunk.trim().to_string(),
                 tokens: current_tokens,
                 chunk_order_index: chunk_index,
+                metadata: None,
             });
             chunk_index += 1;
             current_chunk = String::new();
@@ -581,6 +593,7 @@ fn chunk_paragraphs(paragraphs: &[&str], config: &ChunkerConfig) -> Result<Vec<C
             content: current_chunk.trim().to_string(),
             tokens: current_tokens,
             chunk_order_index: chunk_index,
+            metadata: None,
         });
     }
 
