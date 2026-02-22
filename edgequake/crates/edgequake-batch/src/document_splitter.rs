@@ -107,6 +107,7 @@ pub fn auto_detect_delimiter(content: &str, is_markdown: bool) -> Option<String>
         }
 
         // Check for known delimiter patterns
+        // Note: trimmed is guaranteed non-empty due to the check above
         let pattern = if trimmed == "***" {
             if is_markdown {
                 continue; // Skip for markdown (valid HR)
@@ -114,22 +115,13 @@ pub fn auto_detect_delimiter(content: &str, is_markdown: bool) -> Option<String>
             Some("***".to_string())
         } else if trimmed == "* * *" {
             Some("* * *".to_string())
-        } else if !trimmed.is_empty()
-            && trimmed.chars().all(|c| c == '-')
-            && trimmed.len() >= 3
-        {
+        } else if trimmed.len() >= 3 && trimmed.chars().all(|c| c == '-') {
             if is_markdown {
                 continue; // Skip for markdown (valid HR / front matter)
             }
             Some(trimmed.to_string())
-        } else if !trimmed.is_empty()
-            && trimmed.chars().all(|c| c == '=')
-            && trimmed.len() >= 3
-        {
-            Some(trimmed.to_string())
-        } else if !trimmed.is_empty()
-            && trimmed.chars().all(|c| c == '_')
-            && trimmed.len() >= 3
+        } else if trimmed.len() >= 3
+            && (trimmed.chars().all(|c| c == '=') || trimmed.chars().all(|c| c == '_'))
         {
             Some(trimmed.to_string())
         } else {
