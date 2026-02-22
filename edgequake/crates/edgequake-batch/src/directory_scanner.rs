@@ -128,6 +128,10 @@ impl DirectoryScanner {
         for entry in walker
             .into_iter()
             .filter_entry(|e| {
+                // Always allow the root directory itself (depth 0)
+                if e.depth() == 0 {
+                    return true;
+                }
                 // Skip hidden files and directories (start with '.')
                 e.file_name()
                     .to_str()
