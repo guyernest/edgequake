@@ -34,6 +34,7 @@ mod parquet_reader;
 mod progress;
 mod stages;
 mod state;
+mod validation;
 
 use clap::Parser;
 use cli::{Cli, Command};
@@ -263,6 +264,20 @@ async fn main() -> anyhow::Result<()> {
         exclude_patterns: cli.exclude.clone(),
         max_failures: cli.max_failures,
     };
+
+    // Upfront validation: check all preconditions before any processing
+    let is_ingestion_command = matches!(
+        cli.command,
+        Command::Run
+            | Command::Prepare
+            | Command::Extract
+            | Command::Embed
+            | Command::Store
+            | Command::Resume
+    );
+    if is_ingestion_command {
+        validation::validate_upfront(&config, &api_key).await?;
+    }
 
     // Create work directory
     std::fs::create_dir_all(&config.work_dir)?;
@@ -519,17 +534,35 @@ async fn run_full_pipeline(
     job: &mut state::JobState,
     progress: &BatchProgress,
 ) -> anyhow::Result<()> {
+    let pipeline_start = std::time::Instant::now();
     info!("Running full batch pipeline");
 
+    // Helper: check cumulative failure threshold after each stage
+    let check_failures = |job: &state::JobState, stage_name: &str| -> anyhow::Result<()> {
+        let total_failures: usize = job.errors_per_phase.values().sum();
+        if config.max_failures > 0 && total_failures > config.max_failures {
+            anyhow::bail!(
+                "Failure threshold exceeded: {} total failures (max: {}). Pipeline aborted after {} stage.",
+                total_failures,
+                config.max_failures,
+                stage_name
+            );
+        }
+        Ok(())
+    };
+
     // Phase 1: Prepare
+    info!("[Prepare] Starting...");
     let prepare_result = if matches!(job.phase, state::Phase::Pending | state::Phase::Preparing) {
         stages::prepare::run_prepare(config, domain_config, state_mgr, job, progress).await?
     } else {
         info!("Phase 1 already complete, re-running for data");
         stages::prepare::run_prepare(config, domain_config, state_mgr, job, progress).await?
     };
+    check_failures(job, "prepare")?;
 
     // Phase 2: Extract
+    info!("[Extract] Starting...");
     let extract_result = if matches!(job.phase, state::Phase::Prepared | state::Phase::Extracting) {
         stages::extract::run_extract(
             config,
@@ -576,8 +609,10 @@ async fn run_full_pipeline(
         )
         .await?
     };
+    check_failures(job, "extract")?;
 
     // Phase 3: Embed
+    info!("[Embed] Starting...");
     let embedding_provider = create_embedding_provider(api_key, &config.embedding_model)?;
     let embed_result = stages::embed::run_embed(
         config,
@@ -589,8 +624,10 @@ async fn run_full_pipeline(
         progress,
     )
     .await?;
+    check_failures(job, "embed")?;
 
     // Phase 4: Store
+    info!("[Store] Starting...");
     let (vectors, kv) = create_storage_backends(config).await?;
     let bm25 = create_bm25_storage(config).await?;
     stages::store::run_store(
@@ -609,7 +646,11 @@ async fn run_full_pipeline(
     )
     .await?;
 
-    info!("Full batch pipeline completed successfully!");
+    let pipeline_duration = pipeline_start.elapsed();
+    info!(
+        duration = ?pipeline_duration,
+        "Full batch pipeline completed successfully!"
+    );
     print_status(job);
 
     Ok(())
