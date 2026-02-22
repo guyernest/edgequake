@@ -3,9 +3,6 @@
 //! Builds system and user prompts by combining structural framing (kept in code)
 //! with domain-specific content (entity types, relationship keywords, examples)
 //! from a [`DomainConfig`].
-//!
-//! When using `DomainConfig::builtin_epstein()`, the output is character-identical
-//! to the original hardcoded `EpsteinExtractionPrompts`.
 
 use crate::domain_config::DomainConfig;
 use edgequake_pipeline::prompts::{DEFAULT_COMPLETION_DELIMITER, DEFAULT_TUPLE_DELIMITER};
@@ -240,9 +237,81 @@ fn capitalize_first(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain_config::{
+        DomainMetadata, FewShotExample, InstructionSection, PromptConfig, RelationshipKeyword,
+        UserInstruction,
+    };
+    use indexmap::IndexMap;
+
+    /// Build a rich test DomainConfig for prompt assembly tests.
+    fn make_test_config() -> DomainConfig {
+        let mut entity_types = IndexMap::new();
+        entity_types.insert("PERSON".to_string(), "A named individual".to_string());
+        entity_types.insert(
+            "ORGANIZATION".to_string(),
+            "A company or institution".to_string(),
+        );
+        entity_types.insert(
+            "LEGAL_CASE".to_string(),
+            "A court case or legal proceeding".to_string(),
+        );
+
+        let mut relationship_keywords = IndexMap::new();
+        relationship_keywords.insert(
+            "legal".to_string(),
+            vec![
+                RelationshipKeyword {
+                    keyword: "filed_in".to_string(),
+                    description: "case filed in court".to_string(),
+                },
+                RelationshipKeyword {
+                    keyword: "defendant".to_string(),
+                    description: "accused in case".to_string(),
+                },
+            ],
+        );
+        relationship_keywords.insert(
+            "social".to_string(),
+            vec![RelationshipKeyword {
+                keyword: "associated_with".to_string(),
+                description: "business or personal associate".to_string(),
+            }],
+        );
+
+        DomainConfig {
+            domain: DomainMetadata {
+                name: "test-legal".to_string(),
+                description: "Test legal domain".to_string(),
+                language: "English".to_string(),
+            },
+            entity_types,
+            aliases: IndexMap::new(),
+            prompts: PromptConfig {
+                role_description:
+                    "You are a Knowledge Graph Specialist extracting legal entities.".to_string(),
+                canonicalization_examples: vec![
+                    "\"John Doe\" (NOT \"J. Doe\")".to_string(),
+                ],
+                extra_instructions: vec![InstructionSection {
+                    title: "Date Instructions".to_string(),
+                    content: "Append [DATE: YYYY-MM-DD] when dates are available.".to_string(),
+                }],
+                user_instructions: vec![UserInstruction {
+                    content: "Append [DATE: YYYY-MM-DD] to descriptions when dates can be inferred."
+                        .to_string(),
+                }],
+            },
+            relationship_keywords,
+            examples: vec![FewShotExample {
+                title: "Legal filing".to_string(),
+                input: "Case 12345 was filed by Acme Corp against John Doe.".to_string(),
+                output: "entity{td}John Doe{td}PERSON{td}Defendant in case 12345.\nrelation{td}Acme Corp{td}John Doe{td}defendant{td}Filed suit against.\n{cd}".to_string(),
+            }],
+        }
+    }
 
     fn make_prompts() -> DomainExtractionPrompts {
-        DomainExtractionPrompts::new(DomainConfig::builtin_epstein())
+        DomainExtractionPrompts::new(make_test_config())
     }
 
     #[test]
@@ -251,32 +320,17 @@ mod tests {
         let system = prompts.system_prompt();
 
         assert!(system.contains("PERSON"));
+        assert!(system.contains("ORGANIZATION"));
         assert!(system.contains("LEGAL_CASE"));
-        assert!(system.contains("FINANCIAL_ITEM"));
-        assert!(system.contains("ALLEGATION"));
-        assert!(system.contains("COMMUNICATION"));
-        assert!(system.contains("DOCUMENT"));
     }
 
     #[test]
-    fn test_system_prompt_contains_timestamp_instructions() {
+    fn test_system_prompt_contains_extra_instructions() {
         let prompts = make_prompts();
         let system = prompts.system_prompt();
 
-        assert!(system.contains("TIMESTAMP:"));
+        assert!(system.contains("Date Instructions"));
         assert!(system.contains("YYYY-MM-DD"));
-        assert!(system.contains("Email \"Sent:\" headers"));
-    }
-
-    #[test]
-    fn test_system_prompt_contains_email_instructions() {
-        let prompts = make_prompts();
-        let system = prompts.system_prompt();
-
-        assert!(system.contains("Email-Specific Instructions"));
-        assert!(system.contains("From:"));
-        assert!(system.contains("To:"));
-        assert!(system.contains("Confidentiality notices"));
     }
 
     #[test]
@@ -285,25 +339,8 @@ mod tests {
         let system = prompts.system_prompt();
 
         assert!(system.contains("Example 1"));
-        assert!(system.contains("Example 2"));
-        assert!(system.contains("Example 3"));
-        assert!(system.contains("Jeffrey Epstein"));
-        assert!(system.contains("Michael Wolff"));
-        assert!(system.contains("Non-Prosecution Agreement"));
-    }
-
-    #[test]
-    fn test_system_prompt_long_enough_for_caching() {
-        let prompts = make_prompts();
-        let system = prompts.system_prompt();
-
-        // OpenAI caches prompts >= 1024 tokens
-        // Rough estimate: 1 token ~ 4 chars, so need >= 4096 chars
-        assert!(
-            system.len() > 4096,
-            "System prompt should be > 4096 chars for prompt caching, got {}",
-            system.len()
-        );
+        assert!(system.contains("Legal filing"));
+        assert!(system.contains("John Doe"));
     }
 
     #[test]
@@ -313,7 +350,6 @@ mod tests {
 
         assert!(user.contains("This is test chunk text."));
         assert!(user.contains("<|COMPLETE|>"));
-        assert!(user.contains("TIMESTAMP"));
     }
 
     #[test]
@@ -330,25 +366,19 @@ mod tests {
         let prompts = make_prompts();
         let types = prompts.entity_types();
 
-        assert_eq!(types.len(), 8);
+        assert_eq!(types.len(), 3);
         assert!(types.contains(&"PERSON".to_string()));
         assert!(types.contains(&"LEGAL_CASE".to_string()));
     }
 
     #[test]
-    fn test_system_prompt_crime_focus() {
+    fn test_system_prompt_contains_relationship_keywords() {
         let prompts = make_prompts();
         let system = prompts.system_prompt();
 
-        // Typed relationship keywords
-        assert!(system.contains("financial_transaction"));
-        assert!(system.contains("legal_representation"));
-        assert!(system.contains("travel_companion"));
-        assert!(system.contains("communicated_with"));
-        assert!(system.contains("alleged_abuse"));
-        assert!(system.contains("trafficking"));
-        assert!(system.contains("plea_agreement"));
-        assert!(system.contains("witness_testimony"));
+        assert!(system.contains("filed_in"));
+        assert!(system.contains("defendant"));
+        assert!(system.contains("associated_with"));
     }
 
     #[test]
@@ -356,14 +386,13 @@ mod tests {
         let prompts = make_prompts();
         let system = prompts.system_prompt();
         assert!(system.contains("Knowledge Graph Specialist"));
-        assert!(system.contains("Jeffrey Epstein case"));
     }
 
     #[test]
     fn test_system_prompt_contains_canonicalization() {
         let prompts = make_prompts();
         let system = prompts.system_prompt();
-        assert!(system.contains("Virginia Giuffre"));
-        assert!(system.contains("NOT \"Virginia Roberts\""));
+        assert!(system.contains("John Doe"));
+        assert!(system.contains("NOT \"J. Doe\""));
     }
 }

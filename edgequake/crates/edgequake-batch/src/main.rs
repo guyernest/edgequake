@@ -65,10 +65,11 @@ async fn main() -> anyhow::Result<()> {
         ref domain_hint,
     } = cli.command
     {
+        let suggest_model = cli.model.as_deref().unwrap_or("gpt-4o-mini");
         return handle_suggest_schema(
             &cli.data,
             &cli.api_key,
-            &cli.model,
+            suggest_model,
             &cli.namespace,
             &cli.dynamo_table,
             sample_percentage,
@@ -77,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
         .await;
     }
 
-    // Load domain configuration (CLI flag -> env -> ./domain.toml -> ~/.edgequake/ -> built-in)
+    // Load domain configuration from --domain-config flag (or error if not provided)
     let domain_config = domain_config::DomainConfig::load(cli.domain_config.as_deref())?;
     info!(domain = %domain_config.domain.name, "Loaded domain config");
     let domain_config = std::sync::Arc::new(domain_config);
@@ -94,8 +95,8 @@ async fn main() -> anyhow::Result<()> {
         job_id: job_id.clone(),
         data_path: cli.data,
         work_dir: cli.work_dir,
-        extraction_model: cli.model,
-        embedding_model: cli.embedding_model,
+        extraction_model: cli.model.unwrap_or_else(|| "gpt-4o-mini".to_string()),
+        embedding_model: cli.embedding_model.unwrap_or_else(|| "text-embedding-3-small".to_string()),
         max_tokens: cli.max_tokens,
         chunk_size: cli.chunk_size,
         chunk_overlap: cli.chunk_overlap,
