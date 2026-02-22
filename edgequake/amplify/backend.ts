@@ -6,6 +6,7 @@ import { defineBackend } from '@aws-amplify/backend';
 import {
   aws_dynamodb as dynamodb,
   aws_iam as iam,
+  RemovalPolicy,
   Stack,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -20,19 +21,34 @@ import { data } from './data/resource.js';
 const backend = defineBackend({ auth, data });
 
 // ---------------------------------------------------------------------------
-// 2. External DynamoDB table reference
+// 2. DynamoDB namespace table
 // ---------------------------------------------------------------------------
+//
+// Two modes:
+// - NAMESPACE_TABLE env var set → reference existing external table (production)
+// - NAMESPACE_TABLE not set     → create the table in the Amplify stack (sandbox)
+//
+// The table uses a single-table design: PK (String) + SK (String) composite key.
+// Items store JSON-serialized data in a 'data' attribute.
+// Key patterns: PK=NS#{slug}/SK=META|CONFIG|SCHEMA|DESCRIPTOR|LATEST_RUN,
+//               PK=NAMESPACES/SK={slug} for listing.
 
-const namespaceTableName =
-  process.env.NAMESPACE_TABLE ?? 'edgequake-namespaces';
+const infraStack = backend.createStack('NamespaceInfra');
 
-const existingInfraStack = backend.createStack('ExistingInfra');
+const externalTableName = process.env.NAMESPACE_TABLE;
 
-const namespaceTable = dynamodb.Table.fromTableName(
-  existingInfraStack,
-  'NamespaceTable',
-  namespaceTableName,
-);
+const namespaceTable = externalTableName
+  ? dynamodb.Table.fromTableName(
+      infraStack,
+      'NamespaceTable',
+      externalTableName,
+    )
+  : new dynamodb.Table(infraStack, 'NamespaceTable', {
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
 
 // Register as AppSync data source — name must match dataSource strings in data/resource.ts
 backend.data.addDynamoDbDataSource(
