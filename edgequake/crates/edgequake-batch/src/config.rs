@@ -95,6 +95,9 @@ pub struct BatchConfig {
 
     /// Exclude glob patterns for directory scanning.
     pub exclude_patterns: Vec<String>,
+
+    /// Maximum number of document failures before aborting (0 = fail on first error).
+    pub max_failures: usize,
 }
 
 impl BatchConfig {

@@ -34,9 +34,13 @@ pub struct Cli {
     #[arg(long)]
     pub exclude: Vec<String>,
 
-    /// OpenAI API key
+    /// OpenAI API key (required for run/extract/embed commands, not needed for dry-run)
     #[arg(long, env = "OPENAI_API_KEY")]
-    pub api_key: String,
+    pub api_key: Option<String>,
+
+    /// Maximum number of document failures before aborting pipeline (default: 0 = fail on first error)
+    #[arg(long, default_value = "0", env = "BATCH_MAX_FAILURES")]
+    pub max_failures: usize,
 
     /// Override extraction model (reads from namespace config if not set)
     #[arg(long, env = "BATCH_MODEL")]
@@ -179,6 +183,9 @@ pub enum Command {
         #[arg(short, long, default_value = "20")]
         limit: usize,
     },
+
+    /// Preview pipeline: show document count, chunk estimate, schema summary, and estimated cost (no API calls)
+    DryRun,
 
     /// Analyze a dataset sample and propose entity/relation types for the namespace
     SuggestSchema {
