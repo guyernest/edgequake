@@ -32,6 +32,7 @@ mod jsonl;
 mod namespace_resolver;
 mod parquet_reader;
 mod progress;
+mod report;
 mod stages;
 mod state;
 mod validation;
@@ -646,12 +647,83 @@ async fn run_full_pipeline(
     )
     .await?;
 
+    // Post-store verification: wait for eventual consistency, then query counts
+    info!("Waiting 3s for storage eventual consistency before verification...");
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    let verification = report::verify_stored_data(config, aws_config).await;
+
+    // Read MCP descriptor from DynamoDB (best-effort -- missing descriptor doesn't fail)
+    let descriptor = {
+        let namespace_slug = edgequake_core::NamespaceSlug::parse(&config.namespace).ok();
+        if let Some(ref slug) = namespace_slug {
+            let dynamo_client = aws_sdk_dynamodb::Client::new(aws_config);
+            let registry_config = edgequake_storage_aws::DynamoNamespaceConfig {
+                table_name: config.dynamo_table.clone(),
+            };
+            let registry = edgequake_storage_aws::DynamoNamespaceRegistry::new(
+                registry_config,
+                dynamo_client,
+            );
+            match registry.get_descriptor(slug).await {
+                Ok(desc) => desc,
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to read MCP descriptor (non-fatal)");
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    };
+
     let pipeline_duration = pipeline_start.elapsed();
+
+    // Print detailed final report
+    report::print_final_report(job, &verification, descriptor.as_ref(), pipeline_duration);
+
+    // Write success LATEST_RUN status
+    let completion_millis = chrono::Utc::now().timestamp_millis();
+    let total_error_count: usize = job.errors_per_phase.values().sum();
+    let completed_status = if total_error_count > 0 {
+        "completed_with_warnings"
+    } else {
+        "completed"
+    };
+
+    let success_status = state::LatestRunStatus {
+        status: completed_status.to_string(),
+        phase: Some("completed".to_string()),
+        job_id: Some(job.job_id.clone()),
+        total_documents: Some(job.total_documents),
+        processed_documents: Some(job.processed_documents),
+        total_chunks: Some(job.total_chunks),
+        started_at: job.run_started_at,
+        updated_at: Some(completion_millis),
+        completed_at: Some(completion_millis),
+        total_entities: Some(job.total_entities),
+        total_relationships: Some(job.total_relationships),
+        error_count_per_phase: if !job.errors_per_phase.is_empty() {
+            Some(job.errors_per_phase.clone())
+        } else {
+            None
+        },
+        error_summary: if total_error_count > 0 {
+            Some(format!(
+                "{} document errors across phases",
+                total_error_count
+            ))
+        } else {
+            None
+        },
+        ..Default::default()
+    };
+    state_mgr.write_latest_run(&success_status).await.ok(); // best-effort
+
     info!(
         duration = ?pipeline_duration,
-        "Full batch pipeline completed successfully!"
+        status = completed_status,
+        "Full batch pipeline completed!"
     );
-    print_status(job);
 
     Ok(())
 }
