@@ -17,7 +17,7 @@ export function request(ctx) {
     operation: 'TransactWriteItems',
     transactItems: [
       {
-        table: ctx.env.NAMESPACE_TABLE ?? undefined,
+        table: ctx.env.NAMESPACE_TABLE,
         operation: 'PutItem',
         key: util.dynamodb.toMapValues({
           PK: `NS#${slug}`,
@@ -31,7 +31,7 @@ export function request(ctx) {
         },
       },
       {
-        table: ctx.env.NAMESPACE_TABLE ?? undefined,
+        table: ctx.env.NAMESPACE_TABLE,
         operation: 'PutItem',
         key: util.dynamodb.toMapValues({
           PK: `NS#${slug}`,
@@ -42,7 +42,7 @@ export function request(ctx) {
         }),
       },
       {
-        table: ctx.env.NAMESPACE_TABLE ?? undefined,
+        table: ctx.env.NAMESPACE_TABLE,
         operation: 'PutItem',
         key: util.dynamodb.toMapValues({
           PK: 'NAMESPACES',

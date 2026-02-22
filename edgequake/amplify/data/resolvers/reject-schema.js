@@ -39,7 +39,7 @@ export function response(ctx) {
 
   // Update status and reviewed_at
   data.status = 'rejected';
-  data.reviewed_at = util.time.nowEpochMilliSeconds();
+  data.reviewed_at = Math.floor(util.time.nowEpochSeconds());
 
   // Pass updated data to next pipeline step via stash
   ctx.stash.updatedData = JSON.stringify(data);

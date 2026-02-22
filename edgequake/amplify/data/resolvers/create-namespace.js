@@ -27,7 +27,7 @@ export function response(ctx) {
     return util.error('Namespace already exists', 'ConflictError');
   }
 
-  const now = util.time.nowEpochMilliSeconds();
+  const now = Math.floor(util.time.nowEpochSeconds());
 
   // Prepare META record
   const meta = {

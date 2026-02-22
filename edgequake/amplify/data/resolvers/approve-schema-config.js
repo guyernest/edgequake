@@ -51,7 +51,7 @@ export function response(ctx) {
   });
   config.relation_types = mergedRelations;
 
-  config.updated_at = util.time.nowEpochMilliSeconds();
+  config.updated_at = Math.floor(util.time.nowEpochSeconds());
 
   // Stash merged config for step 4 to write
   ctx.stash.configData = JSON.stringify(config);

@@ -48,7 +48,7 @@ export function response(ctx) {
     batch_size: batchSize,
     offset: offset,
     data_path: dataPath,
-    requested_at: util.time.nowEpochMilliSeconds(),
+    requested_at: Math.floor(util.time.nowEpochSeconds()),
     status: 'requested',
   };
 

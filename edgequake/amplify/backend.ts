@@ -56,6 +56,12 @@ backend.data.addDynamoDbDataSource(
   namespaceTable,
 );
 
+// Expose table name to JS resolvers via ctx.env.NAMESPACE_TABLE
+// Required by TransactWriteItems (which needs explicit table per item, unlike GetItem/PutItem)
+backend.data.resources.cfnResources.cfnGraphqlApi.environmentVariables = {
+  NAMESPACE_TABLE: namespaceTable.tableName,
+};
+
 // ---------------------------------------------------------------------------
 // 3. Per-namespace IAM role CDK construct
 // ---------------------------------------------------------------------------

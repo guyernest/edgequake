@@ -18,7 +18,7 @@ const schema = a.schema({
   Namespace: a.customType({
     slug: a.string().required(),
     description: a.string(),
-    created_at: a.integer().required(),
+    created_at: a.float().required(),
     created_by: a.string(),
   }),
 
@@ -34,7 +34,7 @@ const schema = a.schema({
     extraction_prompt: a.string(),
     entity_types: a.string().array(),
     relation_types: a.string().array(),
-    updated_at: a.integer().required(),
+    updated_at: a.float().required(),
   }),
 
   McpStorageConfig: a.customType({
@@ -66,7 +66,7 @@ const schema = a.schema({
     auth: a.json().required(),
     pipeline_config: a.json().required(),
     tools: a.json().required(),
-    generated_at: a.integer().required(),
+    generated_at: a.float().required(),
   }),
 
   // --- Schema Proposal Types ---
@@ -93,8 +93,8 @@ const schema = a.schema({
     sample_size: a.integer().required(),
     total_documents: a.integer().required(),
     domain_hint: a.string(),
-    proposed_at: a.integer().required(),
-    reviewed_at: a.integer(),
+    proposed_at: a.float().required(),
+    reviewed_at: a.float(),
   }),
 
   // --- Pipeline Status Types ---
@@ -108,8 +108,8 @@ const schema = a.schema({
     total_chunks: a.integer(),
     current_batch: a.integer(),
     total_batches: a.integer(),
-    started_at: a.integer(),
-    updated_at: a.integer(),
+    started_at: a.float(),
+    updated_at: a.float(),
     error_summary: a.string(),
   }),
 
@@ -118,7 +118,7 @@ const schema = a.schema({
     batch_size: a.integer().required(),
     offset: a.integer().required(),
     data_path: a.string().required(),
-    requested_at: a.integer().required(),
+    requested_at: a.float().required(),
     status: a.string().required(),
     cli_command: a.string(),
   }),
@@ -332,6 +332,6 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: 'iam',
+    defaultAuthorizationMode: 'userPool',
   },
 });

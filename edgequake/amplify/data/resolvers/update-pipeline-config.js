@@ -33,7 +33,7 @@ export function response(ctx) {
 
   // Merge updates into existing config
   const merged = { ...existing, ...updates };
-  merged.updated_at = util.time.nowEpochMilliSeconds();
+  merged.updated_at = Math.floor(util.time.nowEpochSeconds());
 
   // Pass merged result to next pipeline step via stash
   ctx.stash.updatedData = JSON.stringify(merged);
