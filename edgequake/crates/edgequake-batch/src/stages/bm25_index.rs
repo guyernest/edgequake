@@ -76,6 +76,7 @@ mod tests {
             },
             doc_hash: doc_hash.to_string(),
             doc_filename: "test.parquet".to_string(),
+            metadata: None,
         }
     }
 

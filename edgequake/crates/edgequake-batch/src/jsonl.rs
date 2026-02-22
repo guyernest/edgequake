@@ -25,6 +25,9 @@ pub struct PreparedChunk {
 
     /// Original document filename.
     pub doc_filename: String,
+
+    /// Optional metadata from document front matter and chunking strategy.
+    pub metadata: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 /// Result of building JSONL files.
