@@ -21,12 +21,14 @@
 
 mod cli;
 mod config;
+mod config_file;
 pub mod directory_scanner;
 pub mod document_reader;
 pub mod document_splitter;
 pub mod domain_config;
 mod domain_prompts;
 mod jsonl;
+mod namespace_resolver;
 mod parquet_reader;
 mod progress;
 mod stages;
