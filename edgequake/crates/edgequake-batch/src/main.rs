@@ -7,16 +7,16 @@
 //!
 //! ```sh
 //! # Full pipeline
-//! edgequake-batch --data data/epstein/0000.parquet --api-key $OPENAI_API_KEY run
+//! edgequake-batch --namespace my-ns --data ./documents --api-key $OPENAI_API_KEY run
 //!
 //! # Individual phases
-//! edgequake-batch --data data/epstein/0000.parquet --api-key $OPENAI_API_KEY prepare
-//! edgequake-batch --data data/epstein/0000.parquet --api-key $OPENAI_API_KEY extract
-//! edgequake-batch --data data/epstein/0000.parquet --api-key $OPENAI_API_KEY embed
-//! edgequake-batch --data data/epstein/0000.parquet --api-key $OPENAI_API_KEY store
+//! edgequake-batch --namespace my-ns --data ./documents --api-key $OPENAI_API_KEY prepare
+//! edgequake-batch --namespace my-ns --data ./documents --api-key $OPENAI_API_KEY extract
+//! edgequake-batch --namespace my-ns --data ./documents --api-key $OPENAI_API_KEY embed
+//! edgequake-batch --namespace my-ns --data ./documents --api-key $OPENAI_API_KEY store
 //!
 //! # Check status
-//! edgequake-batch --data data/epstein/0000.parquet --api-key $OPENAI_API_KEY --job-id <id> status
+//! edgequake-batch --namespace my-ns --data ./documents --api-key $OPENAI_API_KEY --job-id <id> status
 //! ```
 
 mod cli;
@@ -37,7 +37,6 @@ mod state;
 use clap::Parser;
 use cli::{Cli, Command};
 use config::BatchConfig;
-use edgequake_core::schema::SchemaStatus;
 use progress::BatchProgress;
 use state::StateManager;
 use tracing::info;
@@ -65,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
         ref domain_hint,
     } = cli.command
     {
-        let suggest_model = cli.model.as_deref().unwrap_or("gpt-4o-mini");
+        let suggest_model = cli.model.as_deref().unwrap_or("gpt-4.1-mini");
         return handle_suggest_schema(
             &cli.data,
             &cli.api_key,
@@ -78,10 +77,71 @@ async fn main() -> anyhow::Result<()> {
         .await;
     }
 
-    // Load domain configuration from --domain-config flag (or error if not provided)
-    let domain_config = domain_config::DomainConfig::load(cli.domain_config.as_deref())?;
-    info!(domain = %domain_config.domain.name, "Loaded domain config");
-    let domain_config = std::sync::Arc::new(domain_config);
+    // Determine if this is an ingestion command (needs config resolution)
+    let is_ingestion_command = matches!(
+        cli.command,
+        Command::Run
+            | Command::Prepare
+            | Command::Extract
+            | Command::Embed
+            | Command::Store
+            | Command::Resume
+    );
+
+    // Initialize AWS config early (needed by resolver and state manager)
+    let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+
+    // Resolve namespace config for ingestion commands via NamespaceConfigResolver
+    let (resolved_config, domain_config) = if is_ingestion_command {
+        let namespace_slug = edgequake_core::NamespaceSlug::parse(&cli.namespace)?;
+        let resolver = namespace_resolver::NamespaceConfigResolver::new(
+            namespace_slug,
+            aws_config.clone(),
+            cli.dynamo_table.clone(),
+        );
+        let resolved = resolver.resolve(&cli).await?;
+
+        // Print startup summary
+        info!(
+            namespace = %cli.namespace,
+            model = %resolved.extraction_model,
+            embedding_model = %resolved.embedding_model,
+            "{}",
+            resolved.schema_summary,
+        );
+
+        // In verbose mode, print full generated prompt
+        if tracing::event_enabled!(tracing::Level::DEBUG) {
+            let prompts = domain_prompts::DomainExtractionPrompts::new(resolved.domain_config.clone());
+            tracing::debug!(prompt = %prompts.system_prompt(), "Generated extraction system prompt");
+        }
+
+        let dc = std::sync::Arc::new(resolved.domain_config.clone());
+        (Some(resolved), dc)
+    } else {
+        // Non-ingestion commands (Status) don't need domain config.
+        // Create a minimal placeholder that won't be used by the pipeline.
+        let mut entity_types = indexmap::IndexMap::new();
+        entity_types.insert("PLACEHOLDER".to_string(), "Unused".to_string());
+        let dc = std::sync::Arc::new(domain_config::DomainConfig {
+            domain: domain_config::DomainMetadata {
+                name: "none".to_string(),
+                description: "Placeholder for non-ingestion commands".to_string(),
+                language: "English".to_string(),
+            },
+            entity_types,
+            aliases: indexmap::IndexMap::new(),
+            prompts: domain_config::PromptConfig {
+                role_description: "Unused".to_string(),
+                canonicalization_examples: vec![],
+                extra_instructions: vec![],
+                user_instructions: vec![],
+            },
+            relationship_keywords: indexmap::IndexMap::new(),
+            examples: vec![],
+        });
+        (None, dc)
+    };
 
     // Generate or use provided job ID
     let job_id = cli
@@ -90,13 +150,25 @@ async fn main() -> anyhow::Result<()> {
 
     info!(job_id = %job_id, "EdgeQuake Batch Ingestion starting");
 
-    // Build config from CLI args
+    // Resolve models from namespace config (or defaults for non-ingestion commands)
+    let extraction_model = if let Some(ref rc) = resolved_config {
+        rc.extraction_model.clone()
+    } else {
+        cli.model.clone().unwrap_or_else(|| "gpt-4o-mini".to_string())
+    };
+    let embedding_model = if let Some(ref rc) = resolved_config {
+        rc.embedding_model.clone()
+    } else {
+        cli.embedding_model.clone().unwrap_or_else(|| "text-embedding-3-small".to_string())
+    };
+
+    // Build config from CLI args + resolved namespace config
     let config = BatchConfig {
         job_id: job_id.clone(),
         data_path: cli.data,
         work_dir: cli.work_dir,
-        extraction_model: cli.model.unwrap_or_else(|| "gpt-4o-mini".to_string()),
-        embedding_model: cli.embedding_model.unwrap_or_else(|| "text-embedding-3-small".to_string()),
+        extraction_model,
+        embedding_model,
         max_tokens: cli.max_tokens,
         chunk_size: cli.chunk_size,
         chunk_overlap: cli.chunk_overlap,
@@ -127,8 +199,7 @@ async fn main() -> anyhow::Result<()> {
     // Create work directory
     std::fs::create_dir_all(&config.work_dir)?;
 
-    // Initialize state manager with DynamoDB for other commands
-    let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    // Initialize state manager with DynamoDB
     let dynamo_client = aws_sdk_dynamodb::Client::new(&aws_config);
 
     let dynamo_config =
@@ -148,83 +219,6 @@ async fn main() -> anyhow::Result<()> {
         cli.namespace.clone(),
     );
     let progress = BatchProgress::new();
-
-    // --- Schema Approval Gate ---
-    // Ingestion is blocked unless an approved schema exists for the namespace.
-    // This gate runs for all ingestion commands (Run, Prepare, Extract, Embed, Store, Resume).
-    // Status is exempt since it only reads existing job state.
-    let is_ingestion_command = matches!(
-        cli.command,
-        Command::Run
-            | Command::Prepare
-            | Command::Extract
-            | Command::Embed
-            | Command::Store
-            | Command::Resume
-    );
-
-    if is_ingestion_command {
-        let registry_config = edgequake_storage_aws::DynamoNamespaceConfig {
-            table_name: config.dynamo_table.clone(),
-        };
-        let ns_registry =
-            edgequake_storage_aws::DynamoNamespaceRegistry::new(registry_config, dynamo_client);
-        let namespace_slug = edgequake_core::NamespaceSlug::parse(&config.namespace)?;
-
-        // Call approve_schema which is idempotent: if already approved, returns the
-        // proposal unchanged; if newly approved, copies entity/relation type names
-        // into PipelineConfig atomically.
-        match ns_registry.get_schema(&namespace_slug).await {
-            Ok(Some(proposal)) => match proposal.status {
-                SchemaStatus::Approved => {
-                    info!(
-                        namespace = %config.namespace,
-                        entity_types = proposal.entity_types.len(),
-                        relation_types = proposal.relation_types.len(),
-                        "Using approved schema for namespace '{}' with {} entity types and {} relation types",
-                        config.namespace,
-                        proposal.entity_types.len(),
-                        proposal.relation_types.len(),
-                    );
-                }
-                SchemaStatus::Proposed => {
-                    anyhow::bail!(
-                        "Schema has been proposed but not yet approved for namespace '{}'. \
-                         Review and approve the schema before running ingestion.",
-                        config.namespace
-                    );
-                }
-                SchemaStatus::Rejected => {
-                    anyhow::bail!(
-                        "Schema was rejected for namespace '{}'. \
-                         Run schema suggestion again or approve the existing proposal.",
-                        config.namespace
-                    );
-                }
-                SchemaStatus::None => {
-                    anyhow::bail!(
-                        "No schema found for namespace '{}'. \
-                         Run schema suggestion first using: edgequake-batch suggest-schema",
-                        config.namespace
-                    );
-                }
-            },
-            Ok(None) => {
-                anyhow::bail!(
-                    "No schema found for namespace '{}'. \
-                     Run schema suggestion first using: edgequake-batch suggest-schema",
-                    config.namespace
-                );
-            }
-            Err(e) => {
-                anyhow::bail!(
-                    "Failed to check schema status for namespace '{}': {}",
-                    config.namespace,
-                    e
-                );
-            }
-        }
-    }
 
     // Load or create job state
     let mut job = match state_mgr.load_job(&job_id).await? {
