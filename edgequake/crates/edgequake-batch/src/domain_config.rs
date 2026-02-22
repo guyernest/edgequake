@@ -11,6 +11,7 @@
 //! 4. `~/.edgequake/domain.toml`
 //! 5. Built-in Epstein defaults (no file needed)
 
+use edgequake_core::schema::SchemaProposal;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -174,6 +175,65 @@ impl DomainConfig {
         })?;
         config.validate()?;
         Ok(config)
+    }
+
+    /// Build a `DomainConfig` from an approved `SchemaProposal`.
+    ///
+    /// Maps entity types (with descriptions) and relation types (as relationship
+    /// keywords) from the schema proposal into the prompt configuration structure.
+    pub fn from_schema(proposal: &SchemaProposal, namespace_name: &str) -> Self {
+        debug_assert!(
+            !proposal.entity_types.is_empty(),
+            "from_schema requires non-empty entity types"
+        );
+
+        // 1. Entity types: name -> description (ordered)
+        let mut entity_types = IndexMap::new();
+        for et in &proposal.entity_types {
+            entity_types.insert(et.name.clone(), et.description.clone());
+        }
+
+        // 2. Relationship keywords from relation types
+        let mut relationship_keywords = IndexMap::new();
+        let keywords: Vec<RelationshipKeyword> = proposal
+            .relation_types
+            .iter()
+            .map(|rt| RelationshipKeyword {
+                keyword: rt.name.clone(),
+                description: rt.description.clone(),
+            })
+            .collect();
+        if !keywords.is_empty() {
+            relationship_keywords.insert("domain".to_string(), keywords);
+        }
+
+        // 3. Domain metadata
+        let domain = DomainMetadata {
+            name: namespace_name.to_string(),
+            description: format!("Schema-derived config for namespace '{}'", namespace_name),
+            language: "English".to_string(),
+        };
+
+        // 4. Prompts with generic role description
+        let prompts = PromptConfig {
+            role_description: format!(
+                "You are a Knowledge Graph Specialist responsible for extracting entities \
+                 and relationships from documents in the '{}' domain.",
+                namespace_name
+            ),
+            canonicalization_examples: vec![],
+            extra_instructions: vec![],
+            user_instructions: vec![],
+        };
+
+        DomainConfig {
+            domain,
+            entity_types,
+            aliases: IndexMap::new(),
+            prompts,
+            relationship_keywords,
+            examples: vec![],
+        }
     }
 
     /// Validate the configuration.
