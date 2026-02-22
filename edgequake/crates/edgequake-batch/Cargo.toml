@@ -63,6 +63,13 @@ indexmap = { version = "2.7", features = ["serde"] }
 uuid = { workspace = true }
 chrono = { workspace = true }
 
+# File system traversal
+walkdir = { workspace = true }
+globset = { workspace = true }
+
+# YAML parsing
+serde_yaml = { workspace = true }
+
 # AWS SDK (for DynamoDB state management + Neptune bulk load)
 aws-config = "1.5"
 aws-sdk-dynamodb = "1.53"

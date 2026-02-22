@@ -21,6 +21,9 @@
 
 mod cli;
 mod config;
+pub mod directory_scanner;
+pub mod document_reader;
+pub mod document_splitter;
 pub mod domain_config;
 mod domain_prompts;
 mod jsonl;

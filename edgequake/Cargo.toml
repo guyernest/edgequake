@@ -165,6 +165,13 @@ edgequake-tasks = { path = "crates/edgequake-tasks" }
 # CPU utilities
 num_cpus = "1.16"
 
+# File system traversal
+walkdir = "2.5"
+globset = "0.4"
+
+# YAML parsing
+serde_yaml = "0.9"
+
 # Authentication
 argon2 = "0.5"
 password-hash = "0.5"
