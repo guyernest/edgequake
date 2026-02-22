@@ -27,6 +27,7 @@ pub mod document_reader;
 pub mod document_splitter;
 pub mod domain_config;
 mod domain_prompts;
+mod dry_run;
 mod jsonl;
 mod namespace_resolver;
 mod parquet_reader;
@@ -56,7 +57,10 @@ async fn main() -> anyhow::Result<()> {
     // Handle commands that don't need full pipeline infrastructure early
     // (before BatchConfig consumes the CLI fields by move)
     if let Command::ListBatches { limit } = cli.command {
-        return list_openai_batches(&cli.api_key, limit).await;
+        let api_key = cli.api_key.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("OPENAI_API_KEY is required for list-batches")
+        })?;
+        return list_openai_batches(api_key, limit).await;
     }
 
     if let Command::SuggestSchema {
@@ -64,10 +68,13 @@ async fn main() -> anyhow::Result<()> {
         ref domain_hint,
     } = cli.command
     {
+        let api_key = cli.api_key.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("OPENAI_API_KEY is required for suggest-schema")
+        })?;
         let suggest_model = cli.model.as_deref().unwrap_or("gpt-4.1-mini");
         return handle_suggest_schema(
             &cli.data,
-            &cli.api_key,
+            api_key,
             suggest_model,
             &cli.namespace,
             &cli.dynamo_table,
@@ -77,8 +84,8 @@ async fn main() -> anyhow::Result<()> {
         .await;
     }
 
-    // Determine if this is an ingestion command (needs config resolution)
-    let is_ingestion_command = matches!(
+    // Determine if this is a command that needs config resolution (schema/model info)
+    let needs_config_resolution = matches!(
         cli.command,
         Command::Run
             | Command::Prepare
@@ -86,13 +93,14 @@ async fn main() -> anyhow::Result<()> {
             | Command::Embed
             | Command::Store
             | Command::Resume
+            | Command::DryRun
     );
 
     // Initialize AWS config early (needed by resolver and state manager)
     let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
 
-    // Resolve namespace config for ingestion commands via NamespaceConfigResolver
-    let (resolved_config, domain_config) = if is_ingestion_command {
+    // Resolve namespace config for commands that need it via NamespaceConfigResolver
+    let (resolved_config, domain_config) = if needs_config_resolution {
         let namespace_slug = edgequake_core::NamespaceSlug::parse(&cli.namespace)?;
         let resolver = namespace_resolver::NamespaceConfigResolver::new(
             namespace_slug,
@@ -142,6 +150,65 @@ async fn main() -> anyhow::Result<()> {
         });
         (None, dc)
     };
+
+    // Handle DryRun command early: after config resolution (needs schema) but before
+    // state manager / job ID (doesn't need DynamoDB state or API key).
+    if let Command::DryRun = cli.command {
+        // Build a minimal BatchConfig for dry-run (no job_id, no work_dir needed)
+        let dry_run_config = BatchConfig {
+            job_id: "dry-run".to_string(),
+            data_path: cli.data,
+            work_dir: cli.work_dir,
+            extraction_model: resolved_config
+                .as_ref()
+                .map(|rc| rc.extraction_model.clone())
+                .unwrap_or_else(|| "gpt-4o-mini".to_string()),
+            embedding_model: resolved_config
+                .as_ref()
+                .map(|rc| rc.embedding_model.clone())
+                .unwrap_or_else(|| "text-embedding-3-small".to_string()),
+            max_tokens: cli.max_tokens,
+            chunk_size: cli.chunk_size,
+            chunk_overlap: cli.chunk_overlap,
+            embedding_batch_size: cli.embedding_batch_size,
+            embedding_concurrency: cli.embedding_concurrency,
+            dynamo_table: cli.dynamo_table,
+            namespace: cli.namespace.clone(),
+            neptune_endpoint: cli.neptune_endpoint,
+            s3_bucket: cli.s3_bucket,
+            neptune_role_arn: cli.neptune_role_arn,
+            vector_bucket: cli.vector_bucket,
+            vector_index: cli.vector_index,
+            limit: cli.limit,
+            offset: cli.offset,
+            max_retries: cli.max_retries,
+            retry_delay_secs: cli.retry_delay_secs,
+            athena_bm25_database: cli.athena_bm25_database,
+            bm25_s3_bucket: cli.bm25_s3_bucket,
+            athena_workgroup: cli.athena_workgroup,
+            athena_output_location: cli.athena_output_location,
+            delimiter: cli.delimiter,
+            no_split: cli.no_split,
+            no_recurse: cli.no_recurse,
+            include_patterns: cli.include,
+            exclude_patterns: cli.exclude,
+            max_failures: cli.max_failures,
+        };
+        return dry_run::run_dry_run(
+            &dry_run_config,
+            resolved_config
+                .as_ref()
+                .expect("DryRun requires resolved config"),
+        )
+        .await;
+    }
+
+    // Pipeline commands require an API key
+    let api_key = cli
+        .api_key
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("OPENAI_API_KEY is required for pipeline commands"))?
+        .to_string();
 
     // Generate or use provided job ID
     let job_id = cli
@@ -194,6 +261,7 @@ async fn main() -> anyhow::Result<()> {
         no_recurse: cli.no_recurse,
         include_patterns: cli.include.clone(),
         exclude_patterns: cli.exclude.clone(),
+        max_failures: cli.max_failures,
     };
 
     // Create work directory
@@ -239,7 +307,7 @@ async fn main() -> anyhow::Result<()> {
             Command::Run => {
                 run_full_pipeline(
                     &config,
-                    &cli.api_key,
+                    &api_key,
                     &aws_config,
                     &domain_config,
                     &state_mgr,
@@ -270,7 +338,7 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
                 stages::extract::run_extract(
                     &config,
-                    &cli.api_key,
+                    &api_key,
                     &domain_config,
                     &state_mgr,
                     &mut job,
@@ -302,7 +370,7 @@ async fn main() -> anyhow::Result<()> {
                     )?;
 
                 let embedding_provider =
-                    create_embedding_provider(&cli.api_key, &config.embedding_model)?;
+                    create_embedding_provider(&api_key, &config.embedding_model)?;
                 stages::embed::run_embed(
                     &config,
                     embedding_provider,
@@ -343,7 +411,7 @@ async fn main() -> anyhow::Result<()> {
                     } else {
                         info!("No cached embed results, running embed phase");
                         let embedding_provider =
-                            create_embedding_provider(&cli.api_key, &config.embedding_model)?;
+                            create_embedding_provider(&api_key, &config.embedding_model)?;
                         stages::embed::run_embed(
                             &config,
                             embedding_provider,
@@ -382,7 +450,7 @@ async fn main() -> anyhow::Result<()> {
                 info!(phase = %job.phase, "Resuming from checkpoint");
                 run_full_pipeline(
                     &config,
-                    &cli.api_key,
+                    &api_key,
                     &aws_config,
                     &domain_config,
                     &state_mgr,
@@ -397,6 +465,10 @@ async fn main() -> anyhow::Result<()> {
             }
             Command::SuggestSchema { .. } => {
                 // Handled earlier before DynamoDB state initialization
+                unreachable!()
+            }
+            Command::DryRun => {
+                // Handled earlier after config resolution
                 unreachable!()
             }
         }
