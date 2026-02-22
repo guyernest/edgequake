@@ -679,7 +679,7 @@ async fn run_full_pipeline(
     let pipeline_duration = pipeline_start.elapsed();
 
     // Print detailed final report
-    report::print_final_report(job, &verification, descriptor.as_ref(), pipeline_duration);
+    report::print_final_report(job, &config.namespace, &verification, descriptor.as_ref(), pipeline_duration);
 
     // Write success LATEST_RUN status
     let completion_millis = chrono::Utc::now().timestamp_millis();

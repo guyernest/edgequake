@@ -105,6 +105,7 @@ pub async fn verify_stored_data(
 /// - MCP connection info from the namespace descriptor
 pub fn print_final_report(
     job: &JobState,
+    namespace: &str,
     verification: &VerificationCounts,
     descriptor: Option<&McpDescriptor>,
     duration: std::time::Duration,
@@ -117,7 +118,7 @@ pub fn print_final_report(
     println!("=== Pipeline Complete ===");
     println!();
     println!("Job ID:           {}", job.job_id);
-    println!("Namespace:        {}", job.phase); // phase will be "completed"
+    println!("Namespace:        {}", namespace);
     println!("Duration:         {}", duration_str);
     println!();
 
@@ -294,6 +295,7 @@ mod tests {
         // This will print to stdout -- just verify no panic
         print_final_report(
             &job,
+            "test-ns",
             &counts,
             None,
             std::time::Duration::from_secs(222),
@@ -356,6 +358,7 @@ mod tests {
 
         print_final_report(
             &job,
+            "test-ns",
             &counts,
             Some(&descriptor),
             std::time::Duration::from_secs(222),
@@ -374,6 +377,7 @@ mod tests {
         let counts = VerificationCounts::default();
         print_final_report(
             &job,
+            "test-ns",
             &counts,
             None,
             std::time::Duration::from_secs(60),
