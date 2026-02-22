@@ -38,17 +38,13 @@ pub struct Cli {
     #[arg(long, env = "OPENAI_API_KEY")]
     pub api_key: String,
 
-    /// OpenAI model for extraction (default: gpt-4.1-mini)
-    #[arg(long, default_value = "gpt-4.1-mini", env = "BATCH_MODEL")]
-    pub model: String,
+    /// Override extraction model (reads from namespace config if not set)
+    #[arg(long, env = "BATCH_MODEL")]
+    pub model: Option<String>,
 
-    /// OpenAI model for embeddings (default: text-embedding-3-small)
-    #[arg(
-        long,
-        default_value = "text-embedding-3-small",
-        env = "BATCH_EMBEDDING_MODEL"
-    )]
-    pub embedding_model: String,
+    /// Override embedding model (reads from namespace config if not set)
+    #[arg(long, env = "BATCH_EMBEDDING_MODEL")]
+    pub embedding_model: Option<String>,
 
     /// DynamoDB table name for state management
     #[arg(long, default_value = "edgequake-kv", env = "BATCH_DYNAMO_TABLE")]
@@ -86,8 +82,12 @@ pub struct Cli {
     #[arg(long, env = "EDGEQUAKE_DOMAIN_CONFIG")]
     pub domain_config: Option<PathBuf>,
 
-    /// Storage namespace (workspace ID)
-    #[arg(long, default_value = "epstein-batch", env = "BATCH_NAMESPACE")]
+    /// Path to pipeline config TOML file (alternative to DynamoDB namespace config)
+    #[arg(long)]
+    pub config_file: Option<PathBuf>,
+
+    /// Storage namespace (required -- identifies config and storage target)
+    #[arg(long)]
     pub namespace: String,
 
     /// Maximum tokens for extraction output
