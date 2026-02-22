@@ -34,13 +34,22 @@ export function response(ctx) {
   const newEntityTypes = (schema.entity_types || []).map((e) => e.name);
   const newRelationTypes = (schema.relation_types || []).map((r) => r.name);
 
-  // Additive merge using Set union (accumulates across multiple approvals)
-  config.entity_types = [
-    ...new Set([...(config.entity_types || []), ...newEntityTypes]),
-  ];
-  config.relation_types = [
-    ...new Set([...(config.relation_types || []), ...newRelationTypes]),
-  ];
+  // Additive merge — deduplicate via indexOf (Set not available in APPSYNC_JS)
+  const mergedEntities = config.entity_types || [];
+  newEntityTypes.forEach((name) => {
+    if (mergedEntities.indexOf(name) === -1) {
+      mergedEntities.push(name);
+    }
+  });
+  config.entity_types = mergedEntities;
+
+  const mergedRelations = config.relation_types || [];
+  newRelationTypes.forEach((name) => {
+    if (mergedRelations.indexOf(name) === -1) {
+      mergedRelations.push(name);
+    }
+  });
+  config.relation_types = mergedRelations;
 
   config.updated_at = util.time.nowEpochMilliSeconds();
 
