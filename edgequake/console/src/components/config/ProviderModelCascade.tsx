@@ -36,8 +36,9 @@ export function ProviderModelCascade({
     onProviderChange(providerId);
     // Reset model to first available when provider changes
     const providerModels = getModelsForProvider(providers, providerId);
-    if (providerModels.length > 0) {
-      onModelChange(providerModels[0].id);
+    const firstModel = providerModels[0];
+    if (firstModel) {
+      onModelChange(firstModel.id);
     }
   }
 
