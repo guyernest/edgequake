@@ -78,27 +78,67 @@ pub async fn sample_documents(
     })
 }
 
-/// Read documents from local parquet files.
+/// Strip YAML front matter from markdown content.
 ///
-/// Handles both a single parquet file and a directory containing parquet files.
-fn read_documents_from_local(location: &str) -> anyhow::Result<Vec<SampledDocument>> {
-    let path = Path::new(location);
+/// If the content starts with `---\n`, finds the closing `---\n` and returns
+/// everything after it. Otherwise returns the input unchanged.
+/// This is a minimal inline implementation to avoid a circular dependency
+/// on the edgequake-batch crate.
+fn strip_yaml_front_matter(input: &str) -> &str {
+    let normalized = input.trim_start();
+    if !normalized.starts_with("---") {
+        return input;
+    }
 
-    let parquet_files = if path.is_file() {
+    // Find the closing ---
+    let after_first = &normalized[3..];
+    let after_first = after_first.trim_start_matches(['\r', '\n']);
+
+    if let Some(end_pos) = after_first.find("\n---") {
+        let after_closing = &after_first[end_pos + 4..]; // skip "\n---"
+        after_closing.trim_start_matches(['\r', '\n'])
+    } else {
+        // No closing ---, return input as-is
+        input
+    }
+}
+
+/// Read documents from text/markdown files.
+///
+/// Handles both a single text/markdown file and a directory containing such files.
+/// Uses `walkdir` for directory traversal, skips hidden files.
+fn read_documents_from_text_files(location: &str) -> anyhow::Result<Vec<SampledDocument>> {
+    let path = Path::new(location);
+    let mut documents = Vec::new();
+
+    let files: Vec<std::path::PathBuf> = if path.is_file() {
         vec![path.to_path_buf()]
     } else if path.is_dir() {
-        let pattern = format!("{}/**/*.parquet", path.display());
-        let mut files: Vec<_> = glob::glob(&pattern)?
-            .filter_map(|entry| entry.ok())
-            .collect();
-        if files.is_empty() {
-            // Try non-recursive
-            let pattern = format!("{}/*.parquet", path.display());
-            files = glob::glob(&pattern)?
-                .filter_map(|entry| entry.ok())
-                .collect();
+        let mut found = Vec::new();
+        for entry in walkdir::WalkDir::new(path)
+            .into_iter()
+            .filter_entry(|e| {
+                // Allow root directory, skip hidden entries
+                e.depth() == 0
+                    || e.file_name()
+                        .to_str()
+                        .map(|s| !s.starts_with('.'))
+                        .unwrap_or(false)
+            })
+        {
+            let entry = entry?;
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            match entry.path().extension().and_then(|e| e.to_str()) {
+                Some("txt") | Some("md") | Some("markdown") => {
+                    found.push(entry.path().to_path_buf());
+                }
+                _ => {}
+            }
         }
-        files
+        found.sort();
+        found
     } else {
         anyhow::bail!(
             "Location is not a file or directory: {}",
@@ -106,27 +146,129 @@ fn read_documents_from_local(location: &str) -> anyhow::Result<Vec<SampledDocume
         );
     };
 
-    if parquet_files.is_empty() {
-        anyhow::bail!("No parquet files found at: {}", location);
+    if files.is_empty() {
+        anyhow::bail!(
+            "No text/markdown files found at: {}",
+            location
+        );
     }
 
     info!(
-        count = parquet_files.len(),
-        "Found parquet files for sampling"
+        count = files.len(),
+        "Found text/markdown files for sampling"
     );
 
-    let mut documents = Vec::new();
-    for parquet_path in &parquet_files {
-        let file_docs = read_single_parquet(parquet_path)?;
-        documents.extend(file_docs);
+    let base_dir = if path.is_dir() { path } else { path.parent().unwrap_or(Path::new(".")) };
+
+    for file_path in &files {
+        match std::fs::read_to_string(file_path) {
+            Ok(raw_content) => {
+                let relative = file_path
+                    .strip_prefix(base_dir)
+                    .unwrap_or(file_path)
+                    .to_string_lossy()
+                    .to_string();
+
+                // For markdown files, strip front matter before sampling
+                let content = match file_path.extension().and_then(|e| e.to_str()) {
+                    Some("md") | Some("markdown") => {
+                        strip_yaml_front_matter(&raw_content).to_string()
+                    }
+                    _ => raw_content,
+                };
+
+                if !content.trim().is_empty() {
+                    documents.push(SampledDocument {
+                        id: relative.clone(),
+                        content,
+                        source: relative,
+                    });
+                }
+            }
+            Err(e) => {
+                warn!(
+                    path = %file_path.display(),
+                    error = %e,
+                    "Skipping file due to read error"
+                );
+            }
+        }
     }
 
     info!(
         total_documents = documents.len(),
-        "Read documents from local parquet files"
+        "Read documents from text/markdown files"
     );
 
     Ok(documents)
+}
+
+/// Read documents from local files (parquet, text, or markdown).
+///
+/// Handles both single files and directories. For directories, prefers parquet
+/// files if any exist (backward compatibility); falls back to text/markdown.
+fn read_documents_from_local(location: &str) -> anyhow::Result<Vec<SampledDocument>> {
+    let path = Path::new(location);
+
+    if path.is_file() {
+        match path.extension().and_then(|e| e.to_str()) {
+            Some("parquet") => {
+                // Existing parquet reading logic
+                let parquet_files = vec![path.to_path_buf()];
+                info!(count = parquet_files.len(), "Found parquet files for sampling");
+                let mut documents = Vec::new();
+                for parquet_path in &parquet_files {
+                    let file_docs = read_single_parquet(parquet_path)?;
+                    documents.extend(file_docs);
+                }
+                info!(total_documents = documents.len(), "Read documents from local parquet files");
+                return Ok(documents);
+            }
+            Some("txt") | Some("md") | Some("markdown") => {
+                return read_documents_from_text_files(location);
+            }
+            Some(ext) => {
+                anyhow::bail!("Unsupported file type for schema sampling: .{}", ext);
+            }
+            None => {
+                anyhow::bail!("Cannot determine file type: {}", location);
+            }
+        }
+    }
+
+    if path.is_dir() {
+        // Check for parquet files first (backward compatibility)
+        let parquet_pattern = format!("{}/**/*.parquet", path.display());
+        let parquet_files: Vec<_> = glob::glob(&parquet_pattern)?
+            .filter_map(|e| e.ok())
+            .collect();
+
+        if !parquet_files.is_empty() {
+            // Existing parquet directory logic
+            info!(
+                count = parquet_files.len(),
+                "Found parquet files for sampling"
+            );
+            let mut documents = Vec::new();
+            for parquet_path in &parquet_files {
+                let file_docs = read_single_parquet(parquet_path)?;
+                documents.extend(file_docs);
+            }
+            info!(
+                total_documents = documents.len(),
+                "Read documents from local parquet files"
+            );
+            return Ok(documents);
+        }
+
+        // No parquet files -- try text/markdown
+        return read_documents_from_text_files(location);
+    }
+
+    anyhow::bail!(
+        "Location is not a file or directory: {}",
+        path.display()
+    );
 }
 
 /// Read documents from a single parquet file.
