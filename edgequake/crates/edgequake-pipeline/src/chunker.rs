@@ -600,6 +600,366 @@ fn chunk_paragraphs(paragraphs: &[&str], config: &ChunkerConfig) -> Result<Vec<C
     Ok(chunks)
 }
 
+// =========================================================================
+// Heading Boundary Chunking (Markdown-aware)
+// =========================================================================
+
+/// Heading boundary chunking strategy for markdown documents.
+///
+/// This strategy splits markdown content on heading boundaries (H1/H2 first,
+/// then H3/H4 for oversized sections), keeps code blocks intact, and produces
+/// heading breadcrumb context metadata.
+///
+/// # Algorithm
+///
+/// 1. Split content on H1/H2 heading boundaries
+/// 2. For oversized sections, sub-split on H3/H4 boundaries
+/// 3. If still oversized, fall back to paragraph boundary splitting
+/// 4. Code blocks (``` fences) are never split across boundaries
+/// 5. Each chunk carries a heading breadcrumb string in metadata
+pub struct HeadingBoundaryChunking;
+
+impl HeadingBoundaryChunking {
+    /// Create a new heading boundary chunker.
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for HeadingBoundaryChunking {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Detect the heading level of a markdown line.
+///
+/// Returns `Some(level)` for lines like `# Heading` (level 1) through
+/// `###### Heading` (level 6). Returns `None` if the line is not a heading.
+/// Requires a space after the `#` characters (standard markdown).
+fn detect_heading_level(line: &str) -> Option<usize> {
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with('#') {
+        return None;
+    }
+    let hashes = trimmed.chars().take_while(|&c| c == '#').count();
+    if hashes == 0 || hashes > 6 {
+        return None;
+    }
+    // Must have a space after the hashes
+    let rest = &trimmed[hashes..];
+    if rest.starts_with(' ') {
+        Some(hashes)
+    } else {
+        None
+    }
+}
+
+/// Build a breadcrumb string from a heading stack.
+///
+/// Joins heading texts with ` > ` separator.
+/// E.g. `[(1, "Chapter 3"), (2, "Section 2")]` becomes `"Chapter 3 > Section 2"`.
+fn build_breadcrumb(heading_stack: &[(usize, String)]) -> String {
+    heading_stack
+        .iter()
+        .map(|(_, text)| text.as_str())
+        .collect::<Vec<_>>()
+        .join(" > ")
+}
+
+/// Extract heading text from a heading line (strips the `#` prefix and whitespace).
+fn extract_heading_text(line: &str) -> String {
+    let trimmed = line.trim_start();
+    let hashes = trimmed.chars().take_while(|&c| c == '#').count();
+    trimmed[hashes..].trim().to_string()
+}
+
+/// Split markdown content on H1/H2 heading boundaries.
+///
+/// Returns `(section_content, heading_breadcrumb)` pairs.
+/// Code blocks (``` fences) are respected and never trigger heading splits.
+fn split_on_headings(content: &str, _target_tokens: usize) -> Vec<(String, String)> {
+    let mut sections: Vec<(String, String)> = Vec::new();
+    let mut heading_stack: Vec<(usize, String)> = Vec::new();
+    let mut in_code_fence = false;
+    let mut current_section = String::new();
+
+    for line in content.lines() {
+        let trimmed_start = line.trim_start();
+
+        // Handle code fence toggling
+        if trimmed_start.starts_with("```") {
+            in_code_fence = !in_code_fence;
+            if !current_section.is_empty() {
+                current_section.push('\n');
+            }
+            current_section.push_str(line);
+            continue;
+        }
+
+        // Inside code fence: never split
+        if in_code_fence {
+            if !current_section.is_empty() {
+                current_section.push('\n');
+            }
+            current_section.push_str(line);
+            continue;
+        }
+
+        // Check for heading (H1 or H2 only for primary splits)
+        if let Some(level) = detect_heading_level(line) {
+            if level <= 2 && !current_section.trim().is_empty() {
+                // Flush current section
+                let breadcrumb = build_breadcrumb(&heading_stack);
+                sections.push((current_section, breadcrumb));
+                current_section = String::new();
+            }
+
+            // Update heading stack: remove headings at same or deeper level
+            heading_stack.retain(|(l, _)| *l < level);
+            heading_stack.push((level, extract_heading_text(line)));
+        }
+
+        // Add line to current section
+        if !current_section.is_empty() {
+            current_section.push('\n');
+        }
+        current_section.push_str(line);
+    }
+
+    // Flush final section
+    if !current_section.trim().is_empty() {
+        let breadcrumb = build_breadcrumb(&heading_stack);
+        sections.push((current_section, breadcrumb));
+    }
+
+    sections
+}
+
+/// Sub-split an oversized section on H3/H4 boundaries, then fall back to paragraphs.
+///
+/// Each sub-section inherits the parent heading breadcrumb, appended with its own
+/// sub-heading if applicable. Code blocks that exceed target_tokens are emitted
+/// as their own chunk (never split).
+fn sub_split_section(
+    content: &str,
+    heading_breadcrumb: &str,
+    target_tokens: usize,
+) -> Vec<(String, String)> {
+    // First try splitting on H3/H4 boundaries
+    let sub_sections = split_on_sub_headings(content, heading_breadcrumb);
+
+    if sub_sections.len() > 1 {
+        // Check if any sub-section is still oversized
+        let mut result = Vec::new();
+        for (sub_content, sub_breadcrumb) in sub_sections {
+            let tokens = estimate_tokens(&sub_content);
+            if tokens > target_tokens {
+                // Fall back to paragraph splitting for this sub-section
+                let para_chunks = split_on_paragraphs(&sub_content, &sub_breadcrumb, target_tokens);
+                result.extend(para_chunks);
+            } else {
+                result.push((sub_content, sub_breadcrumb));
+            }
+        }
+        return result;
+    }
+
+    // No H3/H4 sub-headings found, fall back to paragraph splitting
+    split_on_paragraphs(content, heading_breadcrumb, target_tokens)
+}
+
+/// Split content on H3/H4 heading boundaries.
+fn split_on_sub_headings(content: &str, parent_breadcrumb: &str) -> Vec<(String, String)> {
+    let mut sections: Vec<(String, String)> = Vec::new();
+    let mut in_code_fence = false;
+    let mut current_section = String::new();
+    let mut current_sub_heading: Option<String> = None;
+
+    for line in content.lines() {
+        let trimmed_start = line.trim_start();
+
+        // Handle code fence toggling
+        if trimmed_start.starts_with("```") {
+            in_code_fence = !in_code_fence;
+            if !current_section.is_empty() {
+                current_section.push('\n');
+            }
+            current_section.push_str(line);
+            continue;
+        }
+
+        if in_code_fence {
+            if !current_section.is_empty() {
+                current_section.push('\n');
+            }
+            current_section.push_str(line);
+            continue;
+        }
+
+        // Check for H3/H4 heading
+        if let Some(level) = detect_heading_level(line) {
+            if (level == 3 || level == 4) && !current_section.trim().is_empty() {
+                // Flush current section
+                let breadcrumb = if let Some(ref sub) = current_sub_heading {
+                    if parent_breadcrumb.is_empty() {
+                        sub.clone()
+                    } else {
+                        format!("{} > {}", parent_breadcrumb, sub)
+                    }
+                } else {
+                    parent_breadcrumb.to_string()
+                };
+                sections.push((current_section, breadcrumb));
+                current_section = String::new();
+            }
+
+            if level == 3 || level == 4 {
+                current_sub_heading = Some(extract_heading_text(line));
+            }
+        }
+
+        if !current_section.is_empty() {
+            current_section.push('\n');
+        }
+        current_section.push_str(line);
+    }
+
+    // Flush final section
+    if !current_section.trim().is_empty() {
+        let breadcrumb = if let Some(ref sub) = current_sub_heading {
+            if parent_breadcrumb.is_empty() {
+                sub.clone()
+            } else {
+                format!("{} > {}", parent_breadcrumb, sub)
+            }
+        } else {
+            parent_breadcrumb.to_string()
+        };
+        sections.push((current_section, breadcrumb));
+    }
+
+    sections
+}
+
+/// Split content on paragraph boundaries (\n\n) as a final fallback.
+///
+/// Code blocks are never split even if they exceed target_tokens.
+fn split_on_paragraphs(
+    content: &str,
+    heading_breadcrumb: &str,
+    target_tokens: usize,
+) -> Vec<(String, String)> {
+    let paragraphs: Vec<&str> = content.split("\n\n").collect();
+
+    if paragraphs.len() <= 1 {
+        // Can't split further; return as-is
+        return vec![(content.to_string(), heading_breadcrumb.to_string())];
+    }
+
+    let mut result: Vec<(String, String)> = Vec::new();
+    let mut current = String::new();
+
+    for para in paragraphs {
+        let para_trimmed = para.trim();
+        if para_trimmed.is_empty() {
+            continue;
+        }
+
+        let combined_tokens = estimate_tokens(&if current.is_empty() {
+            para_trimmed.to_string()
+        } else {
+            format!("{}\n\n{}", current, para_trimmed)
+        });
+
+        if combined_tokens > target_tokens && !current.is_empty() {
+            // Flush current accumulation
+            result.push((current, heading_breadcrumb.to_string()));
+            current = para_trimmed.to_string();
+        } else if current.is_empty() {
+            current = para_trimmed.to_string();
+        } else {
+            current.push_str("\n\n");
+            current.push_str(para_trimmed);
+        }
+    }
+
+    if !current.trim().is_empty() {
+        result.push((current, heading_breadcrumb.to_string()));
+    }
+
+    result
+}
+
+#[async_trait]
+impl ChunkingStrategy for HeadingBoundaryChunking {
+    async fn chunk(&self, content: &str, config: &ChunkerConfig) -> Result<Vec<ChunkResult>> {
+        if content.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let target_tokens = config.chunk_size;
+        let sections = split_on_headings(content, target_tokens);
+
+        let mut chunks = Vec::new();
+        let mut chunk_index = 0;
+
+        for (section_content, breadcrumb) in sections {
+            let section_tokens = estimate_tokens(&section_content);
+
+            if section_tokens > target_tokens {
+                // Sub-split oversized section
+                let sub_sections =
+                    sub_split_section(&section_content, &breadcrumb, target_tokens);
+                for (sub_content, sub_breadcrumb) in sub_sections {
+                    let mut meta = serde_json::Map::new();
+                    if !sub_breadcrumb.is_empty() {
+                        meta.insert(
+                            "heading_context".to_string(),
+                            serde_json::Value::String(sub_breadcrumb),
+                        );
+                    }
+                    chunks.push(ChunkResult {
+                        content: sub_content.trim().to_string(),
+                        tokens: estimate_tokens(sub_content.trim()),
+                        chunk_order_index: chunk_index,
+                        metadata: if meta.is_empty() { None } else { Some(meta) },
+                    });
+                    chunk_index += 1;
+                }
+            } else {
+                let mut meta = serde_json::Map::new();
+                if !breadcrumb.is_empty() {
+                    meta.insert(
+                        "heading_context".to_string(),
+                        serde_json::Value::String(breadcrumb),
+                    );
+                }
+                chunks.push(ChunkResult {
+                    content: section_content.trim().to_string(),
+                    tokens: section_tokens,
+                    chunk_order_index: chunk_index,
+                    metadata: if meta.is_empty() { None } else { Some(meta) },
+                });
+                chunk_index += 1;
+            }
+        }
+
+        // Filter out empty chunks
+        chunks.retain(|c| !c.content.is_empty());
+        // Re-index after filtering
+        for (i, chunk) in chunks.iter_mut().enumerate() {
+            chunk.chunk_order_index = i;
+        }
+
+        Ok(chunks)
+    }
+
+    fn name(&self) -> &str {
+        "heading_boundary"
+    }
+}
+
 /// Split text into sentences using simple heuristics.
 fn split_into_sentences(text: &str) -> Vec<String> {
     let mut sentences = Vec::new();
@@ -1336,5 +1696,257 @@ This work is supported by \u{7814}\u{7A76} and \u{5F00}\u{53D1} funding.";
         let sentences = split_into_sentences("Dr. Smith said hello. Then left.");
         // Should NOT split on "Dr."
         assert!(sentences.len() <= 2);
+    }
+
+    // =========================================================================
+    // HeadingBoundaryChunking Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_heading_boundary_basic() {
+        let strategy = HeadingBoundaryChunking::new();
+        let config = ChunkerConfig {
+            chunk_size: 500,
+            chunk_overlap: 10,
+            min_chunk_size: 5,
+            ..Default::default()
+        };
+
+        let text = "\
+# Introduction
+
+This is the introduction paragraph.
+
+## Background
+
+This is the background section with some details.
+
+## Methods
+
+Here we describe the methods used.
+
+# Results
+
+The results are presented here.";
+
+        let chunks = strategy.chunk(text, &config).await.unwrap();
+
+        // Should split on H1/H2 boundaries
+        assert!(
+            chunks.len() >= 3,
+            "Expected at least 3 chunks from 4 heading sections, got {}",
+            chunks.len()
+        );
+
+        // First chunk should contain the introduction
+        assert!(
+            chunks[0].content.contains("introduction"),
+            "First chunk should contain introduction text"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_heading_boundary_breadcrumb() {
+        let strategy = HeadingBoundaryChunking::new();
+        let config = ChunkerConfig {
+            chunk_size: 500,
+            chunk_overlap: 10,
+            min_chunk_size: 5,
+            ..Default::default()
+        };
+
+        let text = "\
+# Chapter 1
+
+Some intro text.
+
+## Section A
+
+Section A content here.
+
+## Section B
+
+Section B content here.";
+
+        let chunks = strategy.chunk(text, &config).await.unwrap();
+
+        // Find a chunk that has heading_context metadata
+        let chunks_with_metadata: Vec<_> = chunks
+            .iter()
+            .filter(|c| c.metadata.is_some())
+            .collect();
+
+        assert!(
+            !chunks_with_metadata.is_empty(),
+            "At least one chunk should have heading_context metadata"
+        );
+
+        // Check that breadcrumbs contain expected heading hierarchy
+        let has_breadcrumb = chunks.iter().any(|c| {
+            if let Some(ref meta) = c.metadata {
+                if let Some(serde_json::Value::String(ref ctx)) = meta.get("heading_context") {
+                    ctx.contains("Chapter 1") && ctx.contains("Section")
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        });
+
+        assert!(
+            has_breadcrumb,
+            "Should have a breadcrumb with 'Chapter 1 > Section'"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_heading_boundary_code_fence() {
+        let strategy = HeadingBoundaryChunking::new();
+        let config = ChunkerConfig {
+            chunk_size: 500,
+            chunk_overlap: 10,
+            min_chunk_size: 5,
+            ..Default::default()
+        };
+
+        let text = "\
+# Main Section
+
+Here is some code:
+
+```
+# Not a heading
+## Also not a heading
+def foo():
+    pass
+```
+
+More text after code block.";
+
+        let chunks = strategy.chunk(text, &config).await.unwrap();
+
+        // The # inside code fence should NOT trigger a split
+        // Should be one chunk since there's only one H1 heading
+        assert_eq!(
+            chunks.len(),
+            1,
+            "Code fence headings should not cause splits, got {} chunks",
+            chunks.len()
+        );
+
+        // Content should contain the code block intact
+        assert!(
+            chunks[0].content.contains("# Not a heading"),
+            "Code block content should be preserved"
+        );
+        assert!(
+            chunks[0].content.contains("def foo():"),
+            "Code block should be intact"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_heading_boundary_oversized_section() {
+        let strategy = HeadingBoundaryChunking::new();
+        let config = ChunkerConfig {
+            chunk_size: 20, // Very small to force sub-splitting
+            chunk_overlap: 5,
+            min_chunk_size: 3,
+            ..Default::default()
+        };
+
+        let text = "\
+# Big Section
+
+### Subsection 1
+
+First subsection has some content here that is fairly long.
+
+### Subsection 2
+
+Second subsection also has content that goes on for a bit.
+
+### Subsection 3
+
+Third subsection rounds things out with more text here.";
+
+        let chunks = strategy.chunk(text, &config).await.unwrap();
+
+        // With very small chunk_size, the big section should be sub-split
+        assert!(
+            chunks.len() >= 2,
+            "Oversized section should be sub-split, got {} chunks",
+            chunks.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_heading_boundary_empty() {
+        let strategy = HeadingBoundaryChunking::new();
+        let config = ChunkerConfig::default();
+
+        let chunks = strategy.chunk("", &config).await.unwrap();
+        assert!(chunks.is_empty(), "Empty content should return no chunks");
+
+        let chunks2 = strategy.chunk("   \n  \n  ", &config).await.unwrap();
+        assert!(
+            chunks2.is_empty(),
+            "Whitespace-only content should return no chunks"
+        );
+    }
+
+    #[test]
+    fn test_detect_heading_level() {
+        // Valid headings
+        assert_eq!(detect_heading_level("# H1"), Some(1));
+        assert_eq!(detect_heading_level("## H2"), Some(2));
+        assert_eq!(detect_heading_level("### H3"), Some(3));
+        assert_eq!(detect_heading_level("#### H4"), Some(4));
+        assert_eq!(detect_heading_level("##### H5"), Some(5));
+        assert_eq!(detect_heading_level("###### H6"), Some(6));
+
+        // With leading whitespace
+        assert_eq!(detect_heading_level("  # H1 with indent"), Some(1));
+
+        // Invalid: no space after hashes
+        assert_eq!(detect_heading_level("#NoSpace"), None);
+        assert_eq!(detect_heading_level("###"), None);
+        assert_eq!(detect_heading_level("##no"), None);
+
+        // Not a heading
+        assert_eq!(detect_heading_level("Normal text"), None);
+        assert_eq!(detect_heading_level(""), None);
+    }
+
+    #[test]
+    fn test_build_breadcrumb() {
+        let stack: Vec<(usize, String)> = vec![];
+        assert_eq!(build_breadcrumb(&stack), "");
+
+        let stack = vec![(1, "Chapter 3".to_string())];
+        assert_eq!(build_breadcrumb(&stack), "Chapter 3");
+
+        let stack = vec![
+            (1, "Chapter 3".to_string()),
+            (2, "Section 2".to_string()),
+        ];
+        assert_eq!(build_breadcrumb(&stack), "Chapter 3 > Section 2");
+
+        let stack = vec![
+            (1, "Intro".to_string()),
+            (2, "Background".to_string()),
+            (3, "History".to_string()),
+        ];
+        assert_eq!(build_breadcrumb(&stack), "Intro > Background > History");
+    }
+
+    #[test]
+    fn test_chunker_with_heading_strategy() {
+        let config = ChunkerConfig::default();
+        let chunker =
+            Chunker::with_strategy(config, Arc::new(HeadingBoundaryChunking::new()));
+
+        assert_eq!(chunker.strategy_name(), "heading_boundary");
     }
 }
