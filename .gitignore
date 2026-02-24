@@ -116,5 +116,24 @@ zz-explore/
 # OS files
 Thumbs.db
 ehthumbs.db
+.DS_Store
+
+# Amplify build artifacts
+.amplify/
+**/amplify_outputs.json
+!edgequake/console/amplify_outputs.json
+**/.amplify/
+*.tsbuildinfo
+
+# Batch pipeline work directory
+batch_work/
+
+# Test configs (local)
+**/test/test-config.toml
+
+# Planning docs
+.planning/
+.claude/
+
 specs/
 ./metals
