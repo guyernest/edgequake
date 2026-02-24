@@ -46,6 +46,9 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env file if present (before clap parses CLI args, so env vars are available)
+    dotenvy::dotenv().ok();
+
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -60,9 +63,26 @@ async fn main() -> anyhow::Result<()> {
     // (before BatchConfig consumes the CLI fields by move)
     if let Command::ListBatches { limit } = cli.command {
         let api_key = cli.api_key.as_deref().ok_or_else(|| {
-            anyhow::anyhow!("OPENAI_API_KEY is required for list-batches")
+            anyhow::anyhow!("API key is required for list-batches (set OPENAI_API_KEY or ANTHROPIC_API_KEY)")
         })?;
         return list_openai_batches(api_key, limit).await;
+    }
+
+    if let Command::Descriptor = cli.command {
+        let ns_table = cli
+            .registry_table
+            .as_deref()
+            .unwrap_or(&cli.state_table);
+        return generate_descriptor_command(
+            &cli.namespace,
+            ns_table,
+            cli.neptune_endpoint.as_deref(),
+            cli.vector_bucket.as_deref(),
+            cli.athena_bm25_database.as_deref(),
+            cli.bm25_s3_bucket.as_deref(),
+            Some(cli.athena_workgroup.as_str()),
+        )
+        .await;
     }
 
     if let Command::SuggestSchema {
@@ -74,12 +94,16 @@ async fn main() -> anyhow::Result<()> {
             anyhow::anyhow!("OPENAI_API_KEY is required for suggest-schema")
         })?;
         let suggest_model = cli.model.as_deref().unwrap_or("gpt-4.1-mini");
+        let ns_table = cli
+            .registry_table
+            .as_deref()
+            .unwrap_or(&cli.state_table);
         return handle_suggest_schema(
             &cli.data,
             api_key,
             suggest_model,
             &cli.namespace,
-            &cli.dynamo_table,
+            ns_table,
             sample_percentage,
             domain_hint.as_deref(),
         )
@@ -101,13 +125,19 @@ async fn main() -> anyhow::Result<()> {
     // Initialize AWS config early (needed by resolver and state manager)
     let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
 
+    // Resolve the namespace registry table: explicit --namespace-table, or fall back to --dynamo-table
+    let registry_table = cli
+        .registry_table
+        .clone()
+        .unwrap_or_else(|| cli.state_table.clone());
+
     // Resolve namespace config for commands that need it via NamespaceConfigResolver
     let (resolved_config, domain_config) = if needs_config_resolution {
         let namespace_slug = edgequake_core::NamespaceSlug::parse(&cli.namespace)?;
         let resolver = namespace_resolver::NamespaceConfigResolver::new(
             namespace_slug,
             aws_config.clone(),
-            cli.dynamo_table.clone(),
+            registry_table.clone(),
         );
         let resolved = resolver.resolve(&cli).await?;
 
@@ -174,7 +204,8 @@ async fn main() -> anyhow::Result<()> {
             chunk_overlap: cli.chunk_overlap,
             embedding_batch_size: cli.embedding_batch_size,
             embedding_concurrency: cli.embedding_concurrency,
-            dynamo_table: cli.dynamo_table,
+            state_table: cli.state_table,
+            registry_table: registry_table.clone(),
             namespace: cli.namespace.clone(),
             neptune_endpoint: cli.neptune_endpoint,
             s3_bucket: cli.s3_bucket,
@@ -195,6 +226,11 @@ async fn main() -> anyhow::Result<()> {
             include_patterns: cli.include,
             exclude_patterns: cli.exclude,
             max_failures: cli.max_failures,
+            anthropic_api_key: cli.anthropic_key,
+            embedding_dimension: resolved_config
+                .as_ref()
+                .map(|rc| rc.embedding_dimension)
+                .unwrap_or(1536),
         };
         return dry_run::run_dry_run(
             &dry_run_config,
@@ -205,12 +241,32 @@ async fn main() -> anyhow::Result<()> {
         .await;
     }
 
-    // Pipeline commands require an API key
-    let api_key = cli
-        .api_key
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("OPENAI_API_KEY is required for pipeline commands"))?
-        .to_string();
+    // Determine which provider we're using based on extraction model
+    let use_anthropic = {
+        let model = if let Some(ref rc) = resolved_config {
+            &rc.extraction_model
+        } else {
+            cli.model.as_deref().unwrap_or("gpt-4o-mini")
+        };
+        edgequake_llm::providers::anthropic_batch::is_anthropic_model(model)
+    };
+
+    // Pipeline commands require the appropriate API key
+    let api_key = if use_anthropic {
+        cli.anthropic_key
+            .as_deref()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "ANTHROPIC_API_KEY is required when using Claude models for extraction"
+                )
+            })?
+            .to_string()
+    } else {
+        cli.api_key
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("OPENAI_API_KEY is required for pipeline commands"))?
+            .to_string()
+    };
 
     // Generate or use provided job ID
     let job_id = cli
@@ -230,6 +286,10 @@ async fn main() -> anyhow::Result<()> {
     } else {
         cli.embedding_model.clone().unwrap_or_else(|| "text-embedding-3-small".to_string())
     };
+    let embedding_dimension = resolved_config
+        .as_ref()
+        .map(|rc| rc.embedding_dimension)
+        .unwrap_or(1536);
 
     // Build config from CLI args + resolved namespace config
     let config = BatchConfig {
@@ -243,7 +303,8 @@ async fn main() -> anyhow::Result<()> {
         chunk_overlap: cli.chunk_overlap,
         embedding_batch_size: cli.embedding_batch_size,
         embedding_concurrency: cli.embedding_concurrency,
-        dynamo_table: cli.dynamo_table,
+        state_table: cli.state_table,
+        registry_table: registry_table.clone(),
         namespace: cli.namespace.clone(),
         neptune_endpoint: cli.neptune_endpoint.clone(),
         s3_bucket: cli.s3_bucket.clone(),
@@ -264,6 +325,8 @@ async fn main() -> anyhow::Result<()> {
         include_patterns: cli.include.clone(),
         exclude_patterns: cli.exclude.clone(),
         max_failures: cli.max_failures,
+        anthropic_api_key: cli.anthropic_key.clone(),
+        embedding_dimension,
     };
 
     // Upfront validation: check all preconditions before any processing
@@ -287,7 +350,7 @@ async fn main() -> anyhow::Result<()> {
     let dynamo_client = aws_sdk_dynamodb::Client::new(&aws_config);
 
     let dynamo_config =
-        edgequake_storage_aws::DynamoKVConfig::new(&config.dynamo_table, &config.namespace);
+        edgequake_storage_aws::DynamoKVConfig::new(&config.state_table, &config.namespace);
     let dynamo_kv =
         edgequake_storage_aws::DynamoKVStorage::new_with_client(dynamo_config, dynamo_client.clone());
 
@@ -295,11 +358,11 @@ async fn main() -> anyhow::Result<()> {
     use edgequake_storage::KVStorage;
     dynamo_kv.initialize().await?;
 
-    // The namespace registry table is the same DynamoDB table used for KV storage
-    // (single-table design). LATEST_RUN writes go to PK=NS#{slug}, SK=LATEST_RUN.
+    // LATEST_RUN writes go to the namespace registry table (PK=NS#{slug}, SK=LATEST_RUN),
+    // which is separate from the KV state table.
     let state_mgr = StateManager::new(Box::new(dynamo_kv)).with_latest_run_config(
         dynamo_client.clone(),
-        config.dynamo_table.clone(),
+        config.registry_table.clone(),
         cli.namespace.clone(),
     );
     let progress = BatchProgress::new();
@@ -487,6 +550,10 @@ async fn main() -> anyhow::Result<()> {
                 // Handled earlier after config resolution
                 unreachable!()
             }
+            Command::Descriptor => {
+                // Handled earlier before DynamoDB state initialization
+                unreachable!()
+            }
         }
         Ok(())
     }
@@ -612,9 +679,19 @@ async fn run_full_pipeline(
     };
     check_failures(job, "extract")?;
 
-    // Phase 3: Embed
+    // Phase 3: Embed (always uses OpenAI for embeddings)
     info!("[Embed] Starting...");
-    let embedding_provider = create_embedding_provider(api_key, &config.embedding_model)?;
+    let embed_api_key = if edgequake_llm::providers::anthropic_batch::is_anthropic_model(
+        &config.extraction_model,
+    ) {
+        // When using Anthropic for extraction, embeddings still need OpenAI key
+        // The `api_key` passed here is the Anthropic key, so we need the OpenAI key separately
+        // Fall back to the extraction api_key if it looks like an OpenAI key, or error
+        std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| api_key.to_string())
+    } else {
+        api_key.to_string()
+    };
+    let embedding_provider = create_embedding_provider(&embed_api_key, &config.embedding_model)?;
     let embed_result = stages::embed::run_embed(
         config,
         embedding_provider,
@@ -652,22 +729,69 @@ async fn run_full_pipeline(
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     let verification = report::verify_stored_data(config, aws_config).await;
 
-    // Read MCP descriptor from DynamoDB (best-effort -- missing descriptor doesn't fail)
+    // Generate and store MCP descriptor (best-effort -- failure doesn't fail pipeline)
     let descriptor = {
         let namespace_slug = edgequake_core::NamespaceSlug::parse(&config.namespace).ok();
         if let Some(ref slug) = namespace_slug {
             let dynamo_client = aws_sdk_dynamodb::Client::new(aws_config);
             let registry_config = edgequake_storage_aws::DynamoNamespaceConfig {
-                table_name: config.dynamo_table.clone(),
+                table_name: config.registry_table.clone(),
             };
             let registry = edgequake_storage_aws::DynamoNamespaceRegistry::new(
                 registry_config,
                 dynamo_client,
             );
-            match registry.get_descriptor(slug).await {
-                Ok(desc) => desc,
+
+            // Build InfrastructureConfig from batch config + AWS identity
+            let account_id = match aws_sdk_sts::Client::new(aws_config)
+                .get_caller_identity()
+                .send()
+                .await
+            {
+                Ok(identity) => identity.account().unwrap_or("unknown").to_string(),
                 Err(e) => {
-                    tracing::warn!(error = %e, "Failed to read MCP descriptor (non-fatal)");
+                    tracing::warn!(error = %e, "Failed to get AWS account ID for descriptor");
+                    "unknown".to_string()
+                }
+            };
+
+            let infra = edgequake_core::InfrastructureConfig {
+                neptune_endpoint: config
+                    .neptune_endpoint
+                    .clone()
+                    .unwrap_or_default(),
+                vector_bucket_name: config
+                    .vector_bucket
+                    .clone()
+                    .unwrap_or_default(),
+                dynamodb_table_name: config.registry_table.clone(),
+                account_id,
+                region: aws_config.region().map(|r| r.to_string()).unwrap_or_else(|| "us-east-1".to_string()),
+                environment: "dev".to_string(),
+                external_id_suffix: {
+                    use sha2::Digest;
+                    let hash = sha2::Sha256::digest(config.namespace.as_bytes());
+                    format!("{:02x}{:02x}{:02x}", hash[0], hash[1], hash[2])
+                },
+                athena_bm25_database: config.athena_bm25_database.clone(),
+                bm25_s3_bucket: config.bm25_s3_bucket.clone(),
+                athena_workgroup: Some(config.athena_workgroup.clone()),
+            };
+
+            match registry.generate_descriptor(slug, &infra).await {
+                Ok(descriptor) => {
+                    match registry.store_descriptor(slug, &descriptor).await {
+                        Ok(()) => {
+                            info!(namespace = slug.as_str(), "Generated and stored MCP descriptor");
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "Failed to store MCP descriptor (non-fatal)");
+                        }
+                    }
+                    Some(descriptor)
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to generate MCP descriptor (non-fatal)");
                     None
                 }
             }
@@ -760,26 +884,30 @@ async fn create_storage_backends(
             let vectors_config = edgequake_storage_aws::S3VectorsConfig {
                 vector_bucket_name: bucket.clone(),
                 index_name,
-                dimension: 1536,
+                dimension: config.embedding_dimension as usize,
                 namespace: config.namespace.clone(),
             };
             let s3v_client = edgequake_storage_aws::aws_sdk_s3vectors::Client::new(&aws_config);
-            std::sync::Arc::new(edgequake_storage_aws::S3VectorsStorage::new_with_client(
-                vectors_config,
-                s3v_client,
-            ))
+            let storage: std::sync::Arc<dyn edgequake_storage::traits::VectorStorage> =
+                std::sync::Arc::new(edgequake_storage_aws::S3VectorsStorage::new_with_client(
+                    vectors_config,
+                    s3v_client,
+                ));
+            // Initialize creates the bucket/index if they don't exist
+            storage.initialize().await?;
+            storage
         } else {
             info!("No vector bucket configured, using in-memory vector storage");
             std::sync::Arc::new(edgequake_storage::MemoryVectorStorage::new(
                 &config.namespace,
-                1536,
+                config.embedding_dimension as usize,
             ))
         };
 
     // KV storage: DynamoDB
     let dynamo_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let dynamo_config =
-        edgequake_storage_aws::DynamoKVConfig::new(&config.dynamo_table, &config.namespace);
+        edgequake_storage_aws::DynamoKVConfig::new(&config.state_table, &config.namespace);
     let kv: std::sync::Arc<dyn edgequake_storage::traits::KVStorage> = std::sync::Arc::new(
         edgequake_storage_aws::DynamoKVStorage::new_with_client(dynamo_config, dynamo_client),
     );
@@ -859,6 +987,104 @@ fn print_status(job: &state::JobState) {
         println!("Error:           {}", error);
     }
     println!("========================\n");
+}
+
+/// Generate and store the MCP descriptor for a namespace.
+///
+/// Lightweight command that only reads namespace config from DynamoDB,
+/// builds the descriptor from infrastructure config, and writes it back.
+/// No pipeline phases are executed.
+async fn generate_descriptor_command(
+    namespace: &str,
+    registry_table: &str,
+    neptune_endpoint: Option<&str>,
+    vector_bucket: Option<&str>,
+    athena_bm25_database: Option<&str>,
+    bm25_s3_bucket: Option<&str>,
+    athena_workgroup: Option<&str>,
+) -> anyhow::Result<()> {
+    let slug = edgequake_core::NamespaceSlug::parse(namespace)
+        .map_err(|e| anyhow::anyhow!("Invalid namespace: {}", e))?;
+
+    let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+
+    // Get AWS account ID
+    let sts_client = aws_sdk_sts::Client::new(&aws_config);
+    let identity = sts_client
+        .get_caller_identity()
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get AWS identity: {}", e))?;
+    let account_id = identity
+        .account()
+        .ok_or_else(|| anyhow::anyhow!("Could not determine AWS account ID"))?
+        .to_string();
+
+    let region = aws_config
+        .region()
+        .map(|r| r.to_string())
+        .unwrap_or_else(|| "us-east-1".to_string());
+
+    let neptune = neptune_endpoint
+        .ok_or_else(|| anyhow::anyhow!("Neptune endpoint required (set NEPTUNE_ENDPOINT or --neptune-endpoint)"))?;
+
+    let vectors = vector_bucket
+        .ok_or_else(|| anyhow::anyhow!("Vector bucket required (set VECTOR_BUCKET or --vector-bucket)"))?;
+
+    let infra = edgequake_core::InfrastructureConfig {
+        neptune_endpoint: neptune.to_string(),
+        vector_bucket_name: vectors.to_string(),
+        dynamodb_table_name: registry_table.to_string(),
+        account_id,
+        region: region.clone(),
+        environment: "dev".to_string(),
+        external_id_suffix: {
+            use sha2::Digest;
+            let hash = sha2::Sha256::digest(namespace.as_bytes());
+            format!("{:02x}{:02x}{:02x}", hash[0], hash[1], hash[2])
+        },
+        athena_bm25_database: athena_bm25_database.map(|s| s.to_string()),
+        bm25_s3_bucket: bm25_s3_bucket.map(|s| s.to_string()),
+        athena_workgroup: athena_workgroup.map(|s| s.to_string()),
+    };
+
+    let dynamo_client = aws_sdk_dynamodb::Client::new(&aws_config);
+    let registry_config = edgequake_storage_aws::DynamoNamespaceConfig {
+        table_name: registry_table.to_string(),
+    };
+    let registry =
+        edgequake_storage_aws::DynamoNamespaceRegistry::new(registry_config, dynamo_client);
+
+    let descriptor = registry.generate_descriptor(&slug, &infra).await
+        .map_err(|e| anyhow::anyhow!("Failed to generate descriptor: {}", e))?;
+
+    registry.store_descriptor(&slug, &descriptor).await
+        .map_err(|e| anyhow::anyhow!("Failed to store descriptor: {}", e))?;
+
+    println!("MCP descriptor generated and stored for namespace '{}'", namespace);
+    println!();
+    println!("--- Storage Endpoints ---");
+    println!("Neptune:      {}", descriptor.storage.neptune.endpoint);
+    println!("Label prefix: {}", descriptor.storage.neptune.label_prefix);
+    println!("S3 Vectors:   {}/{}", descriptor.storage.s3_vectors.bucket_name, descriptor.storage.s3_vectors.index_name);
+    println!("DynamoDB:     {}", descriptor.storage.dynamodb.table_name);
+    if let Some(ref bm25) = descriptor.storage.bm25 {
+        println!("BM25 DB:      {}", bm25.database);
+        println!("BM25 Bucket:  {}", bm25.s3_bucket);
+        println!("BM25 WG:      {}", bm25.workgroup);
+    }
+    println!();
+    println!("--- Authentication ---");
+    println!("Role ARN:     {}", descriptor.auth.role_arn);
+    println!("External ID:  {}", descriptor.auth.external_id);
+    println!("Region:       {}", descriptor.auth.region);
+    println!();
+    println!("--- Tools ({}) ---", descriptor.tools.len());
+    for tool in &descriptor.tools {
+        println!("  - {}: {}", tool.name, tool.description);
+    }
+
+    Ok(())
 }
 
 /// List all OpenAI batch jobs to identify what's consuming token limits.
@@ -988,7 +1214,7 @@ async fn handle_suggest_schema(
     api_key: &str,
     model: &str,
     namespace: &str,
-    dynamo_table: &str,
+    registry_table: &str,
     sample_percentage: f64,
     domain_hint: Option<&str>,
 ) -> anyhow::Result<()> {
@@ -1019,7 +1245,7 @@ async fn handle_suggest_schema(
     let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let dynamo_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let registry_config = edgequake_storage_aws::DynamoNamespaceConfig {
-        table_name: dynamo_table.to_string(),
+        table_name: registry_table.to_string(),
     };
     let registry = edgequake_storage_aws::DynamoNamespaceRegistry::new(registry_config, dynamo_client);
 

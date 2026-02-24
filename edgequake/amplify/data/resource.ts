@@ -60,8 +60,7 @@ const schema = a.schema({
 
   McpDescriptor: a.customType({
     schema_version: a.string().required(),
-    namespace_slug: a.string().required(),
-    namespace_description: a.string(),
+    namespace: a.json().required(),
     storage: a.json().required(),
     auth: a.json().required(),
     pipeline_config: a.json().required(),

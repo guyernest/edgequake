@@ -92,12 +92,24 @@ pub async fn run_dry_run(config: &BatchConfig, resolved: &ResolvedConfig) -> any
     };
     let estimated_input_tokens = avg_tokens_per_chunk * estimated_chunks as f64;
 
-    let cost = estimate_openai_cost(
-        &resolved.extraction_model,
-        &resolved.embedding_model,
-        estimated_input_tokens,
-        estimated_chunks,
-    );
+    let use_anthropic =
+        edgequake_llm::providers::anthropic_batch::is_anthropic_model(&resolved.extraction_model);
+
+    let cost = if use_anthropic {
+        estimate_anthropic_cost(
+            &resolved.extraction_model,
+            &resolved.embedding_model,
+            estimated_input_tokens,
+            estimated_chunks,
+        )
+    } else {
+        estimate_openai_cost(
+            &resolved.extraction_model,
+            &resolved.embedding_model,
+            estimated_input_tokens,
+            estimated_chunks,
+        )
+    };
 
     // Step 5: Print the report
     print_dry_run_report(
@@ -109,6 +121,7 @@ pub async fn run_dry_run(config: &BatchConfig, resolved: &ResolvedConfig) -> any
         resolved,
         &cost,
         &config.namespace,
+        use_anthropic,
     );
 
     Ok(())
@@ -241,6 +254,72 @@ async fn chunk_document(
     }
 }
 
+/// Estimate Anthropic API cost based on model pricing and estimated token counts.
+///
+/// Uses Anthropic Batch API rates (50% discount on standard pricing).
+fn estimate_anthropic_cost(
+    extraction_model: &str,
+    embedding_model: &str,
+    estimated_input_tokens: f64,
+    estimated_chunks: usize,
+) -> CostEstimate {
+    // Anthropic Batch API rates (50% of standard) per 1M tokens
+    // Source: https://platform.claude.com/docs/en/about-claude/pricing#batch-processing
+    let (input_rate, output_rate) = match extraction_model {
+        // Haiku 3: $0.125 input, $0.625 output per MTok
+        m if m.contains("haiku-3") && !m.contains("haiku-3.5") => {
+            (0.125 / 1_000_000.0, 0.625 / 1_000_000.0)
+        }
+        // Haiku 3.5: $0.40 input, $2.00 output per MTok
+        m if m.contains("haiku-3.5") || m.contains("haiku-3-5") => {
+            (0.40 / 1_000_000.0, 2.00 / 1_000_000.0)
+        }
+        // Haiku 4.5: $0.50 input, $2.50 output per MTok
+        m if m.contains("haiku") => (0.50 / 1_000_000.0, 2.50 / 1_000_000.0),
+        // Opus 4 / 4.1: $7.50 input, $37.50 output per MTok
+        m if m.contains("opus-4-1") || m.contains("opus-4-0") || (m.contains("opus-4") && !m.contains("opus-4.") && !m.contains("opus-4-5") && !m.contains("opus-4-6")) => {
+            (7.50 / 1_000_000.0, 37.50 / 1_000_000.0)
+        }
+        // Opus 4.5 / 4.6: $2.50 input, $12.50 output per MTok
+        m if m.contains("opus") => (2.50 / 1_000_000.0, 12.50 / 1_000_000.0),
+        // Sonnet (all versions 3.7, 4, 4.5, 4.6): $1.50 input, $7.50 output per MTok
+        _ => (1.50 / 1_000_000.0, 7.50 / 1_000_000.0),
+    };
+
+    // Embedding rates (standard, not batch) — embeddings still use OpenAI
+    let embed_rate = match embedding_model {
+        m if m.contains("text-embedding-3-large") => 0.13 / 1_000_000.0,
+        m if m.contains("text-embedding-3-small") => 0.02 / 1_000_000.0,
+        _ => 0.02 / 1_000_000.0,
+    };
+
+    // System prompt is ~1500 tokens per request
+    let system_prompt_tokens = 1500.0;
+    let total_input_tokens =
+        estimated_input_tokens + (system_prompt_tokens * estimated_chunks as f64);
+
+    // Estimate ~500 output tokens per chunk on average
+    let total_output_tokens = 500.0 * estimated_chunks as f64;
+
+    let extraction_input_cost = total_input_tokens * input_rate;
+    let extraction_output_cost = total_output_tokens * output_rate;
+
+    // Embedding items: chunks + ~3 entities + ~2 relationships per chunk = 6x
+    let embedding_items = estimated_chunks * 6;
+    let avg_embed_tokens = 50.0;
+    let embedding_cost = embedding_items as f64 * avg_embed_tokens * embed_rate;
+
+    CostEstimate {
+        extraction_input_cost,
+        extraction_output_cost,
+        embedding_cost,
+        embedding_items,
+        total_input_tokens,
+        total_output_tokens,
+        total: extraction_input_cost + extraction_output_cost + embedding_cost,
+    }
+}
+
 /// Estimate OpenAI API cost based on model pricing and estimated token counts.
 ///
 /// Uses OpenAI Batch API rates (50% discount on standard pricing).
@@ -315,6 +394,7 @@ fn print_dry_run_report(
     resolved: &ResolvedConfig,
     cost: &CostEstimate,
     namespace: &str,
+    use_anthropic: bool,
 ) {
     let (md_count, txt_count) = file_breakdown;
 
@@ -372,7 +452,12 @@ fn print_dry_run_report(
     }
 
     // Cost estimate
-    println!("\nEstimated Cost (OpenAI Batch API):");
+    let api_name = if use_anthropic {
+        "Anthropic Batch API"
+    } else {
+        "OpenAI Batch API"
+    };
+    println!("\nEstimated Cost ({}):", api_name);
     println!(
         "  Extraction:     ~${:.2} (input: ~{} tokens, output: ~{} tokens)",
         cost.extraction_input_cost + cost.extraction_output_cost,

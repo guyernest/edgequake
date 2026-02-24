@@ -31,9 +31,9 @@ export function response(ctx) {
 
   const data = JSON.parse(ctx.result.data);
 
-  if (data.status !== 'proposed') {
+  if (data.status !== 'proposed' && data.status !== 'approved') {
     return util.error(
-      `Schema can only be edited in 'proposed' state (current: ${data.status}). Reject and re-suggest to edit an approved schema.`,
+      `Schema can only be edited in 'proposed' or 'approved' state (current: ${data.status}). Run suggest-schema again to create a new proposal.`,
       'InvalidSchemaState'
     );
   }
@@ -46,6 +46,12 @@ export function response(ctx) {
   // Replace relation_types if provided
   if (ctx.args.relation_types !== null && ctx.args.relation_types !== undefined) {
     data.relation_types = ctx.args.relation_types;
+  }
+
+  // Editing an approved schema resets to proposed (requires re-approval)
+  if (data.status === 'approved') {
+    data.status = 'proposed';
+    data.reviewed_at = null;
   }
 
   // Pass updated data to next pipeline step via stash

@@ -1027,6 +1027,7 @@ image_per_unit = 0.0
 # =============================================================================
 # Claude models from Anthropic
 # Requires: ANTHROPIC_API_KEY environment variable
+# Pricing source: https://platform.claude.com/docs/en/about-claude/pricing
 
 [[providers]]
 name = "anthropic"
@@ -1034,15 +1035,67 @@ display_name = "Anthropic"
 type = "anthropic"
 api_base = "https://api.anthropic.com"
 api_key_env = "ANTHROPIC_API_KEY"
-enabled = false
+enabled = true
 priority = 15
-description = "Anthropic Claude models - Excellent for analysis and long-form content"
+description = "Anthropic Claude models - Excellent for analysis, extraction, and long-form content. Supports Message Batches API for 50% cost savings."
+
+# --- Claude Opus Models ---
 
 [[providers.models]]
-name = "claude-sonnet-4-20250514"
-display_name = "Claude Sonnet 4"
+name = "claude-opus-4-6"
+display_name = "Claude Opus 4.6"
 model_type = "llm"
-description = "Anthropic's latest Claude Sonnet 4 with excellent reasoning"
+description = "Most capable Claude model for complex reasoning and analysis ($5/$25 per MTok)"
+deprecated = false
+tags = ["flagship", "reasoning", "latest"]
+
+[providers.models.capabilities]
+context_length = 200000
+max_output_tokens = 32000
+supports_vision = true
+supports_function_calling = true
+supports_json_mode = true
+supports_streaming = true
+supports_system_message = true
+embedding_dimension = 0
+
+[providers.models.cost]
+input_per_1k = 0.005
+output_per_1k = 0.025
+embedding_per_1k = 0.0
+image_per_unit = 0.0
+
+[[providers.models]]
+name = "claude-opus-4-5-20250918"
+display_name = "Claude Opus 4.5"
+model_type = "llm"
+description = "High-capability Claude model ($5/$25 per MTok)"
+deprecated = false
+tags = ["flagship", "reasoning"]
+
+[providers.models.capabilities]
+context_length = 200000
+max_output_tokens = 32000
+supports_vision = true
+supports_function_calling = true
+supports_json_mode = true
+supports_streaming = true
+supports_system_message = true
+embedding_dimension = 0
+
+[providers.models.cost]
+input_per_1k = 0.005
+output_per_1k = 0.025
+embedding_per_1k = 0.0
+image_per_unit = 0.0
+
+# --- Claude Sonnet Models ---
+
+[[providers.models]]
+name = "claude-sonnet-4-6"
+display_name = "Claude Sonnet 4.6"
+model_type = "llm"
+description = "Latest Claude Sonnet with enhanced capabilities ($3/$15 per MTok)"
 deprecated = false
 tags = ["recommended", "reasoning", "latest"]
 
@@ -1063,12 +1116,12 @@ embedding_per_1k = 0.0
 image_per_unit = 0.0
 
 [[providers.models]]
-name = "claude-3-5-sonnet-20241022"
-display_name = "Claude 3.5 Sonnet"
+name = "claude-sonnet-4-5-20250514"
+display_name = "Claude Sonnet 4.5"
 model_type = "llm"
-description = "Balanced performance and cost, great for coding"
+description = "Balanced Claude Sonnet ($3/$15 per MTok)"
 deprecated = false
-tags = ["balanced", "code"]
+tags = ["recommended", "reasoning"]
 
 [providers.models.capabilities]
 context_length = 200000
@@ -1087,12 +1140,38 @@ embedding_per_1k = 0.0
 image_per_unit = 0.0
 
 [[providers.models]]
-name = "claude-3-5-haiku-20241022"
-display_name = "Claude 3.5 Haiku"
+name = "claude-sonnet-4-20250514"
+display_name = "Claude Sonnet 4"
 model_type = "llm"
-description = "Fast and cost-effective Claude model"
+description = "Claude Sonnet 4 with excellent reasoning ($3/$15 per MTok)"
 deprecated = false
-tags = ["fast", "cost-effective"]
+tags = ["reasoning"]
+
+[providers.models.capabilities]
+context_length = 200000
+max_output_tokens = 8192
+supports_vision = true
+supports_function_calling = true
+supports_json_mode = true
+supports_streaming = true
+supports_system_message = true
+embedding_dimension = 0
+
+[providers.models.cost]
+input_per_1k = 0.003
+output_per_1k = 0.015
+embedding_per_1k = 0.0
+image_per_unit = 0.0
+
+# --- Claude Haiku Models ---
+
+[[providers.models]]
+name = "claude-haiku-4-5-20251001"
+display_name = "Claude Haiku 4.5"
+model_type = "llm"
+description = "Fast and cost-effective, ideal for high-volume batch extraction ($1/$5 per MTok, batch: $0.50/$2.50)"
+deprecated = false
+tags = ["recommended", "cost-effective", "fast", "batch"]
 
 [providers.models.capabilities]
 context_length = 200000
@@ -1107,6 +1186,56 @@ embedding_dimension = 0
 [providers.models.cost]
 input_per_1k = 0.001
 output_per_1k = 0.005
+embedding_per_1k = 0.0
+image_per_unit = 0.0
+
+[[providers.models]]
+name = "claude-3-5-haiku-20241022"
+display_name = "Claude Haiku 3.5"
+model_type = "llm"
+description = "Previous-gen fast Claude model ($0.80/$4 per MTok, batch: $0.40/$2)"
+deprecated = false
+tags = ["fast", "cost-effective"]
+
+[providers.models.capabilities]
+context_length = 200000
+max_output_tokens = 8192
+supports_vision = true
+supports_function_calling = true
+supports_json_mode = true
+supports_streaming = true
+supports_system_message = true
+embedding_dimension = 0
+
+[providers.models.cost]
+input_per_1k = 0.0008
+output_per_1k = 0.004
+embedding_per_1k = 0.0
+image_per_unit = 0.0
+
+# --- Legacy Models ---
+
+[[providers.models]]
+name = "claude-3-5-sonnet-20241022"
+display_name = "Claude 3.5 Sonnet"
+model_type = "llm"
+description = "Legacy Sonnet model, use Sonnet 4+ instead ($3/$15 per MTok)"
+deprecated = true
+tags = ["legacy"]
+
+[providers.models.capabilities]
+context_length = 200000
+max_output_tokens = 8192
+supports_vision = true
+supports_function_calling = true
+supports_json_mode = true
+supports_streaming = true
+supports_system_message = true
+embedding_dimension = 0
+
+[providers.models.cost]
+input_per_1k = 0.003
+output_per_1k = 0.015
 embedding_per_1k = 0.0
 image_per_unit = 0.0
 

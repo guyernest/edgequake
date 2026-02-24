@@ -30,12 +30,12 @@ export function NamespaceCard({
 
   const lastRunTimestamp = status?.updated_at ?? status?.started_at;
   const lastRunLabel = lastRunTimestamp
-    ? formatDistanceToNow(new Date(lastRunTimestamp * 1000), {
+    ? formatDistanceToNow(new Date(lastRunTimestamp), {
         addSuffix: true,
       })
     : null;
 
-  const createdLabel = formatDistanceToNow(new Date(createdAt * 1000), {
+  const createdLabel = formatDistanceToNow(new Date(createdAt), {
     addSuffix: true,
   });
 

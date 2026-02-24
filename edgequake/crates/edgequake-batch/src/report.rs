@@ -77,7 +77,7 @@ pub async fn verify_stored_data(
         let vectors_config = edgequake_storage_aws::S3VectorsConfig {
             vector_bucket_name: bucket.clone(),
             index_name,
-            dimension: 1536,
+            dimension: config.embedding_dimension as usize,
             namespace: config.namespace.clone(),
         };
         let s3v_client = edgequake_storage_aws::aws_sdk_s3vectors::Client::new(aws_config);
@@ -341,6 +341,7 @@ mod tests {
                     table_name: "edgequake-kv".to_string(),
                     namespace_key: "test-ns".to_string(),
                 },
+                bm25: None,
             },
             auth: edgequake_core::McpAuthConfig {
                 role_arn: "arn:aws:iam::123456789012:role/test".to_string(),

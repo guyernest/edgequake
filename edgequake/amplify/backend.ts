@@ -1,11 +1,18 @@
 // Required env vars:
-// NAMESPACE_TABLE - DynamoDB table name for namespace registry (default: edgequake-namespaces)
-// PMCP_ACCOUNT_ID - AWS account ID for pmcp.run cross-account access (default: none, same-account only)
+// NAMESPACE_TABLE        - DynamoDB table for namespace registry, PK+SK schema (default: created by sandbox)
+// PIPELINE_STATE_TABLE   - DynamoDB table for pipeline execution state, namespace+id schema (default: created by sandbox)
+// BM25_S3_BUCKET         - S3 bucket for BM25 Iceberg table data (default: created by sandbox as edgequake-bm25-{account}-{region})
+// ATHENA_BM25_DATABASE   - Glue database for BM25 Athena tables (default: created by sandbox as edgequake_bm25)
+// ATHENA_WORKGROUP       - Athena workgroup, must be v3 for Iceberg (default: created by sandbox as edgequake-v3)
+// PMCP_ACCOUNT_ID        - AWS account ID for pmcp.run cross-account access (default: none, same-account only)
 
 import { defineBackend } from '@aws-amplify/backend';
 import {
+  aws_athena as athena,
   aws_dynamodb as dynamodb,
+  aws_glue as glue,
   aws_iam as iam,
+  aws_s3 as s3,
   RemovalPolicy,
   Stack,
 } from 'aws-cdk-lib';
@@ -50,16 +57,108 @@ const namespaceTable = externalTableName
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
+// ---------------------------------------------------------------------------
+// 2b. DynamoDB pipeline state table
+// ---------------------------------------------------------------------------
+//
+// Stores batch pipeline execution state (job progress, document status).
+// Key schema: namespace (String PK) + id (String SK) — different from the
+// namespace registry table which uses PK/SK.
+//
+// Two modes (same pattern as namespace table):
+// - PIPELINE_STATE_TABLE env var set → reference existing external table
+// - PIPELINE_STATE_TABLE not set     → create in the Amplify stack (sandbox)
+
+const externalStateTableName = process.env.PIPELINE_STATE_TABLE;
+
+const pipelineStateTable = externalStateTableName
+  ? dynamodb.Table.fromTableName(
+      infraStack,
+      'PipelineStateTable',
+      externalStateTableName,
+    )
+  : new dynamodb.Table(infraStack, 'PipelineStateTable', {
+      partitionKey: { name: 'namespace', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
+// ---------------------------------------------------------------------------
+// 2c. BM25 infrastructure: S3 bucket, Glue database, Athena v3 workgroup
+// ---------------------------------------------------------------------------
+//
+// BM25 keyword search uses Athena with Iceberg tables stored on S3.
+// Resources:
+// - S3 bucket: stores Iceberg table files (Parquet) and Athena query results
+// - Glue database: Athena metadata catalog for BM25 tables
+// - Athena v3 workgroup: required for Iceberg table support
+//
+// Same two-mode pattern: env var set → reference existing, not set → create.
+
+const accountId = Stack.of(infraStack).account;
+const region = Stack.of(infraStack).region;
+
+// S3 bucket for BM25 Iceberg data + Athena query results
+const externalBm25Bucket = process.env.BM25_S3_BUCKET;
+
+const bm25Bucket = externalBm25Bucket
+  ? s3.Bucket.fromBucketName(infraStack, 'Bm25Bucket', externalBm25Bucket)
+  : new s3.Bucket(infraStack, 'Bm25Bucket', {
+      bucketName: `edgequake-bm25-${accountId}-${region}`,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+// Glue database for Athena BM25 tables (namespace tables created at runtime by pipeline)
+const externalBm25Database = process.env.ATHENA_BM25_DATABASE;
+const bm25DatabaseName = externalBm25Database || 'edgequake_bm25';
+
+if (!externalBm25Database) {
+  new glue.CfnDatabase(infraStack, 'Bm25Database', {
+    catalogId: accountId,
+    databaseInput: {
+      name: bm25DatabaseName,
+      description: 'EdgeQuake BM25 inverted index tables (Iceberg)',
+    },
+  });
+}
+
+// Athena v3 workgroup (required for Iceberg table support)
+const externalWorkgroup = process.env.ATHENA_WORKGROUP;
+const athenaWorkgroupName = externalWorkgroup || 'edgequake-v3';
+
+if (!externalWorkgroup) {
+  new athena.CfnWorkGroup(infraStack, 'Bm25Workgroup', {
+    name: athenaWorkgroupName,
+    state: 'ENABLED',
+    workGroupConfiguration: {
+      engineVersion: {
+        selectedEngineVersion: 'Athena engine version 3',
+      },
+      resultConfiguration: {
+        outputLocation: `s3://${
+          externalBm25Bucket || `edgequake-bm25-${accountId}-${region}`
+        }/athena-results/`,
+      },
+    },
+  });
+}
+
 // Register as AppSync data source — name must match dataSource strings in data/resource.ts
 backend.data.addDynamoDbDataSource(
   'NamespaceTableDataSource', // Must match data/resource.ts handler dataSource
   namespaceTable,
 );
 
-// Expose table name to JS resolvers via ctx.env.NAMESPACE_TABLE
+// Expose resource names to JS resolvers via ctx.env
 // Required by TransactWriteItems (which needs explicit table per item, unlike GetItem/PutItem)
 backend.data.resources.cfnResources.cfnGraphqlApi.environmentVariables = {
   NAMESPACE_TABLE: namespaceTable.tableName,
+  PIPELINE_STATE_TABLE: pipelineStateTable.tableName,
+  BM25_S3_BUCKET: bm25Bucket.bucketName,
+  ATHENA_BM25_DATABASE: bm25DatabaseName,
+  ATHENA_WORKGROUP: athenaWorkgroupName,
 };
 
 // ---------------------------------------------------------------------------

@@ -1,16 +1,829 @@
 {
-  "$schema": "https://docs.amplify.aws/cli/project/schema.json",
-  "version": "1.4",
   "auth": {
-    "user_pool_id": "PLACEHOLDER_USER_POOL_ID",
-    "user_pool_client_id": "PLACEHOLDER_CLIENT_ID",
-    "identity_pool_id": "PLACEHOLDER_IDENTITY_POOL_ID",
-    "aws_region": "us-east-1"
+    "user_pool_id": "us-east-1_6Z6hYAgio",
+    "aws_region": "us-east-1",
+    "user_pool_client_id": "1n5cr4pv728hs7sok3jem610je",
+    "identity_pool_id": "us-east-1:875400d6-0e2e-46ae-bf46-1c4170d430dc",
+    "mfa_methods": [],
+    "standard_required_attributes": [
+      "email"
+    ],
+    "username_attributes": [
+      "email"
+    ],
+    "user_verification_types": [
+      "email"
+    ],
+    "groups": [],
+    "mfa_configuration": "NONE",
+    "password_policy": {
+      "min_length": 8,
+      "require_lowercase": true,
+      "require_numbers": true,
+      "require_symbols": true,
+      "require_uppercase": true
+    },
+    "unauthenticated_identities_enabled": true
   },
   "data": {
-    "url": "https://placeholder.appsync-api.us-east-1.amazonaws.com/graphql",
+    "url": "https://2jta5sddxnbuvfceso47zpetcu.appsync-api.us-east-1.amazonaws.com/graphql",
     "aws_region": "us-east-1",
     "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
-    "authorization_types": ["AWS_IAM"]
-  }
+    "authorization_types": [
+      "AWS_IAM"
+    ],
+    "model_introspection": {
+      "version": 1,
+      "models": {},
+      "enums": {},
+      "nonModels": {
+        "Namespace": {
+          "name": "Namespace",
+          "fields": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "description": {
+              "name": "description",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "created_at": {
+              "name": "created_at",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": true,
+              "attributes": []
+            },
+            "created_by": {
+              "name": "created_by",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        },
+        "PipelineConfig": {
+          "name": "PipelineConfig",
+          "fields": {
+            "llm_provider": {
+              "name": "llm_provider",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "llm_model": {
+              "name": "llm_model",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "embedding_provider": {
+              "name": "embedding_provider",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "embedding_model": {
+              "name": "embedding_model",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "embedding_dimension": {
+              "name": "embedding_dimension",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "chunking_strategy": {
+              "name": "chunking_strategy",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "chunk_size": {
+              "name": "chunk_size",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "chunk_overlap": {
+              "name": "chunk_overlap",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "extraction_prompt": {
+              "name": "extraction_prompt",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "entity_types": {
+              "name": "entity_types",
+              "isArray": true,
+              "type": "String",
+              "isRequired": false,
+              "attributes": [],
+              "isArrayNullable": true
+            },
+            "relation_types": {
+              "name": "relation_types",
+              "isArray": true,
+              "type": "String",
+              "isRequired": false,
+              "attributes": [],
+              "isArrayNullable": true
+            },
+            "updated_at": {
+              "name": "updated_at",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "McpStorageConfig": {
+          "name": "McpStorageConfig",
+          "fields": {
+            "neptune_endpoint": {
+              "name": "neptune_endpoint",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "neptune_label_prefix": {
+              "name": "neptune_label_prefix",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "s3_vectors_bucket_name": {
+              "name": "s3_vectors_bucket_name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "s3_vectors_index_name": {
+              "name": "s3_vectors_index_name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "dynamodb_table_name": {
+              "name": "dynamodb_table_name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "dynamodb_namespace_key": {
+              "name": "dynamodb_namespace_key",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "McpAuthConfig": {
+          "name": "McpAuthConfig",
+          "fields": {
+            "role_arn": {
+              "name": "role_arn",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "external_id": {
+              "name": "external_id",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "region": {
+              "name": "region",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "McpToolDefinition": {
+          "name": "McpToolDefinition",
+          "fields": {
+            "name": {
+              "name": "name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "description": {
+              "name": "description",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "modes": {
+              "name": "modes",
+              "isArray": true,
+              "type": "String",
+              "isRequired": false,
+              "attributes": [],
+              "isArrayNullable": true
+            }
+          }
+        },
+        "McpDescriptor": {
+          "name": "McpDescriptor",
+          "fields": {
+            "schema_version": {
+              "name": "schema_version",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "namespace": {
+              "name": "namespace",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": true,
+              "attributes": []
+            },
+            "storage": {
+              "name": "storage",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": true,
+              "attributes": []
+            },
+            "auth": {
+              "name": "auth",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": true,
+              "attributes": []
+            },
+            "pipeline_config": {
+              "name": "pipeline_config",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": true,
+              "attributes": []
+            },
+            "tools": {
+              "name": "tools",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": true,
+              "attributes": []
+            },
+            "generated_at": {
+              "name": "generated_at",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "SchemaEntityType": {
+          "name": "SchemaEntityType",
+          "fields": {
+            "name": {
+              "name": "name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "description": {
+              "name": "description",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "frequency": {
+              "name": "frequency",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "is_baseline": {
+              "name": "is_baseline",
+              "isArray": false,
+              "type": "Boolean",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "SchemaRelationType": {
+          "name": "SchemaRelationType",
+          "fields": {
+            "name": {
+              "name": "name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "description": {
+              "name": "description",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "source_type": {
+              "name": "source_type",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "target_type": {
+              "name": "target_type",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "frequency": {
+              "name": "frequency",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "SchemaProposal": {
+          "name": "SchemaProposal",
+          "fields": {
+            "status": {
+              "name": "status",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "entity_types": {
+              "name": "entity_types",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": true,
+              "attributes": []
+            },
+            "relation_types": {
+              "name": "relation_types",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": true,
+              "attributes": []
+            },
+            "sample_size": {
+              "name": "sample_size",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "total_documents": {
+              "name": "total_documents",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "domain_hint": {
+              "name": "domain_hint",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "proposed_at": {
+              "name": "proposed_at",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": true,
+              "attributes": []
+            },
+            "reviewed_at": {
+              "name": "reviewed_at",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        },
+        "NamespaceStatus": {
+          "name": "NamespaceStatus",
+          "fields": {
+            "status": {
+              "name": "status",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "phase": {
+              "name": "phase",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "job_id": {
+              "name": "job_id",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "total_documents": {
+              "name": "total_documents",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "processed_documents": {
+              "name": "processed_documents",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "total_chunks": {
+              "name": "total_chunks",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "current_batch": {
+              "name": "current_batch",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "total_batches": {
+              "name": "total_batches",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "started_at": {
+              "name": "started_at",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": false,
+              "attributes": []
+            },
+            "updated_at": {
+              "name": "updated_at",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": false,
+              "attributes": []
+            },
+            "error_summary": {
+              "name": "error_summary",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        },
+        "IngestionRequest": {
+          "name": "IngestionRequest",
+          "fields": {
+            "namespace": {
+              "name": "namespace",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "batch_size": {
+              "name": "batch_size",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "offset": {
+              "name": "offset",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "data_path": {
+              "name": "data_path",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "requested_at": {
+              "name": "requested_at",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": true,
+              "attributes": []
+            },
+            "status": {
+              "name": "status",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "cli_command": {
+              "name": "cli_command",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        }
+      },
+      "queries": {
+        "getNamespace": {
+          "name": "getNamespace",
+          "isArray": false,
+          "type": {
+            "nonModel": "Namespace"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        },
+        "listNamespaces": {
+          "name": "listNamespaces",
+          "isArray": true,
+          "type": {
+            "nonModel": "Namespace"
+          },
+          "isRequired": false,
+          "isArrayNullable": true
+        },
+        "getNamespaceDescriptor": {
+          "name": "getNamespaceDescriptor",
+          "isArray": false,
+          "type": {
+            "nonModel": "McpDescriptor"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        },
+        "getNamespacePipelineConfig": {
+          "name": "getNamespacePipelineConfig",
+          "isArray": false,
+          "type": {
+            "nonModel": "PipelineConfig"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        },
+        "getNamespaceStatus": {
+          "name": "getNamespaceStatus",
+          "isArray": false,
+          "type": {
+            "nonModel": "NamespaceStatus"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        },
+        "getSchemaProposal": {
+          "name": "getSchemaProposal",
+          "isArray": false,
+          "type": {
+            "nonModel": "SchemaProposal"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        }
+      },
+      "mutations": {
+        "createNamespace": {
+          "name": "createNamespace",
+          "isArray": false,
+          "type": {
+            "nonModel": "Namespace"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            },
+            "description": {
+              "name": "description",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false
+            },
+            "domain_hint": {
+              "name": "domain_hint",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false
+            }
+          }
+        },
+        "updatePipelineConfig": {
+          "name": "updatePipelineConfig",
+          "isArray": false,
+          "type": {
+            "nonModel": "PipelineConfig"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            },
+            "config": {
+              "name": "config",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": true
+            }
+          }
+        },
+        "triggerIngestion": {
+          "name": "triggerIngestion",
+          "isArray": false,
+          "type": {
+            "nonModel": "IngestionRequest"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            },
+            "batch_size": {
+              "name": "batch_size",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true
+            },
+            "offset": {
+              "name": "offset",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true
+            },
+            "data_path": {
+              "name": "data_path",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        },
+        "approveSchema": {
+          "name": "approveSchema",
+          "isArray": false,
+          "type": {
+            "nonModel": "SchemaProposal"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        },
+        "rejectSchema": {
+          "name": "rejectSchema",
+          "isArray": false,
+          "type": {
+            "nonModel": "SchemaProposal"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        },
+        "updateSchemaTypes": {
+          "name": "updateSchemaTypes",
+          "isArray": false,
+          "type": {
+            "nonModel": "SchemaProposal"
+          },
+          "isRequired": false,
+          "arguments": {
+            "slug": {
+              "name": "slug",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            },
+            "entity_types": {
+              "name": "entity_types",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": false
+            },
+            "relation_types": {
+              "name": "relation_types",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": false
+            }
+          }
+        }
+      }
+    }
+  },
+  "version": "1.4"
 }

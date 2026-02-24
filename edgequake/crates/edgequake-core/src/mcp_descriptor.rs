@@ -54,6 +54,9 @@ pub struct McpStorageConfig {
     pub s3_vectors: McpS3VectorsConfig,
     /// DynamoDB key-value storage configuration.
     pub dynamodb: McpDynamoDbConfig,
+    /// BM25 keyword search configuration (Athena + Iceberg).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bm25: Option<McpBm25Config>,
 }
 
 /// Neptune graph database configuration.
@@ -81,6 +84,17 @@ pub struct McpDynamoDbConfig {
     pub table_name: String,
     /// Namespace key for data isolation.
     pub namespace_key: String,
+}
+
+/// BM25 keyword search configuration using Athena with Iceberg tables.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct McpBm25Config {
+    /// Athena/Glue database name (e.g., "edgequake_bm25").
+    pub database: String,
+    /// S3 bucket for Iceberg table data and query results.
+    pub s3_bucket: String,
+    /// Athena workgroup (must be v3 for Iceberg support).
+    pub workgroup: String,
 }
 
 /// Authentication configuration for AWS access via IAM role assumption.
@@ -141,6 +155,12 @@ pub struct InfrastructureConfig {
     pub environment: String,
     /// External ID suffix for cross-account security.
     pub external_id_suffix: String,
+    /// Athena BM25 database name (optional — enables BM25 in descriptor).
+    pub athena_bm25_database: Option<String>,
+    /// S3 bucket for BM25 Iceberg data (required when database is set).
+    pub bm25_s3_bucket: Option<String>,
+    /// Athena workgroup (required when database is set).
+    pub athena_workgroup: Option<String>,
 }
 
 /// Returns the static list of MCP tool definitions.
@@ -207,6 +227,7 @@ mod tests {
                     table_name: "edgequake-kv".to_string(),
                     namespace_key: "epstein-files".to_string(),
                 },
+                bm25: None,
             },
             auth: McpAuthConfig {
                 role_arn: "arn:aws:iam::123456789012:role/edgequake-mcp-epstein-files-dev"

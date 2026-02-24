@@ -15,3 +15,5 @@ pub mod ollama;
 pub mod lmstudio;
 
 pub mod openai_batch;
+
+pub mod anthropic_batch;

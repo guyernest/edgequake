@@ -1,10 +1,11 @@
-//! JSONL file builder for OpenAI Batch API requests.
+//! JSONL file builder for batch API requests (OpenAI and Anthropic).
 //!
-//! Builds JSONL files from chunked documents, splitting at the 50K request
-//! limit per batch job.
+//! Builds JSONL files from chunked documents, splitting at the per-provider
+//! request limit (50K for OpenAI, 10K for Anthropic).
 
 use crate::config::BatchConfig;
 use crate::parquet_reader::compute_hash8;
+use edgequake_llm::providers::anthropic_batch::{build_anthropic_jsonl_request, is_anthropic_model};
 use edgequake_llm::providers::openai_batch::build_jsonl_request;
 use edgequake_pipeline::chunker::TextChunk;
 use std::io::Write;
@@ -43,9 +44,10 @@ pub struct JsonlBuildResult {
     pub batch_count: usize,
 }
 
-/// Build JSONL files from prepared chunks.
+/// Build JSONL files from prepared chunks, auto-detecting the provider format.
 ///
-/// Splits into multiple files if the request count exceeds the 50K limit.
+/// If the extraction model is a Claude model, uses Anthropic JSONL format and
+/// 10K request limit. Otherwise, uses OpenAI format and 50K request limit.
 ///
 /// # Arguments
 /// * `chunks` - Prepared chunks with custom_ids
@@ -58,6 +60,14 @@ pub fn build_jsonl_files(
     user_prompt_fn: &dyn Fn(&str) -> String,
     config: &BatchConfig,
 ) -> anyhow::Result<JsonlBuildResult> {
+    let use_anthropic = is_anthropic_model(&config.extraction_model);
+    let max_requests = if use_anthropic {
+        BatchConfig::ANTHROPIC_MAX_BATCH_REQUESTS
+    } else {
+        BatchConfig::MAX_BATCH_REQUESTS
+    };
+    let provider_name = if use_anthropic { "Anthropic" } else { "OpenAI" };
+
     std::fs::create_dir_all(config.jsonl_dir())?;
 
     let mut file_paths = Vec::new();
@@ -70,7 +80,7 @@ pub fn build_jsonl_files(
     for chunk in chunks {
         // Start a new file if needed (split on request count OR file size)
         if writer.is_none()
-            || current_count >= BatchConfig::MAX_BATCH_REQUESTS
+            || current_count >= max_requests
             || current_size >= BatchConfig::MAX_JSONL_SIZE
         {
             // Flush previous file
@@ -90,14 +100,25 @@ pub fn build_jsonl_files(
         }
 
         let user_prompt = user_prompt_fn(&chunk.chunk.content);
-        let request = build_jsonl_request(
-            &chunk.custom_id,
-            &config.extraction_model,
-            system_prompt,
-            &user_prompt,
-            config.max_tokens,
-            0.0, // Deterministic extraction
-        );
+        let request = if use_anthropic {
+            build_anthropic_jsonl_request(
+                &chunk.custom_id,
+                &config.extraction_model,
+                system_prompt,
+                &user_prompt,
+                config.max_tokens,
+                0.0, // Deterministic extraction
+            )
+        } else {
+            build_jsonl_request(
+                &chunk.custom_id,
+                &config.extraction_model,
+                system_prompt,
+                &user_prompt,
+                config.max_tokens,
+                0.0, // Deterministic extraction
+            )
+        };
 
         let line = serde_json::to_string(&request)?;
         if let Some(ref mut w) = writer {
@@ -118,6 +139,8 @@ pub fn build_jsonl_files(
     info!(
         total_requests = total_requests,
         batch_files = batch_count,
+        provider = provider_name,
+        max_per_batch = max_requests,
         "JSONL files built"
     );
 

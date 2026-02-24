@@ -204,7 +204,7 @@ impl VectorStorage for S3VectorsStorage {
             }
         }
 
-        // Verify index exists
+        // Verify index exists and has the correct dimension
         match self
             .client
             .get_index()
@@ -213,10 +213,21 @@ impl VectorStorage for S3VectorsStorage {
             .send()
             .await
         {
-            Ok(_) => {
+            Ok(resp) => {
+                let existing_dim = resp.index().map(|i| i.dimension()).unwrap_or(0);
+                if existing_dim > 0 && existing_dim != self.config.dimension as i32 {
+                    return Err(edgequake_storage::error::StorageError::InvalidConfig(
+                        format!(
+                            "S3 Vectors index '{}' has dimension {} but pipeline expects {}. \
+                             Delete the index or use a different index name (e.g. '{{namespace}}-embeddings').",
+                            self.config.index_name, existing_dim, self.config.dimension
+                        ),
+                    ));
+                }
                 debug!(
                     index = %self.config.index_name,
-                    "S3 Vector index exists"
+                    dimension = existing_dim,
+                    "S3 Vector index exists with matching dimension"
                 );
             }
             Err(e) => {

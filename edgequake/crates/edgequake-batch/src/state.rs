@@ -224,7 +224,7 @@ pub struct StateManager {
     /// Direct DynamoDB client for LATEST_RUN writes to the namespace registry table.
     dynamo_client: Option<aws_sdk_dynamodb::Client>,
     /// Namespace registry table name (e.g. `edgequake-namespaces` or shared table).
-    namespace_table: Option<String>,
+    registry_table: Option<String>,
     /// Namespace slug for PK construction (`NS#{slug}`).
     namespace: Option<String>,
 }
@@ -238,7 +238,7 @@ impl StateManager {
         Self {
             kv,
             dynamo_client: None,
-            namespace_table: None,
+            registry_table: None,
             namespace: None,
         }
     }
@@ -251,22 +251,22 @@ impl StateManager {
     pub fn with_latest_run_config(
         mut self,
         dynamo_client: aws_sdk_dynamodb::Client,
-        namespace_table: String,
+        registry_table: String,
         namespace: String,
     ) -> Self {
         self.dynamo_client = Some(dynamo_client);
-        self.namespace_table = Some(namespace_table);
+        self.registry_table = Some(registry_table);
         self.namespace = Some(namespace);
         self
     }
 
     /// Write pipeline status to `NS#{slug}/LATEST_RUN` in the namespace registry table.
     ///
-    /// If LATEST_RUN config is not set (no dynamo_client/namespace_table/namespace),
+    /// If LATEST_RUN config is not set (no dynamo_client/registry_table/namespace),
     /// logs a warning and returns Ok -- this allows tests and non-namespace runs
     /// to work without modification.
     pub async fn write_latest_run(&self, status: &LatestRunStatus) -> anyhow::Result<()> {
-        let (client, table, ns) = match (&self.dynamo_client, &self.namespace_table, &self.namespace)
+        let (client, table, ns) = match (&self.dynamo_client, &self.registry_table, &self.namespace)
         {
             (Some(c), Some(t), Some(n)) => (c, t, n),
             _ => {
@@ -299,7 +299,7 @@ impl StateManager {
     /// Used by the Prepare phase to check if the UI set `status=requested`
     /// (preserving the `started_at` timestamp from the UI trigger).
     pub async fn read_latest_run(&self) -> anyhow::Result<Option<LatestRunStatus>> {
-        let (client, table, ns) = match (&self.dynamo_client, &self.namespace_table, &self.namespace)
+        let (client, table, ns) = match (&self.dynamo_client, &self.registry_table, &self.namespace)
         {
             (Some(c), Some(t), Some(n)) => (c, t, n),
             _ => return Ok(None),

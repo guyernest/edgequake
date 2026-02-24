@@ -3,6 +3,9 @@
  *
  * Reads MCP descriptor from DynamoDB using PK=NS#{slug}, SK=DESCRIPTOR.
  * Returns the parsed McpDescriptor object, or null if no descriptor exists.
+ *
+ * The stored JSON matches the Rust McpDescriptor struct directly —
+ * no field mapping needed.
  */
 import { util } from '@aws-appsync/utils';
 

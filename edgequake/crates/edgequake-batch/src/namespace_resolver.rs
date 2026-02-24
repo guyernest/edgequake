@@ -59,7 +59,7 @@ pub struct ResolvedConfig {
 pub struct NamespaceConfigResolver {
     namespace: NamespaceSlug,
     aws_config: aws_config::SdkConfig,
-    dynamo_table: String,
+    registry_table: String,
 }
 
 impl NamespaceConfigResolver {
@@ -69,16 +69,16 @@ impl NamespaceConfigResolver {
     ///
     /// * `namespace` - Validated namespace slug
     /// * `aws_config` - AWS SDK config for creating clients
-    /// * `dynamo_table` - DynamoDB table name for namespace registry
+    /// * `registry_table` - DynamoDB namespace registry table (PK + SK schema)
     pub fn new(
         namespace: NamespaceSlug,
         aws_config: aws_config::SdkConfig,
-        dynamo_table: String,
+        registry_table: String,
     ) -> Self {
         Self {
             namespace,
             aws_config,
-            dynamo_table,
+            registry_table,
         }
     }
 
@@ -175,7 +175,7 @@ impl NamespaceConfigResolver {
     async fn resolve_from_dynamodb(&self, cli: &Cli) -> anyhow::Result<ResolvedConfig> {
         let dynamo_client = aws_sdk_dynamodb::Client::new(&self.aws_config);
         let registry_config = DynamoNamespaceConfig {
-            table_name: self.dynamo_table.clone(),
+            table_name: self.registry_table.clone(),
         };
         let registry = DynamoNamespaceRegistry::new(registry_config, dynamo_client);
 

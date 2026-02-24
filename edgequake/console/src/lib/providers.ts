@@ -17,16 +17,21 @@ export const LLM_PROVIDERS: ProviderDefinition[] = [
     models: [
       { id: 'gpt-4o', name: 'GPT-4o' },
       { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-      { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-      { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
+      { id: 'gpt-4.1', name: 'GPT-4.1' },
+      { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini' },
+      { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano' },
     ],
   },
   {
     id: 'anthropic',
     name: 'Anthropic',
     models: [
+      { id: 'claude-opus-4-6-20260220', name: 'Claude Opus 4.6' },
+      { id: 'claude-opus-4-5-20250414', name: 'Claude Opus 4.5' },
+      { id: 'claude-sonnet-4-6-20260220', name: 'Claude Sonnet 4.6' },
+      { id: 'claude-sonnet-4-5-20250514', name: 'Claude Sonnet 4.5' },
       { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
+      { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
     ],
   },
 ];

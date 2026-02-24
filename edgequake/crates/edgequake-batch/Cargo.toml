@@ -55,6 +55,7 @@ indicatif = "0.17"
 sha2 = "0.10"
 
 # Configuration
+dotenvy = { workspace = true }
 toml = "0.8"
 indexmap = { version = "2.7", features = ["serde"] }
 

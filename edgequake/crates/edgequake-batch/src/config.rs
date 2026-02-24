@@ -36,8 +36,11 @@ pub struct BatchConfig {
     /// Maximum concurrent embedding requests.
     pub embedding_concurrency: usize,
 
-    /// DynamoDB table for state.
-    pub dynamo_table: String,
+    /// DynamoDB table for pipeline execution state (key schema: namespace + id).
+    pub state_table: String,
+
+    /// DynamoDB table for namespace registry: config, schema, run status (key schema: PK + SK).
+    pub registry_table: String,
 
     /// Storage namespace.
     pub namespace: String,
@@ -98,11 +101,20 @@ pub struct BatchConfig {
 
     /// Maximum number of document failures before aborting (0 = fail on first error).
     pub max_failures: usize,
+
+    /// Anthropic API key (optional, required when using Claude models).
+    pub anthropic_api_key: Option<String>,
+
+    /// Embedding vector dimension (e.g. 1536 for text-embedding-3-small, 3072 for text-embedding-3-large).
+    pub embedding_dimension: u32,
 }
 
 impl BatchConfig {
     /// Maximum requests per OpenAI batch job (API limit).
     pub const MAX_BATCH_REQUESTS: usize = 50_000;
+
+    /// Maximum requests per Anthropic batch job (API limit).
+    pub const ANTHROPIC_MAX_BATCH_REQUESTS: usize = 10_000;
 
     /// Maximum JSONL file size in bytes (5MB for reliable uploads; API limit is 100MB).
     pub const MAX_JSONL_SIZE: usize = 5 * 1024 * 1024;

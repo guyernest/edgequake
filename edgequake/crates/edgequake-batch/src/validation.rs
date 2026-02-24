@@ -95,7 +95,14 @@ pub async fn validate_upfront(config: &BatchConfig, api_key: &str) -> anyhow::Re
 
     // 3. API key is non-empty
     if api_key.trim().is_empty() {
-        errors.push("OPENAI_API_KEY is empty".to_string());
+        let key_name = if edgequake_llm::providers::anthropic_batch::is_anthropic_model(
+            &config.extraction_model,
+        ) {
+            "ANTHROPIC_API_KEY"
+        } else {
+            "OPENAI_API_KEY"
+        };
+        errors.push(format!("{} is empty", key_name));
     }
 
     // 4. Neptune endpoint is configured
@@ -166,7 +173,8 @@ mod tests {
             chunk_overlap: 50,
             embedding_batch_size: 100,
             embedding_concurrency: 5,
-            dynamo_table: "test-table".to_string(),
+            state_table: "test-state-table".to_string(),
+            registry_table: "test-registry-table".to_string(),
             namespace: "test-ns".to_string(),
             neptune_endpoint: Some("test-endpoint:8182".to_string()),
             s3_bucket: Some("test-bucket".to_string()),
@@ -187,6 +195,8 @@ mod tests {
             include_patterns: vec![],
             exclude_patterns: vec![],
             max_failures: 0,
+            anthropic_api_key: None,
+            embedding_dimension: 1536,
         }
     }
 

@@ -103,8 +103,9 @@ pub use schema::{EntityTypeProposal, RelationTypeProposal, SchemaProposal, Schem
 
 // Re-export MCP descriptor types
 pub use mcp_descriptor::{
-    default_mcp_tools, InfrastructureConfig, McpAuthConfig, McpDescriptor, McpDynamoDbConfig,
-    McpNamespaceInfo, McpNeptuneConfig, McpPipelineConfig, McpS3VectorsConfig, McpStorageConfig,
+    default_mcp_tools, InfrastructureConfig, McpAuthConfig, McpBm25Config, McpDescriptor,
+    McpDynamoDbConfig, McpNamespaceInfo, McpNeptuneConfig, McpPipelineConfig, McpS3VectorsConfig,
+    McpStorageConfig,
     McpToolDefinition,
 };
 

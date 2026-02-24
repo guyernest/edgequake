@@ -36,8 +36,9 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use edgequake_core::{
-    default_mcp_tools, InfrastructureConfig, McpAuthConfig, McpDescriptor, McpDynamoDbConfig,
-    McpNamespaceInfo, McpNeptuneConfig, McpPipelineConfig, McpS3VectorsConfig, McpStorageConfig,
+    default_mcp_tools, InfrastructureConfig, McpAuthConfig, McpBm25Config, McpDescriptor,
+    McpDynamoDbConfig, McpNamespaceInfo, McpNeptuneConfig, McpPipelineConfig, McpS3VectorsConfig,
+    McpStorageConfig,
     NamespaceListItem as CoreNamespaceListItem, NamespaceRecord, NamespaceRegistry,
     NamespaceRegistryError, NamespaceSlug, PipelineConfig, SchemaProposal, SchemaStatus,
 };
@@ -531,6 +532,11 @@ impl DynamoNamespaceRegistry {
                     table_name: infra.dynamodb_table_name.clone(),
                     namespace_key: slug.as_str().to_string(),
                 },
+                bm25: infra.athena_bm25_database.as_ref().map(|db| McpBm25Config {
+                    database: db.clone(),
+                    s3_bucket: infra.bm25_s3_bucket.clone().unwrap_or_default(),
+                    workgroup: infra.athena_workgroup.clone().unwrap_or_else(|| "primary".to_string()),
+                }),
             },
             auth: McpAuthConfig {
                 role_arn: format!(

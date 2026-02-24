@@ -9,67 +9,11 @@ import { LlmConfigForm } from '@/components/config/LlmConfigForm';
 import { ExtractionConfigForm } from '@/components/config/ExtractionConfigForm';
 import { PipelineTimeline } from '@/components/pipeline/PipelineTimeline';
 import { TriggerIngestionDialog } from '@/components/ingestion/TriggerIngestionDialog';
-import { useNamespace, useSchemaProposal } from '@/hooks/useNamespaceDetail';
+import { SchemaEditor } from '@/components/schema/SchemaEditor';
+import { McpEndpointsPanel } from '@/components/namespace/McpEndpointsPanel';
+import { useNamespace } from '@/hooks/useNamespaceDetail';
 import { usePipelineConfig } from '@/hooks/usePipelineConfig';
 import { useNamespaceStatus } from '@/hooks/useNamespaceStatus';
-
-function SchemaTabContent({ slug }: { slug: string }) {
-  const { data: schema, isLoading } = useSchemaProposal(slug);
-
-  if (isLoading) {
-    return (
-      <div className="space-y-3 p-4">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-4 w-64" />
-        <Skeleton className="h-4 w-48" />
-      </div>
-    );
-  }
-
-  if (!schema) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-        <h3 className="text-base font-semibold">No schema proposal</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Run the pipeline to generate a schema proposal from your documents.
-        </p>
-      </div>
-    );
-  }
-
-  const entityTypes = Array.isArray(schema.entity_types)
-    ? schema.entity_types
-    : [];
-  const relationTypes = Array.isArray(schema.relation_types)
-    ? schema.relation_types
-    : [];
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium">Status:</span>
-        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium capitalize">
-          {schema.status}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-md border p-4">
-          <div className="text-sm font-medium">Entity Types</div>
-          <div className="mt-1 text-2xl font-bold">{entityTypes.length}</div>
-        </div>
-        <div className="rounded-md border p-4">
-          <div className="text-sm font-medium">Relation Types</div>
-          <div className="mt-1 text-2xl font-bold">{relationTypes.length}</div>
-        </div>
-      </div>
-      {schema.sample_size != null && (
-        <p className="text-xs text-muted-foreground">
-          Proposed from {schema.sample_size} of {schema.total_documents} documents
-        </p>
-      )}
-    </div>
-  );
-}
 
 export function NamespacePage() {
   const { namespace: slug } = useParams<{ namespace: string }>();
@@ -141,6 +85,7 @@ export function NamespacePage() {
           <TabsTrigger value="status">Status</TabsTrigger>
           <TabsTrigger value="configuration">Configuration</TabsTrigger>
           <TabsTrigger value="schema">Schema</TabsTrigger>
+          <TabsTrigger value="endpoints">Endpoints</TabsTrigger>
           <TabsTrigger value="history">Run History</TabsTrigger>
         </TabsList>
 
@@ -157,7 +102,11 @@ export function NamespacePage() {
         </TabsContent>
 
         <TabsContent value="schema" className="mt-4">
-          <SchemaTabContent slug={slug} />
+          <SchemaEditor slug={slug} />
+        </TabsContent>
+
+        <TabsContent value="endpoints" className="mt-4">
+          <McpEndpointsPanel slug={slug} />
         </TabsContent>
 
         <TabsContent value="history" className="mt-4">

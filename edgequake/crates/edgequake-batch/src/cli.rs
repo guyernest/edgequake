@@ -34,9 +34,13 @@ pub struct Cli {
     #[arg(long)]
     pub exclude: Vec<String>,
 
-    /// OpenAI API key (required for run/extract/embed commands, not needed for dry-run)
+    /// OpenAI API key (required for OpenAI models, not needed for dry-run)
     #[arg(long, env = "OPENAI_API_KEY")]
     pub api_key: Option<String>,
+
+    /// Anthropic API key (required for Claude models, not needed for dry-run)
+    #[arg(long, env = "ANTHROPIC_API_KEY")]
+    pub anthropic_key: Option<String>,
 
     /// Maximum number of document failures before aborting pipeline (default: 0 = fail on first error)
     #[arg(long, default_value = "0", env = "BATCH_MAX_FAILURES")]
@@ -50,9 +54,13 @@ pub struct Cli {
     #[arg(long, env = "BATCH_EMBEDDING_MODEL")]
     pub embedding_model: Option<String>,
 
-    /// DynamoDB table name for state management
-    #[arg(long, default_value = "edgequake-kv", env = "BATCH_DYNAMO_TABLE")]
-    pub dynamo_table: String,
+    /// DynamoDB table for pipeline execution state (key schema: namespace + id)
+    #[arg(long, default_value = "edgequake-kv", env = "PIPELINE_STATE_TABLE")]
+    pub state_table: String,
+
+    /// DynamoDB table for namespace registry: config, schema, run status (key schema: PK + SK)
+    #[arg(long, env = "NAMESPACE_REGISTRY_TABLE")]
+    pub registry_table: Option<String>,
 
     /// Job ID for resume/status (auto-generated if not provided)
     #[arg(long, env = "BATCH_JOB_ID")]
@@ -183,6 +191,9 @@ pub enum Command {
         #[arg(short, long, default_value = "20")]
         limit: usize,
     },
+
+    /// Generate and store the MCP descriptor for this namespace (no pipeline re-run)
+    Descriptor,
 
     /// Preview pipeline: show document count, chunk estimate, schema summary, and estimated cost (no API calls)
     DryRun,
