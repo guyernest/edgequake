@@ -488,17 +488,15 @@ fn namespace_scoped_routes() -> Router<AppState> {
         .route("/graph/labels/search", get(handlers::ns_search_labels))
         .route("/graph/labels/popular", get(handlers::ns_get_popular_labels))
         .route("/graph/degrees/batch", post(handlers::ns_get_degrees_batch))
-        // Entities (using global handlers -- namespace-aware entity handlers deferred)
-        // NOTE: Entity operations through this route still use global storage.
-        // Full namespace-scoped entity handlers will be added when document
-        // namespace scoping is implemented (Phase 2).
+        // Entity list/detail use namespace-scoped handlers (Phase 11).
+        // Mutation routes (create, update, delete, merge) still use global handlers.
         .route(
             "/graph/entities",
-            get(handlers::list_entities).post(handlers::create_entity),
+            get(handlers::ns_list_entities).post(handlers::create_entity),
         )
         .route("/graph/entities/exists", get(handlers::entity_exists))
         .route("/graph/entities/merge", post(handlers::merge_entities))
-        .route("/graph/entities/{entity_name}", get(handlers::get_entity))
+        .route("/graph/entities/{entity_name}", get(handlers::ns_get_entity))
         .route(
             "/graph/entities/{entity_name}",
             put(handlers::update_entity),
