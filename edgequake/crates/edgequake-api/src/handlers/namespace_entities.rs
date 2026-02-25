@@ -14,7 +14,8 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use tracing::debug;
+use edgequake_core::namespace::NamespaceSlug;
+use tracing::{debug, info, warn};
 
 use crate::error::{ApiError, ApiResult};
 use crate::middleware::TenantContext;
@@ -57,20 +58,107 @@ pub async fn ns_list_entities(
 
     // Build entity list using the most efficient storage method available
     let mut entities: Vec<(EntityResponse, String)> = if let Some(ref search) = query.search {
-        // Search by name/description -- uses graph.search_nodes which returns
-        // Vec<(GraphNode, usize)> with degrees already included (avoids N+1)
-        let limit = 1000; // fetch enough to paginate client-side
-        let results = graph
-            .search_nodes(search, limit, query.entity_type.as_deref(), None, None)
+        // Semantic search: embed query → S3 Vectors → Neptune entity lookup
+        NamespaceSlug::parse(&namespace)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid namespace: {}", e)))?;
+        let ns_storage = state.resolve_namespace_storage(&namespace).await?;
+
+        // 1. Embed the search query
+        let query_embedding = state
+            .embedding_provider
+            .embed_one(search)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Embedding failed: {}", e)))?;
+
+        info!(
+            namespace = %namespace,
+            query = %search,
+            embedding_dim = query_embedding.len(),
+            "Semantic entity search"
+        );
+
+        // 2. Search S3 Vectors (request extra to allow for chunk/rel filtering)
+        let top_k = 100;
+        let vector_results = ns_storage
+            .vector_storage
+            .query(&query_embedding, top_k, None)
             .await?;
 
-        results
+        // 3. Filter to entity vectors only (type=entity in metadata)
+        let entity_ids: Vec<String> = vector_results
             .into_iter()
-            .map(|(node, degree)| {
-                let sort_key = node.id.clone();
-                (node_to_entity_response(node, degree), sort_key)
+            .filter(|r| {
+                r.metadata
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .map(|t| t == "entity")
+                    .unwrap_or(false)
             })
-            .collect()
+            .filter_map(|r| {
+                // Vector IDs are stored as "entity:{NAME}" — strip prefix
+                r.id.strip_prefix("entity:").map(|s| s.to_string())
+            })
+            .collect();
+
+        debug!(
+            namespace = %namespace,
+            matched_entities = entity_ids.len(),
+            "Vector search returned entity matches"
+        );
+
+        if entity_ids.is_empty() {
+            // Fall back to Gremlin text search if no vector matches
+            warn!(namespace = %namespace, "No vector entity matches, falling back to text search");
+            let results = graph
+                .search_nodes(search, 100, query.entity_type.as_deref(), None, None)
+                .await?;
+            results
+                .into_iter()
+                .map(|(node, degree)| {
+                    let sort_key = node.id.clone();
+                    (node_to_entity_response(node, degree), sort_key)
+                })
+                .collect()
+        } else {
+            // 4. Fetch matched entities from Neptune
+            let nodes = graph.get_nodes_by_ids(&entity_ids).await?;
+            // Get degrees in one batch query
+            let degree_pairs = graph.node_degrees_batch(&entity_ids).await?;
+            let degree_map: std::collections::HashMap<String, usize> =
+                degree_pairs.into_iter().collect();
+
+            let mut results: Vec<(EntityResponse, String)> = nodes
+                .into_iter()
+                .filter(|n| {
+                    // Apply entity_type filter if specified
+                    if let Some(ref et) = query.entity_type {
+                        n.properties
+                            .get("entity_type")
+                            .and_then(|v| v.as_str())
+                            .map(|t| t == et.as_str())
+                            .unwrap_or(false)
+                    } else {
+                        true
+                    }
+                })
+                .map(|node| {
+                    let degree = degree_map.get(&node.id).copied().unwrap_or(0);
+                    let sort_key = node.id.clone();
+                    (node_to_entity_response(node, degree), sort_key)
+                })
+                .collect();
+
+            // Preserve vector search relevance ordering (entity_ids is already ranked)
+            let id_rank: std::collections::HashMap<String, usize> = entity_ids
+                .iter()
+                .enumerate()
+                .map(|(i, id)| (id.clone(), i))
+                .collect();
+            results.sort_by_key(|(resp, _)| {
+                id_rank.get(&resp.id).copied().unwrap_or(usize::MAX)
+            });
+            results
+        }
     } else if let Some(ref entity_type) = query.entity_type {
         // Type filter only -- use get_popular_nodes_with_degree for efficient
         // filtering with degrees included
@@ -87,17 +175,16 @@ pub async fn ns_list_entities(
             })
             .collect()
     } else {
-        // No filters -- get all nodes + batch degree lookup
-        let all_nodes = graph.get_all_nodes().await?;
-        let node_ids: Vec<String> = all_nodes.iter().map(|n| n.id.clone()).collect();
-        let degree_pairs = graph.node_degrees_batch(&node_ids).await?;
-        let degree_map: std::collections::HashMap<String, usize> =
-            degree_pairs.into_iter().collect();
+        // No filters -- use get_popular_nodes_with_degree for single server-side
+        // query that returns nodes with degrees (avoids N+1 degree queries)
+        let limit = 1000;
+        let results = graph
+            .get_popular_nodes_with_degree(limit, None, None, None, None)
+            .await?;
 
-        all_nodes
+        results
             .into_iter()
-            .map(|node| {
-                let degree = degree_map.get(&node.id).copied().unwrap_or(0);
+            .map(|(node, degree)| {
                 let sort_key = node.id.clone();
                 (node_to_entity_response(node, degree), sort_key)
             })

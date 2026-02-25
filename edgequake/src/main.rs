@@ -10,7 +10,7 @@ use edgequake_tasks::{
     Pagination, TaskFilter, TaskQueue, TaskStatus, TaskStorage, WorkerPool, WorkerPoolConfig,
 };
 use std::sync::Arc;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// Print the EdgeQuake startup banner with storage mode information.
@@ -393,31 +393,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get API key from environment (optional - Ollama doesn't need it)
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
 
-    // OODA-03: DATABASE_URL is now REQUIRED - in-memory storage removed for production consistency
-    // WHY: Mission directive requires eliminating in-memory providers to ensure:
-    // 1. Consistent behavior between dev and production
-    // 2. No accidental data loss from memory mode
-    // 3. Proper testing against real storage
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-        error!("═══════════════════════════════════════════════════════════════════════");
-        error!(" FATAL: DATABASE_URL environment variable is REQUIRED");
-        error!("═══════════════════════════════════════════════════════════════════════");
-        error!(" In-memory storage has been removed for production consistency.");
-        error!(" Please set DATABASE_URL to a PostgreSQL connection string:");
-        error!("");
-        error!("   export DATABASE_URL=\"postgresql://user:pass@localhost:5432/edgequake\"");
-        error!("");
-        error!(" Or use the Makefile:");
-        error!("   make dev          # Starts with PostgreSQL (recommended)");
-        error!("   make backend-dev  # Backend only with PostgreSQL");
-        error!("═══════════════════════════════════════════════════════════════════════");
-        std::process::exit(1);
-    });
+    // DATABASE_URL is optional: when set, use PostgreSQL for persistent operational
+    // storage (tasks, workspaces, conversations). When absent, use in-memory storage
+    // which is sufficient for the namespace-scoped entity browser (Neptune/S3/DynamoDB).
+    let database_url = std::env::var("DATABASE_URL").ok();
+    let has_postgres = database_url.is_some();
 
-    info!("PostgreSQL storage mode (DATABASE_URL detected)");
-    let state = AppState::new_postgres(&database_url, &api_key)
-        .await
-        .expect("Failed to initialize PostgreSQL storage");
+    let state = if let Some(ref db_url) = database_url {
+        info!("PostgreSQL storage mode (DATABASE_URL detected)");
+        AppState::new_postgres(db_url, &api_key)
+            .await
+            .expect("Failed to initialize PostgreSQL storage")
+    } else {
+        info!("Memory storage mode (no DATABASE_URL) - namespace entity browser via AWS stores");
+        AppState::new_memory(Some(&api_key))
+    };
 
     // Construct namespace registry if NAMESPACE_TABLE is set (or use default)
     let namespace_table = std::env::var("NAMESPACE_TABLE")
@@ -457,6 +447,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or_else(|_| "dev".to_string()),
             external_id_suffix: std::env::var("EXTERNAL_ID_SUFFIX")
                 .unwrap_or_else(|_| "default".to_string()),
+            athena_bm25_database: std::env::var("ATHENA_BM25_DATABASE").ok(),
+            bm25_s3_bucket: std::env::var("BM25_S3_BUCKET").ok(),
+            athena_workgroup: std::env::var("ATHENA_WORKGROUP").ok(),
         };
 
         let registry = DynamoNamespaceRegistry::new(ns_config, dynamo_client)
@@ -520,13 +513,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create document task processor with workspace-specific pipeline support (SPEC-032)
-    // This ensures that rebuild/reprocess operations use the workspace's configured
-    // LLM and embedding providers, not the server's default providers.
-    //
-    // OODA-03: Always use STRICT workspace isolation mode (PostgreSQL required now).
     // OODA-223: Strict mode enforces workspace isolation.
     // OODA-10: Also attach progress broadcaster for WebSocket event delivery.
-    info!("🔒 Using STRICT workspace isolation mode (PostgreSQL storage)");
+    info!(
+        "Using {} workspace isolation mode",
+        if has_postgres { "STRICT (PostgreSQL)" } else { "MEMORY" }
+    );
     let mut processor = DocumentTaskProcessor::with_workspace_support_strict(
         Arc::clone(&state.pipeline),
         Arc::clone(&state.llm_provider),
@@ -560,33 +552,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         backoff_multiplier: 2.0,
     };
 
-    // Recover orphaned tasks from previous backend session (PRODUCTION_BUG_FIX)
-    // MUST run BEFORE starting workers to prevent race conditions
-    if let Err(e) =
-        recover_orphaned_tasks(Arc::clone(&state.task_storage) as Arc<dyn TaskStorage>).await
-    {
-        warn!("Failed to recover orphaned tasks (non-fatal): {}", e);
-    }
+    // Recovery functions only apply to PostgreSQL mode (persistent tasks/documents).
+    // In memory mode, there's nothing to recover from a previous session.
+    if has_postgres {
+        // Recover orphaned tasks from previous backend session (PRODUCTION_BUG_FIX)
+        // MUST run BEFORE starting workers to prevent race conditions
+        if let Err(e) =
+            recover_orphaned_tasks(Arc::clone(&state.task_storage) as Arc<dyn TaskStorage>).await
+        {
+            warn!("Failed to recover orphaned tasks (non-fatal): {}", e);
+        }
 
-    // Recover orphaned documents stuck in non-terminal states (uploading, pending, etc.)
-    // MUST run BEFORE starting workers to avoid race with new uploads
-    if let Err(e) = recover_orphaned_documents(
-        Arc::clone(&state.kv_storage) as Arc<dyn edgequake_storage::traits::KVStorage>
-    )
-    .await
-    {
-        warn!("Failed to recover orphaned documents (non-fatal): {}", e);
-    }
+        // Recover orphaned documents stuck in non-terminal states (uploading, pending, etc.)
+        // MUST run BEFORE starting workers to avoid race with new uploads
+        if let Err(e) = recover_orphaned_documents(
+            Arc::clone(&state.kv_storage) as Arc<dyn edgequake_storage::traits::KVStorage>,
+        )
+        .await
+        {
+            warn!("Failed to recover orphaned documents (non-fatal): {}", e);
+        }
 
-    // Requeue pending tasks from database to in-memory queue (PRODUCTION_BUG_FIX)
-    // MUST run BEFORE starting workers so tasks are available when workers start polling
-    if let Err(e) = requeue_pending_tasks(
-        Arc::clone(&state.task_storage) as Arc<dyn TaskStorage>,
-        Arc::clone(&state.task_queue) as Arc<dyn TaskQueue>,
-    )
-    .await
-    {
-        warn!("Failed to requeue pending tasks (non-fatal): {}", e);
+        // Requeue pending tasks from database to in-memory queue (PRODUCTION_BUG_FIX)
+        // MUST run BEFORE starting workers so tasks are available when workers start polling
+        if let Err(e) = requeue_pending_tasks(
+            Arc::clone(&state.task_storage) as Arc<dyn TaskStorage>,
+            Arc::clone(&state.task_queue) as Arc<dyn TaskQueue>,
+        )
+        .await
+        {
+            warn!("Failed to requeue pending tasks (non-fatal): {}", e);
+        }
+    } else {
+        info!("Skipping task/document recovery (memory mode - no persistent state)");
     }
 
     // Create and start worker pool

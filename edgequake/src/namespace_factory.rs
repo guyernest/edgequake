@@ -73,16 +73,53 @@ impl NamespaceStorageFactory for AwsNamespaceStorageFactory {
             "Creating namespace-scoped storage backends"
         );
 
-        // 1. Create NeptuneGraphStorage with namespace-specific label-prefix
+        // 1. Create NeptuneGraphStorage with namespace-specific isolation.
+        //    Use property-namespace mode: bare labels (Entity, relates_to) with
+        //    namespace stored as a vertex property. This matches data written by
+        //    the batch ingestion pipeline.
         let neptune_config = NeptuneConfig::new(&self.neptune_endpoint)
-            .with_namespace(namespace);
+            .with_namespace(namespace)
+            .with_property_namespace();
         let neptune_storage = NeptuneGraphStorage::new(neptune_config).await?;
 
-        // 2. Create S3VectorsStorage with namespace-scoped index
+        // 2. Create S3VectorsStorage with namespace-scoped index.
+        //    Query the existing index dimension first so we don't reject a
+        //    pre-existing index that was created with a different model.
+        let index_name = format!("{}-embeddings", namespace);
+        let aws_config = edgequake_storage_aws::aws_config::load_defaults(
+            edgequake_storage_aws::aws_config::BehaviorVersion::latest(),
+        )
+        .await;
+        let s3v_client =
+            edgequake_storage_aws::aws_sdk_s3vectors::Client::new(&aws_config);
+        let dimension = match s3v_client
+            .get_index()
+            .vector_bucket_name(&self.vector_bucket_name)
+            .index_name(&index_name)
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                let existing = resp.index().map(|i| i.dimension()).unwrap_or(0);
+                if existing > 0 {
+                    info!(
+                        namespace = %namespace,
+                        index = %index_name,
+                        dimension = existing,
+                        "Using existing S3 Vectors index dimension"
+                    );
+                    existing as usize
+                } else {
+                    self.embedding_dimension
+                }
+            }
+            Err(_) => self.embedding_dimension, // index doesn't exist yet, use default
+        };
+
         let vector_config = S3VectorsConfig {
             vector_bucket_name: self.vector_bucket_name.clone(),
-            index_name: format!("{}-embeddings", namespace),
-            dimension: self.embedding_dimension,
+            index_name,
+            dimension,
             namespace: namespace.to_string(),
         };
         let vector_storage = S3VectorsStorage::new(vector_config).await?;

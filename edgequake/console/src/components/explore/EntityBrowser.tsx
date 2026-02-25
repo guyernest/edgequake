@@ -58,16 +58,17 @@ interface EntityBrowserProps {
 export function EntityBrowser({ slug }: EntityBrowserProps) {
   // ---- Filter / pagination state ----
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [committedSearch, setCommittedSearch] = useState('');
   const [entityType, setEntityType] = useState('');
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<EntityItem[]>([]);
 
-  // ---- Debounce search input (300ms) ----
-  useEffect(() => {
-    const id = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(id);
-  }, [search]);
+  // Submit search on Enter or button click
+  const submitSearch = () => setCommittedSearch(search);
+  const clearSearch = () => {
+    setSearch('');
+    setCommittedSearch('');
+  };
 
   // ---- Data fetching ----
   const { data: pipelineConfig } = usePipelineConfig(slug);
@@ -92,23 +93,23 @@ export function EntityBrowser({ slug }: EntityBrowserProps) {
     isError,
     error,
     refetch,
-  } = useEntityList(slug, debouncedSearch, entityType, page);
+  } = useEntityList(slug, committedSearch, entityType, page);
 
   // ---- Reset when filters change ----
-  const prevSearch = useRef(debouncedSearch);
+  const prevSearch = useRef(committedSearch);
   const prevType = useRef(entityType);
 
   useEffect(() => {
     if (
-      prevSearch.current !== debouncedSearch ||
+      prevSearch.current !== committedSearch ||
       prevType.current !== entityType
     ) {
       setItems([]);
       setPage(1);
-      prevSearch.current = debouncedSearch;
+      prevSearch.current = committedSearch;
       prevType.current = entityType;
     }
-  }, [debouncedSearch, entityType]);
+  }, [committedSearch, entityType]);
 
   // ---- Accumulate items when data arrives ----
   useEffect(() => {
@@ -124,7 +125,7 @@ export function EntityBrowser({ slug }: EntityBrowserProps) {
   const totalPages = data?.total_pages ?? 0;
   const hasMore = page < totalPages;
   const isFirstLoad = isLoading && items.length === 0;
-  const filtersActive = debouncedSearch !== '' || entityType !== '';
+  const filtersActive = committedSearch !== '' || entityType !== '';
   const isEmpty = !isLoading && !isFetching && items.length === 0;
 
   // ---- Render ----
@@ -138,9 +139,23 @@ export function EntityBrowser({ slug }: EntityBrowserProps) {
             placeholder="Search entities..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitSearch();
+            }}
             className="pl-8"
           />
         </div>
+        <Button
+          onClick={submitSearch}
+          disabled={isFetching}
+        >
+          Search
+        </Button>
+        {committedSearch && (
+          <Button variant="ghost" size="sm" onClick={clearSearch}>
+            Clear
+          </Button>
+        )}
         <Select
           value={entityType || ALL_TYPES_VALUE}
           onValueChange={(v) => setEntityType(v === ALL_TYPES_VALUE ? '' : v)}

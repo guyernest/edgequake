@@ -90,6 +90,12 @@ pub struct NeptuneConfig {
     pub timeout_secs: u64,
     /// Enable SSL/TLS (always true with Neptune Data API)
     pub use_ssl: bool,
+    /// When true (default), use label-prefix strategy: `{namespace}:Entity`,
+    /// `{namespace}:relates_to`, `{namespace}:{id}`.
+    /// When false, use bare labels (`Entity`, `relates_to`) with bare IDs,
+    /// and filter by the `namespace` property. This matches data ingested
+    /// by the batch pipeline which stores namespace as a vertex property.
+    pub use_label_prefix: bool,
 }
 
 impl NeptuneConfig {
@@ -106,6 +112,7 @@ impl NeptuneConfig {
             pool_size: 10,
             timeout_secs: 30,
             use_ssl: true,
+            use_label_prefix: true,
         }
     }
 
@@ -115,6 +122,14 @@ impl NeptuneConfig {
     /// (e.g., `epstein-files:Entity`) and as an ID prefix for T.id uniqueness.
     pub fn with_namespace(mut self, namespace: impl Into<String>) -> Self {
         self.namespace = namespace.into();
+        self
+    }
+
+    /// Disable label-prefix strategy. Use bare labels (`Entity`, `relates_to`)
+    /// and filter by the `namespace` vertex property instead. This matches data
+    /// ingested by the batch pipeline.
+    pub fn with_property_namespace(mut self) -> Self {
+        self.use_label_prefix = false;
         self
     }
 
@@ -188,32 +203,53 @@ impl NeptuneGraphStorage {
 
     // ========== Namespace Helpers ==========
 
-    /// Return the namespace-prefixed vertex label (e.g., `epstein-files:Entity`).
+    /// Return the vertex label for Gremlin queries.
+    ///
+    /// With label-prefix: `epstein-files:Entity`
+    /// Without (property mode): `Entity`
     fn vertex_label(&self) -> String {
-        format!("{}:Entity", self.config.namespace)
+        if self.config.use_label_prefix {
+            format!("{}:Entity", self.config.namespace)
+        } else {
+            "Entity".to_string()
+        }
     }
 
-    /// Return the namespace-prefixed edge label (e.g., `epstein-files:relates_to`).
+    /// Return the edge label for Gremlin queries.
+    ///
+    /// With label-prefix: `epstein-files:relates_to`
+    /// Without (property mode): `relates_to`
     fn edge_label(&self) -> String {
-        format!("{}:relates_to", self.config.namespace)
+        if self.config.use_label_prefix {
+            format!("{}:relates_to", self.config.namespace)
+        } else {
+            "relates_to".to_string()
+        }
     }
 
     /// Prefix a caller-supplied node ID with the namespace for Neptune T.id storage.
     ///
-    /// Example: `ns_id("JOHN_DOE")` => `"epstein-files:JOHN_DOE"`
+    /// With label-prefix: `ns_id("JOHN_DOE")` => `"epstein-files:JOHN_DOE"`
+    /// Without (property mode): `ns_id("JOHN_DOE")` => `"JOHN_DOE"` (passthrough)
     fn ns_id(&self, node_id: &str) -> String {
-        format!("{}:{}", self.config.namespace, node_id)
+        if self.config.use_label_prefix {
+            format!("{}:{}", self.config.namespace, node_id)
+        } else {
+            node_id.to_string()
+        }
     }
 
     /// Strip the namespace prefix from a Neptune T.id, returning the caller-facing ID.
     ///
-    /// Example: `strip_ns_id("epstein-files:JOHN_DOE")` => `"JOHN_DOE"`
-    ///
-    /// If the ID does not start with the expected prefix, returns it unchanged
-    /// (defensive — should not happen with properly namespaced data).
+    /// With label-prefix: `strip_ns_id("epstein-files:JOHN_DOE")` => `"JOHN_DOE"`
+    /// Without (property mode): passthrough (IDs are already bare).
     fn strip_ns_id<'a>(&self, neptune_id: &'a str) -> &'a str {
-        let prefix = format!("{}:", self.config.namespace);
-        neptune_id.strip_prefix(&prefix).unwrap_or(neptune_id)
+        if self.config.use_label_prefix {
+            let prefix = format!("{}:", self.config.namespace);
+            neptune_id.strip_prefix(&prefix).unwrap_or(neptune_id)
+        } else {
+            neptune_id
+        }
     }
 
     /// Execute a Gremlin query via the Neptune Data API.
@@ -223,12 +259,26 @@ impl NeptuneGraphStorage {
     ///
     /// Response structure: `{ "result": { "data": { "@type": "g:List", "@value": [...] }, "meta": ... } }`
     async fn execute(&self, query: &str) -> crate::error::Result<Vec<JsonValue>> {
+        // In property-namespace mode, inject `.has('namespace', '{ns}')` after
+        // every `hasLabel('Entity')` so all queries are namespace-scoped.
+        // This is safe for writes too: `addV('Entity')` is not matched.
+        let query = if !self.config.use_label_prefix {
+            let bare_label = format!("hasLabel('{}')", self.vertex_label());
+            let filtered = format!(
+                "hasLabel('{}').has('namespace', '{}')",
+                self.vertex_label(),
+                gremlin_escape(&self.config.namespace),
+            );
+            query.replace(&bare_label, &filtered)
+        } else {
+            query.to_string()
+        };
         debug!("Executing Gremlin query: {}", query);
 
         let result = self
             .client
             .execute_gremlin_query()
-            .gremlin_query(query)
+            .gremlin_query(&query)
             .send()
             .await
             .map_err(neptune_err)?;

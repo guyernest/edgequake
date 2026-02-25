@@ -472,20 +472,19 @@ backend-db: db-wait ## Run backend with PostgreSQL storage (uses .env configurat
 		OLLAMA_EMBEDDING_MODEL="nomic-embed-text" \
 		cargo run
 
-# OODA-03: In-memory storage has been REMOVED for production consistency.
-# This target now fails with guidance to use PostgreSQL instead.
-backend-memory: ## DEPRECATED - In-memory storage removed, use backend-dev with PostgreSQL
-	@echo "$(RED)╔══════════════════════════════════════════════════════════════════╗$(RESET)"
-	@echo "$(RED)║  ❌  ERROR: In-memory storage has been REMOVED                   ║$(RESET)"
-	@echo "$(RED)║                                                                  ║$(RESET)"
-	@echo "$(RED)║  The mission directive requires PostgreSQL for all operations.  ║$(RESET)"
-	@echo "$(RED)║  Please use one of these alternatives:                          ║$(RESET)"
-	@echo "$(RED)║                                                                  ║$(RESET)"
-	@echo "$(RED)║    make dev          # Full stack with PostgreSQL               ║$(RESET)"
-	@echo "$(RED)║    make backend-dev  # Backend only with PostgreSQL             ║$(RESET)"
-	@echo "$(RED)║                                                                  ║$(RESET)"
-	@echo "$(RED)╚══════════════════════════════════════════════════════════════════╝$(RESET)"
-	@exit 1
+backend-memory: ## Run backend with memory storage + AWS namespace stores (no PostgreSQL needed)
+	@echo "$(YELLOW)Starting backend with memory storage (no PostgreSQL)...$(RESET)"
+	@echo "$(YELLOW)Operational data (tasks, workspaces) is ephemeral.$(RESET)"
+	@echo "$(YELLOW)Namespace entity browser uses AWS stores (Neptune, S3 Vectors, DynamoDB).$(RESET)"
+	@if [ -f $(ROOT_DIR)/.env ]; then \
+		echo "$(GREEN)✓ Sourcing .env$(RESET)"; \
+		set -a && . $(ROOT_DIR)/.env && set +a; \
+	fi
+	@cd $(BACKEND_DIR) && \
+		OPENAI_API_KEY="$(OPENAI_API_KEY)" \
+		PDFIUM_DYNAMIC_LIB_PATH="$(PDFIUM_LIB_PATH)" \
+		SQLX_OFFLINE=true \
+		cargo run
 
 backend-bg: db-wait ## Run backend in background with PostgreSQL (respects OPENAI_API_KEY if set)
 	@echo "$(BLUE)Starting backend in background...$(RESET)"

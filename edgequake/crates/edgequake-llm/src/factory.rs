@@ -342,7 +342,11 @@ impl ProviderFactory {
             ));
         }
 
-        let provider = Arc::new(OpenAIProvider::new(api_key));
+        let mut provider = OpenAIProvider::new(api_key);
+        if let Ok(embedding_model) = std::env::var("OPENAI_EMBEDDING_MODEL") {
+            provider = provider.with_embedding_model(embedding_model);
+        }
+        let provider = Arc::new(provider);
         Ok((provider.clone(), provider))
     }
 
