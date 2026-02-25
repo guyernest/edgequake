@@ -1,6 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import { CliCommandDisplay } from '@/components/ingestion/CliCommandDisplay';
 import { useNamespaceStatus } from '@/hooks/useNamespaceStatus';
+import { EntityBrowser } from './EntityBrowser';
 
 interface ExplorePanelProps {
   slug: string;
@@ -57,12 +58,5 @@ export function ExplorePanel({ slug, onNavigateToStatus }: ExplorePanelProps) {
     );
   }
 
-  {/* Data-present placeholder: Phase 11 (entity browser), Phase 12 (query panel), Phase 13 (vector search) */}
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-      <p className="text-sm text-muted-foreground">
-        Explore features will appear here once implemented.
-      </p>
-    </div>
-  );
+  return <EntityBrowser slug={slug} />;
 }
