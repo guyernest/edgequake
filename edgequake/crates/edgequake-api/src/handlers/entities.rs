@@ -158,7 +158,7 @@ fn normalize_entity_name(name: &str) -> String {
 }
 
 /// Convert GraphNode to EntityResponse.
-fn node_to_entity_response(node: GraphNode, degree: usize) -> EntityResponse {
+pub fn node_to_entity_response(node: GraphNode, degree: usize) -> EntityResponse {
     let props = &node.properties;
 
     EntityResponse {
