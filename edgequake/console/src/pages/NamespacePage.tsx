@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,12 +12,14 @@ import { PipelineTimeline } from '@/components/pipeline/PipelineTimeline';
 import { TriggerIngestionDialog } from '@/components/ingestion/TriggerIngestionDialog';
 import { SchemaEditor } from '@/components/schema/SchemaEditor';
 import { McpEndpointsPanel } from '@/components/namespace/McpEndpointsPanel';
+import { ExplorePanel } from '@/components/explore/ExplorePanel';
 import { useNamespace } from '@/hooks/useNamespaceDetail';
 import { usePipelineConfig } from '@/hooks/usePipelineConfig';
 import { useNamespaceStatus } from '@/hooks/useNamespaceStatus';
 
 export function NamespacePage() {
   const { namespace: slug } = useParams<{ namespace: string }>();
+  const [activeTab, setActiveTab] = useState('status');
 
   const {
     data: namespace,
@@ -80,13 +83,14 @@ export function NamespacePage() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="status">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="status">Status</TabsTrigger>
           <TabsTrigger value="configuration">Configuration</TabsTrigger>
           <TabsTrigger value="schema">Schema</TabsTrigger>
           <TabsTrigger value="endpoints">Endpoints</TabsTrigger>
           <TabsTrigger value="history">Run History</TabsTrigger>
+          <TabsTrigger value="explore">Explore</TabsTrigger>
         </TabsList>
 
         <TabsContent value="status" className="mt-4">
@@ -116,6 +120,13 @@ export function NamespacePage() {
               Run history deferred to future phase
             </p>
           </div>
+        </TabsContent>
+
+        <TabsContent value="explore" className="mt-4">
+          <ExplorePanel
+            slug={slug}
+            onNavigateToStatus={() => setActiveTab('status')}
+          />
         </TabsContent>
       </Tabs>
     </div>
