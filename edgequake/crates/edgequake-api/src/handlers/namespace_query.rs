@@ -39,8 +39,13 @@ async fn resolve_ns_engine(
     // Construct a namespace-scoped SOTAQueryEngine sharing the global LLM
     // and embedding providers. The engine is lightweight (config + Arc refs);
     // the expensive AWS clients are already shared through storage instances.
+    let mut config = SOTAQueryConfig::default();
+    // Enable chunk content hydration so query responses include snippet text
+    // and chunk metadata (document_id, chunk_index) from KV storage.
+    config.enable_chunk_content = true;
+
     let mut engine = SOTAQueryEngine::new(
-        SOTAQueryConfig::default(),
+        config,
         ns_storage.vector_storage.clone(),
         ns_storage.graph_storage.clone(),
         state.embedding_provider.clone(),
@@ -179,6 +184,7 @@ pub async fn ns_execute_query(
                 score: chunk.score,
                 rerank_score,
                 snippet: Some(chunk.content.chars().take(200).collect()),
+                content: if chunk.content.is_empty() { None } else { Some(chunk.content.clone()) },
                 reference_id: Some(ref_id),
                 document_id: chunk.document_id.clone(),
                 file_path: None,
@@ -210,6 +216,7 @@ pub async fn ns_execute_query(
             score: entity.score,
             rerank_score: None,
             snippet: Some(entity.description.chars().take(200).collect()),
+            content: if entity.description.is_empty() { None } else { Some(entity.description.clone()) },
             reference_id: Some(ref_id),
             document_id: entity.source_document_id.clone(),
             file_path: entity.source_file_path.clone(),
@@ -222,12 +229,14 @@ pub async fn ns_execute_query(
     for rel in &result.context.relationships {
         let ref_id = ref_counter;
         ref_counter += 1;
+        let rel_text = format!("{} {} {}", rel.source, rel.relation_type, rel.target);
         sources.push(SourceReference {
             source_type: "relationship".to_string(),
             id: format!("{}->{}", rel.source, rel.target),
             score: rel.score,
             rerank_score: None,
-            snippet: Some(format!("{} {} {}", rel.source, rel.relation_type, rel.target)),
+            snippet: Some(rel_text.clone()),
+            content: Some(rel_text),
             reference_id: Some(ref_id),
             document_id: rel.source_document_id.clone(),
             file_path: rel.source_file_path.clone(),

@@ -326,6 +326,7 @@ pub async fn execute_query(
                 score: chunk.score,
                 rerank_score,
                 snippet: Some(chunk.content.chars().take(200).collect()),
+                content: if chunk.content.is_empty() { None } else { Some(chunk.content.clone()) },
                 reference_id: Some(ref_id),
                 document_id: chunk.document_id.clone(),
                 file_path: None, // TODO: Resolve document_id to file_path
@@ -359,6 +360,7 @@ pub async fn execute_query(
             score: entity.score,
             rerank_score: None,
             snippet: Some(entity.description.chars().take(200).collect()),
+            content: if entity.description.is_empty() { None } else { Some(entity.description.clone()) },
             reference_id: Some(ref_id),
             document_id: entity.source_document_id.clone(),
             file_path: entity.source_file_path.clone(),
@@ -372,15 +374,14 @@ pub async fn execute_query(
         let ref_id = ref_counter;
         ref_counter += 1;
 
+        let rel_text = format!("{} {} {}", rel.source, rel.relation_type, rel.target);
         sources.push(SourceReference {
             source_type: "relationship".to_string(),
             id: format!("{}->{}", rel.source, rel.target),
             score: rel.score,
             rerank_score: None,
-            snippet: Some(format!(
-                "{} {} {}",
-                rel.source, rel.relation_type, rel.target
-            )),
+            snippet: Some(rel_text.clone()),
+            content: Some(rel_text),
             reference_id: Some(ref_id),
             document_id: rel.source_document_id.clone(),
             file_path: rel.source_file_path.clone(),

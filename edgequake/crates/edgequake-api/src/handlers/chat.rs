@@ -142,6 +142,7 @@ fn build_sources(context: &edgequake_query::QueryContext) -> Vec<SourceReference
             score: chunk.score,
             rerank_score: None,
             snippet: Some(chunk.content.chars().take(200).collect()),
+            content: if chunk.content.is_empty() { None } else { Some(chunk.content.clone()) },
             reference_id: Some(ref_counter),
             document_id: chunk.document_id.clone(),
             file_path: None,
@@ -159,6 +160,7 @@ fn build_sources(context: &edgequake_query::QueryContext) -> Vec<SourceReference
             score: entity.score,
             rerank_score: None,
             snippet: Some(entity.description.chars().take(200).collect()),
+            content: if entity.description.is_empty() { None } else { Some(entity.description.clone()) },
             reference_id: Some(ref_counter),
             // Source tracking for citations (LightRAG parity)
             document_id: entity.source_document_id.clone(),
@@ -171,15 +173,14 @@ fn build_sources(context: &edgequake_query::QueryContext) -> Vec<SourceReference
     }
 
     for rel in &context.relationships {
+        let rel_text = format!("{} {} {}", rel.source, rel.relation_type, rel.target);
         sources.push(SourceReference {
             source_type: "relationship".to_string(),
             id: format!("{}->{}", rel.source, rel.target),
             score: rel.score,
             rerank_score: None,
-            snippet: Some(format!(
-                "{} {} {}",
-                rel.source, rel.relation_type, rel.target
-            )),
+            snippet: Some(rel_text.clone()),
+            content: Some(rel_text),
             reference_id: Some(ref_counter),
             // Source tracking for citations (LightRAG parity)
             document_id: rel.source_document_id.clone(),

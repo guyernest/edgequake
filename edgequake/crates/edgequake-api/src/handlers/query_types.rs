@@ -147,8 +147,12 @@ pub struct SourceReference {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rerank_score: Option<f32>,
 
-    /// Content snippet.
+    /// Content snippet (truncated preview, max 200 chars).
     pub snippet: Option<String>,
+
+    /// Full content text (untruncated).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
 
     /// Reference ID for citation (1, 2, 3, ...).
     #[serde(skip_serializing_if = "Option::is_none")]

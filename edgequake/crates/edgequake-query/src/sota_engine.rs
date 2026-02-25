@@ -496,10 +496,11 @@ impl SOTAQueryEngine {
         context: &mut crate::context::QueryContext,
         kv: &Arc<dyn KVStorage>,
     ) {
+        // Hydrate chunks that are missing content OR metadata (document_id, chunk_index).
         let ids_to_hydrate: Vec<String> = context
             .chunks
             .iter()
-            .filter(|c| c.content.is_empty())
+            .filter(|c| c.content.is_empty() || c.document_id.is_none() || c.chunk_index.is_none())
             .map(|c| format!("chunk:{}", c.id))
             .collect();
 
@@ -509,24 +510,46 @@ impl SOTAQueryEngine {
 
         match kv.get_by_ids(&ids_to_hydrate).await {
             Ok(values) => {
-                let mut content_map: std::collections::HashMap<String, String> =
-                    std::collections::HashMap::new();
+                // Build a map of chunk_id → (content, document_id, chunk_index)
+                let mut chunk_data: std::collections::HashMap<
+                    String,
+                    (String, Option<String>, Option<usize>),
+                > = std::collections::HashMap::new();
                 for val in &values {
                     if let (Some(id), Some(content)) = (
                         val.get("id").and_then(|v| v.as_str()),
                         val.get("content").and_then(|v| v.as_str()),
                     ) {
                         let chunk_id = id.strip_prefix("chunk:").unwrap_or(id);
-                        content_map.insert(chunk_id.to_string(), content.to_string());
+                        let document_id = val
+                            .get("document_id")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        let chunk_index = val
+                            .get("index")
+                            .and_then(|v| v.as_u64())
+                            .map(|i| i as usize);
+                        chunk_data.insert(
+                            chunk_id.to_string(),
+                            (content.to_string(), document_id, chunk_index),
+                        );
                     }
                 }
                 let mut hydrated = 0usize;
                 for chunk in &mut context.chunks {
-                    if chunk.content.is_empty() {
-                        if let Some(content) = content_map.get(&chunk.id) {
+                    if let Some((content, document_id, chunk_index)) =
+                        chunk_data.get(&chunk.id)
+                    {
+                        if chunk.content.is_empty() {
                             chunk.content = content.clone();
                             chunk.token_count = (content.len() as f32 / 4.0).ceil() as usize;
                             hydrated += 1;
+                        }
+                        if chunk.document_id.is_none() {
+                            chunk.document_id = document_id.clone();
+                        }
+                        if chunk.chunk_index.is_none() {
+                            chunk.chunk_index = *chunk_index;
                         }
                     }
                 }
@@ -2378,14 +2401,12 @@ impl SOTAQueryEngine {
         let mut context = QueryContext::new();
 
         // Step 1: Vector search with LOW-level keyword embedding
-        // This finds entities relevant to specific terms
-        let vector_results = self
+        // This finds entities relevant to specific terms.
+        // Use query_by_type for server-side metadata filtering (S3 Vectors).
+        let entity_vectors = self
             .vector_storage
-            .query(&embeddings.low_level, self.config.max_entities * 3, None)
+            .query_by_type(&embeddings.low_level, self.config.max_entities * 3, "entity", None)
             .await?;
-
-        // Step 2: Filter to entity vectors only (LightRAG Local mode)
-        let entity_vectors = filter_by_type(vector_results, VectorType::Entity);
 
         // Step 2.5: Build entity scores map to preserve vector similarity scores
         let entity_scores: HashMap<String, f32> = entity_vectors
@@ -2870,20 +2891,17 @@ impl SOTAQueryEngine {
                 workspace_id.clone()
             ),
             self.vector_storage
-                .query(&embeddings.query, self.config.max_chunks * 2, None),
+                .query_by_type(&embeddings.query, self.config.max_chunks * 2, "chunk", None),
         );
 
         let mut context = hybrid_result?;
         let chunk_results = chunk_results?;
 
-        // Filter to chunk vectors only
-        let chunk_vectors = filter_by_type(chunk_results, VectorType::Chunk);
-
         // Add direct chunks (deduplicated)
         let existing_chunk_ids: std::collections::HashSet<_> =
             context.chunks.iter().map(|c| c.id.clone()).collect();
 
-        for result in chunk_vectors
+        for result in chunk_results
             .iter()
             .filter(|r| r.score >= self.config.min_score)
             .filter(|r| self.matches_tenant_filter(&r.metadata, &tenant_id, &workspace_id))
@@ -3209,13 +3227,13 @@ impl SOTAQueryEngine {
     ) -> Result<QueryContext> {
         let mut context = QueryContext::new();
 
-        let results = self
+        // Use query_by_type for server-side metadata filtering. In shared indices
+        // (S3 Vectors), entity/relationship vectors dominate cosine similarity rankings
+        // and crowd out chunk vectors. Native metadata filtering ensures chunk retrieval.
+        let chunk_results = self
             .vector_storage
-            .query(&embeddings.query, self.config.max_chunks * 2, None)
+            .query_by_type(&embeddings.query, self.config.max_chunks * 2, "chunk", None)
             .await?;
-
-        // Filter to chunk vectors only
-        let chunk_results = filter_by_type(results, VectorType::Chunk);
 
         for result in chunk_results
             .iter()
@@ -3441,13 +3459,10 @@ The answer must integrate relevant facts from the Knowledge Graph and Document C
     ) -> Result<QueryContext> {
         let mut context = QueryContext::new();
 
-        // WHY 2x oversampling: Vector storage returns all types (entities, relationships, chunks).
-        // We retrieve 2x max_chunks to compensate for non-chunk results in top results.
-        let results = vector_storage
-            .query(&embeddings.query, self.config.max_chunks * 2, None)
+        // Use query_by_type for server-side metadata filtering (see query_naive).
+        let chunk_results = vector_storage
+            .query_by_type(&embeddings.query, self.config.max_chunks * 2, "chunk", None)
             .await?;
-
-        let chunk_results = filter_by_type(results, VectorType::Chunk);
 
         for result in chunk_results
             .iter()
@@ -3473,12 +3488,10 @@ The answer must integrate relevant facts from the Knowledge Graph and Document C
         let mut context = QueryContext::new();
 
         // Step 1: Vector search with LOW-level keyword embedding
-        let vector_results = vector_storage
-            .query(&embeddings.low_level, self.config.max_entities * 3, None)
+        // Use query_by_type for server-side metadata filtering (S3 Vectors).
+        let entity_vectors = vector_storage
+            .query_by_type(&embeddings.low_level, self.config.max_entities * 3, "entity", None)
             .await?;
-
-        // Step 2: Filter to entity vectors only
-        let entity_vectors = filter_by_type(vector_results, VectorType::Entity);
 
         // Step 2.5: Build entity scores map
         let entity_scores: HashMap<String, f32> = entity_vectors

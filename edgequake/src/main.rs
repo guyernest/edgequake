@@ -432,6 +432,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .and_then(|s| s.parse().ok())
             .unwrap_or(1536);
         let kv_table = std::env::var("DYNAMODB_TABLE")
+            .or_else(|_| std::env::var("PIPELINE_STATE_TABLE"))
             .unwrap_or_else(|_| "edgequake-kv".to_string());
 
         // Build InfrastructureConfig for MCP descriptor auto-generation

@@ -13,6 +13,7 @@ import { TriggerIngestionDialog } from '@/components/ingestion/TriggerIngestionD
 import { SchemaEditor } from '@/components/schema/SchemaEditor';
 import { McpEndpointsPanel } from '@/components/namespace/McpEndpointsPanel';
 import { ExplorePanel } from '@/components/explore/ExplorePanel';
+import { QueryPanel } from '@/components/query/QueryPanel';
 import { useNamespace } from '@/hooks/useNamespaceDetail';
 import { usePipelineConfig } from '@/hooks/usePipelineConfig';
 import { useNamespaceStatus } from '@/hooks/useNamespaceStatus';
@@ -91,6 +92,7 @@ export function NamespacePage() {
           <TabsTrigger value="endpoints">Endpoints</TabsTrigger>
           <TabsTrigger value="history">Run History</TabsTrigger>
           <TabsTrigger value="explore">Explore</TabsTrigger>
+          <TabsTrigger value="query">Query</TabsTrigger>
         </TabsList>
 
         <TabsContent value="status" className="mt-4">
@@ -127,6 +129,10 @@ export function NamespacePage() {
             slug={slug}
             onNavigateToStatus={() => setActiveTab('status')}
           />
+        </TabsContent>
+
+        <TabsContent value="query" className="mt-4">
+          <QueryPanel slug={slug} />
         </TabsContent>
       </Tabs>
     </div>

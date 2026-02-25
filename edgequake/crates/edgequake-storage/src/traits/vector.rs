@@ -81,6 +81,41 @@ pub trait VectorStorage: Send + Sync {
         filter_ids: Option<&[String]>,
     ) -> Result<Vec<VectorSearchResult>>;
 
+    /// Perform similarity search filtered by vector type metadata.
+    ///
+    /// When the index contains multiple vector types (chunk, entity, relationship),
+    /// this method filters results server-side for much better recall. Backends
+    /// that support native metadata filtering (e.g. S3 Vectors) should override
+    /// this. The default implementation falls back to `query()` + client-side
+    /// filtering, which may miss results if non-matching types dominate the top-K.
+    ///
+    /// # Arguments
+    ///
+    /// * `query_embedding` - The query vector
+    /// * `top_k` - Maximum number of results to return
+    /// * `type_filter` - Value of the `type` metadata field to filter on (e.g. "chunk")
+    /// * `filter_ids` - Optional list of IDs to restrict search to
+    async fn query_by_type(
+        &self,
+        query_embedding: &[f32],
+        top_k: usize,
+        type_filter: &str,
+        filter_ids: Option<&[String]>,
+    ) -> Result<Vec<VectorSearchResult>> {
+        // Default: query without filter, then filter client-side
+        let results = self.query(query_embedding, top_k, filter_ids).await?;
+        Ok(results
+            .into_iter()
+            .filter(|r| {
+                r.metadata
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .map(|t| t == type_filter)
+                    .unwrap_or(false)
+            })
+            .collect())
+    }
+
     /// Insert or update vectors with metadata.
     ///
     /// # Arguments

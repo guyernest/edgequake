@@ -349,6 +349,78 @@ impl VectorStorage for S3VectorsStorage {
         Ok(results)
     }
 
+    async fn query_by_type(
+        &self,
+        query_embedding: &[f32],
+        top_k: usize,
+        type_filter: &str,
+        filter_ids: Option<&[String]>,
+    ) -> edgequake_storage::error::Result<Vec<VectorSearchResult>> {
+        let request_top_k = if filter_ids.is_some() {
+            (top_k * 3).min(100) as i32
+        } else {
+            (top_k).min(100) as i32
+        };
+
+        // Build native metadata filter: {"type": "<type_filter>"}
+        let filter = {
+            let mut map = HashMap::new();
+            map.insert(
+                "type".to_string(),
+                Document::String(type_filter.to_string()),
+            );
+            Document::Object(map)
+        };
+
+        let resp = self
+            .client
+            .query_vectors()
+            .vector_bucket_name(&self.config.vector_bucket_name)
+            .index_name(&self.config.index_name)
+            .query_vector(VectorData::Float32(query_embedding.to_vec()))
+            .top_k(request_top_k)
+            .filter(filter)
+            .return_distance(true)
+            .return_metadata(true)
+            .send()
+            .await
+            .map_err(s3v_err)?;
+
+        let mut results: Vec<VectorSearchResult> = resp
+            .vectors()
+            .iter()
+            .filter_map(|v| {
+                let key = v.key().to_string();
+
+                if let Some(ids) = filter_ids {
+                    if !ids.iter().any(|id| id == &key) {
+                        return None;
+                    }
+                }
+
+                let score = v.distance().map(|d| 1.0 - d).unwrap_or(0.0);
+                let metadata = v
+                    .metadata()
+                    .map(Self::document_to_json)
+                    .unwrap_or(serde_json::Value::Null);
+
+                Some(VectorSearchResult {
+                    id: key,
+                    score,
+                    metadata,
+                })
+            })
+            .collect();
+
+        results.truncate(top_k);
+        debug!(
+            type_filter = type_filter,
+            results = results.len(),
+            "S3 Vectors query_by_type with native metadata filter"
+        );
+        Ok(results)
+    }
+
     async fn delete(&self, ids: &[String]) -> edgequake_storage::error::Result<()> {
         if ids.is_empty() {
             return Ok(());
