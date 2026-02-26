@@ -64,6 +64,7 @@ pub mod ingestion_types;
 pub mod lineage;
 pub mod merger;
 pub mod pipeline;
+pub mod preview;
 pub mod progress;
 pub mod prompts;
 pub mod sanitizer;

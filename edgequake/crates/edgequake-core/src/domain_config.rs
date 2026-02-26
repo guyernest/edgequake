@@ -336,6 +336,7 @@ mod tests {
             domain_hint: Some("legal".to_string()),
             proposed_at: 1700000000000,
             reviewed_at: Some(1700000100000),
+            sampling_metadata: None,
         }
     }
 
