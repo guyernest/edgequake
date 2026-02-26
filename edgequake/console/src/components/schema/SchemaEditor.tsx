@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { Check, X, Plus, Trash2, Pencil } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { Check, X, Plus, Trash2, Pencil, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,8 @@ import {
   useRejectSchema,
   useUpdateSchemaTypes,
 } from '@/hooks/useSchemaActions';
+import { usePreviewExtraction } from '@/hooks/usePreviewExtraction';
+import { PreviewConfirmModal } from './PreviewConfirmModal';
 
 interface EntityType {
   name: string;
@@ -211,6 +213,35 @@ export function SchemaEditor({ slug }: { slug: string }) {
   const [relations, setRelations] = useState<RelationType[] | null>(null);
   const [dirty, setDirty] = useState(false);
   const [editingApproved, setEditingApproved] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [_finalPreviewResult, setFinalPreviewResult] = useState<any>(null);
+
+  const {
+    fetchCostEstimate,
+    costEstimate,
+    isCostLoading,
+    costError,
+    triggerPreview,
+    triggerStatus,
+    isTriggerPending,
+    triggerError,
+    previewResult,
+    isPreviewRunning,
+    documentsCompleted,
+    documentsTotal,
+    cancelPolling,
+    resetPreview,
+  } = usePreviewExtraction(slug);
+
+  // When preview completes (or is cancelled with partial results), store the result
+  useEffect(() => {
+    const status = previewResult?.status;
+    if (status === 'completed' || status === 'cancelled') {
+      setFinalPreviewResult(previewResult);
+      setShowPreviewModal(false);
+    }
+  }, [previewResult?.status, previewResult]);
 
   // Parse and initialize local state from schema data
   const entityTypes: EntityType[] = parseJsonField(schema?.entity_types);
@@ -318,13 +349,27 @@ export function SchemaEditor({ slug }: { slug: string }) {
 
         <div className="flex gap-2">
           {isApproved && !editingApproved && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setEditingApproved(true)}
-            >
-              <Pencil className="mr-1 size-3.5" /> Edit Schema
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setShowPreviewModal(true);
+                  resetPreview();
+                  void fetchCostEstimate();
+                }}
+                disabled={isPreviewRunning}
+              >
+                <Eye className="mr-1 size-3.5" /> Preview Extraction
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEditingApproved(true)}
+              >
+                <Pencil className="mr-1 size-3.5" /> Edit Schema
+              </Button>
+            </>
           )}
           {editingApproved && (
             <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
@@ -468,6 +513,27 @@ export function SchemaEditor({ slug }: { slug: string }) {
           </table>
         </div>
       </div>
+
+      {/* Preview Extraction Modal */}
+      <PreviewConfirmModal
+        open={showPreviewModal}
+        onOpenChange={setShowPreviewModal}
+        costEstimate={costEstimate}
+        isLoading={isCostLoading}
+        onConfirm={() => void triggerPreview()}
+        isPreviewRunning={isPreviewRunning}
+        isTriggerPending={isTriggerPending}
+        documentsCompleted={documentsCompleted}
+        documentsTotal={documentsTotal}
+        previewStatus={previewResult?.status}
+        cliCommand={triggerStatus?.cliCommand}
+        onCancel={() => {
+          cancelPolling();
+          setShowPreviewModal(false);
+        }}
+        costError={costError}
+        triggerError={triggerError}
+      />
     </div>
   );
 }
