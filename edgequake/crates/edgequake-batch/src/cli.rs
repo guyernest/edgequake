@@ -201,11 +201,29 @@ pub enum Command {
     /// Analyze a dataset sample and propose entity/relation types for the namespace
     SuggestSchema {
         /// Sample percentage of documents to analyze (default: 10)
+        /// Deprecated: use --sample-budget instead. Kept for backward compatibility.
         #[arg(long, default_value = "10.0")]
         sample_percentage: f64,
 
         /// Optional domain hint to guide schema extraction (e.g. "legal", "healthcare", "finance")
+        /// Deprecated: use --domain-description instead. Kept for backward compatibility.
         #[arg(long)]
         domain_hint: Option<String>,
+
+        /// What domain is this data from? (e.g. "legal", "healthcare", "finance")
+        #[arg(long)]
+        domain_description: Option<String>,
+
+        /// Comma-separated entity types to guarantee in the output (e.g. "VEHICLE,WEAPON")
+        #[arg(long, value_delimiter = ',')]
+        expected_entity_types: Option<Vec<String>>,
+
+        /// Comma-separated relationship types to guarantee in the output (e.g. "funds,manages")
+        #[arg(long, value_delimiter = ',')]
+        expected_relationship_types: Option<Vec<String>>,
+
+        /// Total number of documents to sample (overrides sample-percentage, default: 24)
+        #[arg(long)]
+        sample_budget: Option<usize>,
     },
 }

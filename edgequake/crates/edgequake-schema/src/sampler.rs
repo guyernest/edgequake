@@ -142,7 +142,7 @@ fn extract_positional_content(content: &str, window_chars: usize) -> String {
                 if abs + 1 < content.len() {
                     let ch = content.as_bytes()[abs];
                     if (ch == b'.' || ch == b'!' || ch == b'?')
-                        && content.as_bytes().get(abs + 1).map_or(false, |c| c.is_ascii_whitespace())
+                        && content.as_bytes().get(abs + 1).is_some_and(|c| c.is_ascii_whitespace())
                     {
                         return abs + 1;
                     }
@@ -165,7 +165,7 @@ fn extract_positional_content(content: &str, window_chars: usize) -> String {
                 if abs + 1 < content.len() {
                     let ch = content.as_bytes()[abs];
                     if (ch == b'.' || ch == b'!' || ch == b'?')
-                        && content.as_bytes().get(abs + 1).map_or(false, |c| c.is_ascii_whitespace())
+                        && content.as_bytes().get(abs + 1).is_some_and(|c| c.is_ascii_whitespace())
                     {
                         best = abs + 2; // After the punctuation and space
                     }
@@ -234,24 +234,24 @@ fn select_diverse(docs: &[(usize, HashMap<String, f64>)], budget: usize) -> Vec<
     while selected.len() < budget {
         // Update min distances with respect to the most recently selected doc
         let last_selected = *selected.last().unwrap();
-        for i in 0..docs.len() {
+        for (i, dist_entry) in min_distances.iter_mut().enumerate() {
             if selected_set.contains(&i) {
-                min_distances[i] = -1.0; // Mark as selected
+                *dist_entry = -1.0; // Mark as selected
                 continue;
             }
             let sim = tfidf::cosine_similarity(&docs[i].1, &docs[last_selected].1);
             let dist = 1.0 - sim;
-            if dist < min_distances[i] {
-                min_distances[i] = dist;
+            if dist < *dist_entry {
+                *dist_entry = dist;
             }
         }
 
         // Pick the doc with maximum minimum distance
         let mut best_idx = 0;
         let mut best_dist = -1.0_f64;
-        for i in 0..docs.len() {
-            if !selected_set.contains(&i) && min_distances[i] > best_dist {
-                best_dist = min_distances[i];
+        for (i, &dist) in min_distances.iter().enumerate() {
+            if !selected_set.contains(&i) && dist > best_dist {
+                best_dist = dist;
                 best_idx = i;
             }
         }

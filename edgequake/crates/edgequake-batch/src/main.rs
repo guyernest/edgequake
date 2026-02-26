@@ -86,8 +86,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if let Command::SuggestSchema {
-        sample_percentage,
+        sample_percentage: _,
         ref domain_hint,
+        ref domain_description,
+        ref expected_entity_types,
+        ref expected_relationship_types,
+        ref sample_budget,
     } = cli.command
     {
         let api_key = cli.api_key.as_deref().ok_or_else(|| {
@@ -98,14 +102,22 @@ async fn main() -> anyhow::Result<()> {
             .registry_table
             .as_deref()
             .unwrap_or(&cli.state_table);
+
+        let input = edgequake_schema::SuggestSchemaInput {
+            domain_description: domain_description.clone(),
+            expected_entity_types: expected_entity_types.clone(),
+            expected_relationship_types: expected_relationship_types.clone(),
+            domain_hint: domain_hint.clone(),
+            sample_budget: *sample_budget,
+        };
+
         return handle_suggest_schema(
             &cli.data,
             api_key,
             suggest_model,
             &cli.namespace,
             ns_table,
-            sample_percentage,
-            domain_hint.as_deref(),
+            &input,
         )
         .await;
     }
@@ -1207,22 +1219,22 @@ async fn list_openai_batches(api_key: &str, limit: usize) -> anyhow::Result<()> 
 
 /// Handle the suggest-schema subcommand.
 ///
-/// Samples documents from the dataset, analyzes them with OpenAI to propose
-/// entity/relation types, and stores the proposal in DynamoDB.
+/// Samples documents from the dataset using stratified sampling, analyzes them
+/// with OpenAI to propose entity/relation types, and stores the proposal in DynamoDB.
 async fn handle_suggest_schema(
     data: &std::path::Path,
     api_key: &str,
     model: &str,
     namespace: &str,
     registry_table: &str,
-    sample_percentage: f64,
-    domain_hint: Option<&str>,
+    input: &edgequake_schema::SuggestSchemaInput,
 ) -> anyhow::Result<()> {
     info!(
         data = %data.display(),
         namespace = namespace,
-        sample_percentage = sample_percentage,
-        domain_hint = domain_hint,
+        domain_description = ?input.domain_description,
+        domain_hint = ?input.domain_hint,
+        sample_budget = ?input.sample_budget,
         "Starting schema suggestion"
     );
 
@@ -1235,8 +1247,7 @@ async fn handle_suggest_schema(
     // Run schema suggestion
     let proposal = edgequake_schema::suggest_schema(
         &location,
-        sample_percentage,
-        domain_hint,
+        input,
         &openai_config,
     )
     .await?;
