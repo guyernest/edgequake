@@ -4,9 +4,13 @@
 //!
 //! This crate implements the pre-ingestion schema suggestion workflow:
 //! 1. Sample documents from a dataset (local or S3)
-//! 2. Send samples to OpenAI for entity/relation type analysis
+//! 2. Send samples to OpenAI for entity/relation type analysis (two-pass)
 //! 3. Normalize and deduplicate proposed types
 //! 4. Return a `SchemaProposal` ready for partner review
+//!
+//! The two-pass analysis discovers entity types first, then relationship types
+//! with full entity context, producing more complete schemas. Auto-generated
+//! domain personas and few-shot examples further improve output quality.
 //!
 //! ## Usage
 //!
@@ -14,12 +18,8 @@
 //! use edgequake_schema::{suggest_schema, analyzer::OpenAiConfig};
 //!
 //! let config = OpenAiConfig::new("sk-...");
-//! let proposal = suggest_schema(
-//!     "data/epstein/0000.parquet",
-//!     10.0,
-//!     Some("legal"),
-//!     &config,
-//! ).await?;
+//! let input = SuggestSchemaInput::default();
+//! let proposal = suggest_schema("data/epstein/0000.parquet", &input, &config).await?;
 //!
 //! println!("Proposed {} entity types, {} relation types",
 //!     proposal.entity_types.len(),
@@ -44,8 +44,9 @@ pub use types::{
 /// Orchestrate the full schema suggestion workflow.
 ///
 /// 1. Sample documents from the dataset at `location` using stratified sampling
-/// 2. Analyze samples with OpenAI to propose entity/relation types
-/// 3. Normalize names, deduplicate, ensure baseline types, merge user-specified types
+/// 2. Optionally auto-generate a domain persona from document excerpts
+/// 3. Analyze samples with OpenAI using two-pass discovery (entities, then relationships)
+/// 4. Normalize names, deduplicate, ensure baseline types, merge user-specified types
 ///
 /// # Arguments
 ///
@@ -74,7 +75,7 @@ pub async fn suggest_schema(
     );
 
     // Step 1: Stratified sampling
-    let (dataset, sampling_metadata) =
+    let (dataset, mut sampling_metadata) =
         sampler::sample_documents_stratified(location, input).await?;
 
     if dataset.documents.is_empty() {
@@ -87,9 +88,14 @@ pub async fn suggest_schema(
         "Document sampling complete"
     );
 
-    // Step 2: Analyze with LLM
-    let raw_proposal =
-        analyzer::analyze_schema(&dataset.documents, domain_hint, openai_config).await?;
+    // Step 2: Two-pass LLM analysis (persona -> entities -> relationships)
+    let (raw_proposal, auto_persona) =
+        analyzer::analyze_schema_two_pass(&dataset.documents, input, openai_config).await?;
+
+    // Store auto-generated persona in sampling metadata for transparency
+    if auto_persona.is_some() {
+        sampling_metadata.auto_persona = auto_persona;
+    }
 
     // Step 3: Normalize
     let proposal = normalizer::normalize_proposal(
