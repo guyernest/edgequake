@@ -5,5 +5,6 @@
 //! reverse). This module re-exports them for convenience.
 
 pub use edgequake_core::schema::{
-    EntityTypeProposal, RelationTypeProposal, SchemaProposal, SchemaStatus,
+    BucketBreakdown, BucketInfo, EntityTypeProposal, RelationTypeProposal, SamplingMetadata,
+    SchemaProposal, SchemaStatus, SuggestSchemaInput,
 };

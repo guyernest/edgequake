@@ -6,7 +6,10 @@
 use std::collections::HashMap;
 
 use crate::analyzer::RawSchemaProposal;
-use crate::types::{EntityTypeProposal, RelationTypeProposal, SchemaProposal, SchemaStatus};
+use crate::types::{
+    EntityTypeProposal, RelationTypeProposal, SamplingMetadata, SchemaProposal, SchemaStatus,
+    SuggestSchemaInput,
+};
 
 /// Baseline entity types that are always included in every proposal.
 const BASELINE_ENTITY_TYPES: &[(&str, &str)] = &[
@@ -23,18 +26,56 @@ const BASELINE_ENTITY_TYPES: &[(&str, &str)] = &[
 /// 2. Normalizes relation type names to lower_snake_case
 /// 3. Deduplicates types by normalized name (keeps highest frequency)
 /// 4. Ensures baseline entity types (PERSON, ORGANIZATION, LOCATION, DATE) are present
-/// 5. Sets metadata fields (status, timestamps)
+/// 5. Merges user-specified entity/relationship types (guaranteed in output)
+/// 6. Sets metadata fields (status, timestamps, sampling metadata)
 pub fn normalize_proposal(
     raw: RawSchemaProposal,
     sample_size: usize,
     total_documents: usize,
     domain_hint: Option<String>,
+    sampling_metadata: Option<SamplingMetadata>,
+    suggest_input: Option<&SuggestSchemaInput>,
 ) -> SchemaProposal {
     // Normalize and deduplicate entity types
-    let entity_types = normalize_entity_types(raw.entity_types);
+    let mut entity_types = normalize_entity_types(raw.entity_types);
 
     // Normalize and deduplicate relation types
-    let relation_types = normalize_relation_types(raw.relation_types);
+    let mut relation_types = normalize_relation_types(raw.relation_types);
+
+    // Merge user-specified entity types (guaranteed in output)
+    if let Some(input) = suggest_input {
+        if let Some(ref expected) = input.expected_entity_types {
+            for user_type in expected {
+                let normalized = to_upper_snake_case(user_type);
+                if !normalized.is_empty()
+                    && !entity_types.iter().any(|e| e.name == normalized)
+                {
+                    entity_types.push(EntityTypeProposal {
+                        name: normalized,
+                        description: "User-specified entity type".to_string(),
+                        frequency: 0,
+                        is_baseline: false,
+                    });
+                }
+            }
+        }
+        if let Some(ref expected) = input.expected_relationship_types {
+            for user_type in expected {
+                let normalized = to_lower_snake_case(user_type);
+                if !normalized.is_empty()
+                    && !relation_types.iter().any(|r| r.name == normalized)
+                {
+                    relation_types.push(RelationTypeProposal {
+                        name: normalized,
+                        description: "User-specified relationship type".to_string(),
+                        source_type: "UNKNOWN".to_string(),
+                        target_type: "UNKNOWN".to_string(),
+                        frequency: 0,
+                    });
+                }
+            }
+        }
+    }
 
     SchemaProposal {
         status: SchemaStatus::Proposed,
@@ -45,6 +86,7 @@ pub fn normalize_proposal(
         domain_hint,
         proposed_at: chrono::Utc::now().timestamp_millis(),
         reviewed_at: None,
+        sampling_metadata,
     }
 }
 
@@ -268,7 +310,7 @@ mod tests {
             relation_types: vec![],
         };
 
-        let proposal = normalize_proposal(raw, 10, 100, None);
+        let proposal = normalize_proposal(raw, 10, 100, None, None, None);
 
         // Should have PERSON, ORGANIZATION, LOCATION, DATE + CUSTOM_TYPE
         assert_eq!(proposal.entity_types.len(), 5);
@@ -297,7 +339,7 @@ mod tests {
             relation_types: vec![],
         };
 
-        let proposal = normalize_proposal(raw, 20, 200, None);
+        let proposal = normalize_proposal(raw, 20, 200, None, None, None);
 
         let person = proposal.entity_types.iter().find(|e| e.name == "PERSON").unwrap();
         assert!(person.is_baseline);
@@ -325,7 +367,7 @@ mod tests {
             relation_types: vec![],
         };
 
-        let proposal = normalize_proposal(raw, 20, 200, None);
+        let proposal = normalize_proposal(raw, 20, 200, None, None, None);
 
         let persons: Vec<_> = proposal.entity_types.iter().filter(|e| e.name == "PERSON").collect();
         assert_eq!(persons.len(), 1);
@@ -354,7 +396,7 @@ mod tests {
             ],
         };
 
-        let proposal = normalize_proposal(raw, 20, 200, None);
+        let proposal = normalize_proposal(raw, 20, 200, None, None, None);
 
         let employs: Vec<_> = proposal.relation_types.iter().filter(|r| r.name == "employs").collect();
         assert_eq!(employs.len(), 1);
@@ -368,7 +410,7 @@ mod tests {
             relation_types: vec![],
         };
 
-        let proposal = normalize_proposal(raw, 15, 150, Some("legal".to_string()));
+        let proposal = normalize_proposal(raw, 15, 150, Some("legal".to_string()), None, None);
 
         assert_eq!(proposal.status, SchemaStatus::Proposed);
         assert_eq!(proposal.sample_size, 15);
@@ -396,7 +438,7 @@ mod tests {
             relation_types: vec![],
         };
 
-        let proposal = normalize_proposal(raw, 10, 100, None);
+        let proposal = normalize_proposal(raw, 10, 100, None, None, None);
 
         // Baseline types should come first in canonical order
         assert_eq!(proposal.entity_types[0].name, "PERSON");
@@ -405,5 +447,100 @@ mod tests {
         assert_eq!(proposal.entity_types[3].name, "DATE");
         // Then domain types
         assert_eq!(proposal.entity_types[4].name, "CUSTOM_A");
+    }
+
+    #[test]
+    fn test_user_specified_entity_types_guaranteed() {
+        let raw = RawSchemaProposal {
+            entity_types: vec![RawEntityType {
+                name: "PERSON".to_string(),
+                description: "People".to_string(),
+                frequency: 10,
+            }],
+            relation_types: vec![],
+        };
+
+        let input = SuggestSchemaInput {
+            expected_entity_types: Some(vec![
+                "VEHICLE".to_string(),
+                "PERSON".to_string(), // Already present, should not duplicate
+            ]),
+            ..Default::default()
+        };
+
+        let proposal = normalize_proposal(raw, 10, 100, None, None, Some(&input));
+
+        // VEHICLE should be added, PERSON should not be duplicated
+        assert!(proposal.entity_types.iter().any(|e| e.name == "VEHICLE"));
+        let persons: Vec<_> = proposal
+            .entity_types
+            .iter()
+            .filter(|e| e.name == "PERSON")
+            .collect();
+        assert_eq!(persons.len(), 1);
+    }
+
+    #[test]
+    fn test_user_specified_relationship_types_guaranteed() {
+        let raw = RawSchemaProposal {
+            entity_types: vec![],
+            relation_types: vec![],
+        };
+
+        let input = SuggestSchemaInput {
+            expected_relationship_types: Some(vec!["funds".to_string(), "manages".to_string()]),
+            ..Default::default()
+        };
+
+        let proposal = normalize_proposal(raw, 10, 100, None, None, Some(&input));
+
+        assert!(proposal.relation_types.iter().any(|r| r.name == "funds"));
+        assert!(proposal.relation_types.iter().any(|r| r.name == "manages"));
+
+        let funds = proposal
+            .relation_types
+            .iter()
+            .find(|r| r.name == "funds")
+            .unwrap();
+        assert_eq!(funds.source_type, "UNKNOWN");
+        assert_eq!(funds.target_type, "UNKNOWN");
+        assert_eq!(funds.frequency, 0);
+    }
+
+    #[test]
+    fn test_sampling_metadata_stored() {
+        let raw = RawSchemaProposal {
+            entity_types: vec![],
+            relation_types: vec![],
+        };
+
+        let meta = SamplingMetadata {
+            total_documents: 100,
+            sampled_count: 24,
+            buckets: crate::types::BucketBreakdown {
+                short: crate::types::BucketInfo {
+                    available: 30,
+                    sampled: 8,
+                },
+                medium: crate::types::BucketInfo {
+                    available: 50,
+                    sampled: 8,
+                },
+                long: crate::types::BucketInfo {
+                    available: 20,
+                    sampled: 8,
+                },
+            },
+            topic_clusters_found: 5,
+            auto_persona: None,
+        };
+
+        let proposal = normalize_proposal(raw, 24, 100, None, Some(meta), None);
+
+        assert!(proposal.sampling_metadata.is_some());
+        let m = proposal.sampling_metadata.unwrap();
+        assert_eq!(m.total_documents, 100);
+        assert_eq!(m.sampled_count, 24);
+        assert_eq!(m.topic_clusters_found, 5);
     }
 }

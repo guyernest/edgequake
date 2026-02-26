@@ -31,23 +31,26 @@ pub mod analyzer;
 pub mod normalizer;
 pub mod prompt;
 pub mod sampler;
+pub mod tfidf;
 pub mod types;
 
 // Re-export key types for convenience
 pub use analyzer::OpenAiConfig;
-pub use types::{EntityTypeProposal, RelationTypeProposal, SchemaProposal, SchemaStatus};
+pub use types::{
+    BucketBreakdown, BucketInfo, EntityTypeProposal, RelationTypeProposal, SamplingMetadata,
+    SchemaProposal, SchemaStatus, SuggestSchemaInput,
+};
 
 /// Orchestrate the full schema suggestion workflow.
 ///
-/// 1. Sample documents from the dataset at `location`
+/// 1. Sample documents from the dataset at `location` using stratified sampling
 /// 2. Analyze samples with OpenAI to propose entity/relation types
-/// 3. Normalize names, deduplicate, and ensure baseline types
+/// 3. Normalize names, deduplicate, ensure baseline types, merge user-specified types
 ///
 /// # Arguments
 ///
 /// * `location` - Local filesystem path or `s3://bucket/prefix` URI
-/// * `sample_percentage` - Percentage of documents to sample (e.g. 10.0 = 10%)
-/// * `domain_hint` - Optional domain hint to guide the LLM (e.g. "legal", "healthcare")
+/// * `input` - Sampling and schema suggestion configuration
 /// * `openai_config` - OpenAI API configuration
 ///
 /// # Returns
@@ -55,19 +58,24 @@ pub use types::{EntityTypeProposal, RelationTypeProposal, SchemaProposal, Schema
 /// A `SchemaProposal` with status `Proposed`, ready for partner review.
 pub async fn suggest_schema(
     location: &str,
-    sample_percentage: f64,
-    domain_hint: Option<&str>,
+    input: &SuggestSchemaInput,
     openai_config: &OpenAiConfig,
 ) -> anyhow::Result<SchemaProposal> {
+    let domain_hint = input
+        .domain_description
+        .as_deref()
+        .or(input.domain_hint.as_deref());
+
     tracing::info!(
         location = location,
-        sample_percentage = sample_percentage,
         domain_hint = domain_hint,
+        sample_budget = input.sample_budget,
         "Starting schema suggestion"
     );
 
-    // Step 1: Sample documents
-    let dataset = sampler::sample_documents(location, sample_percentage).await?;
+    // Step 1: Stratified sampling
+    let (dataset, sampling_metadata) =
+        sampler::sample_documents_stratified(location, input).await?;
 
     if dataset.documents.is_empty() {
         anyhow::bail!("No documents found at location: {}", location);
@@ -89,6 +97,8 @@ pub async fn suggest_schema(
         dataset.documents.len(),
         dataset.total_count,
         domain_hint.map(|s| s.to_string()),
+        Some(sampling_metadata),
+        Some(input),
     );
 
     tracing::info!(
