@@ -13,6 +13,7 @@ import {
 } from '@/hooks/useSchemaActions';
 import { usePreviewExtraction } from '@/hooks/usePreviewExtraction';
 import { PreviewConfirmModal } from './PreviewConfirmModal';
+import { PreviewResultsPanel, type PreviewResult } from './PreviewResultsPanel';
 
 interface EntityType {
   name: string;
@@ -214,8 +215,8 @@ export function SchemaEditor({ slug }: { slug: string }) {
   const [dirty, setDirty] = useState(false);
   const [editingApproved, setEditingApproved] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [_finalPreviewResult, setFinalPreviewResult] = useState<any>(null);
+  const [showResultsPanel, setShowResultsPanel] = useState(false);
+  const [finalPreviewResult, setFinalPreviewResult] = useState<PreviewResult | null>(null);
 
   const {
     fetchCostEstimate,
@@ -234,12 +235,13 @@ export function SchemaEditor({ slug }: { slug: string }) {
     resetPreview,
   } = usePreviewExtraction(slug);
 
-  // When preview completes (or is cancelled with partial results), store the result
+  // When preview completes (or is cancelled with partial results), store the result and open panel
   useEffect(() => {
     const status = previewResult?.status;
     if (status === 'completed' || status === 'cancelled') {
-      setFinalPreviewResult(previewResult);
+      setFinalPreviewResult(previewResult as PreviewResult);
       setShowPreviewModal(false);
+      setShowResultsPanel(true);
     }
   }, [previewResult?.status, previewResult]);
 
@@ -534,6 +536,26 @@ export function SchemaEditor({ slug }: { slug: string }) {
         costError={costError}
         triggerError={triggerError}
       />
+
+      {/* Preview Results Slide-over Panel */}
+      {finalPreviewResult && (
+        <PreviewResultsPanel
+          open={showResultsPanel}
+          onOpenChange={(open) => {
+            setShowResultsPanel(open);
+            if (!open) setFinalPreviewResult(null);
+          }}
+          result={finalPreviewResult}
+          onRunAgain={() => {
+            setShowResultsPanel(false);
+            setFinalPreviewResult(null);
+            resetPreview();
+            setShowPreviewModal(true);
+            void fetchCostEstimate();
+          }}
+          isRunning={isPreviewRunning}
+        />
+      )}
     </div>
   );
 }
