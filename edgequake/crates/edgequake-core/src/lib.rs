@@ -39,6 +39,8 @@ pub mod bm25_text;
 pub mod cache;
 pub mod config;
 pub mod conversation_service;
+pub mod domain_config;
+pub mod domain_prompts;
 pub mod error;
 pub mod keyword_extractor;
 pub mod mcp_descriptor;

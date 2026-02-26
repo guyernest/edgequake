@@ -490,36 +490,6 @@ fn build_domain_config_from_config_schema(
     }
 }
 
-/// Extension to `DomainConfig` for internal resolver use.
-impl DomainConfig {
-    /// Create a minimal placeholder DomainConfig for error paths.
-    ///
-    /// This is used when we collect errors but need to continue resolving
-    /// other fields before reporting all errors at once. It should never
-    /// be used by the pipeline -- the resolver will bail before returning it.
-    fn placeholder() -> Self {
-        let mut entity_types = IndexMap::new();
-        entity_types.insert("PLACEHOLDER".to_string(), "Placeholder".to_string());
-        DomainConfig {
-            domain: DomainMetadata {
-                name: "placeholder".to_string(),
-                description: "Placeholder (should not be used)".to_string(),
-                language: "English".to_string(),
-            },
-            entity_types,
-            aliases: IndexMap::new(),
-            prompts: PromptConfig {
-                role_description: "Placeholder".to_string(),
-                canonicalization_examples: vec![],
-                extra_instructions: vec![],
-                user_instructions: vec![],
-            },
-            relationship_keywords: IndexMap::new(),
-            examples: vec![],
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
