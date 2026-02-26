@@ -132,6 +132,7 @@ async fn main() -> anyhow::Result<()> {
             | Command::Store
             | Command::Resume
             | Command::DryRun
+            | Command::Preview
     );
 
     // Initialize AWS config early (needed by resolver and state manager)
@@ -249,6 +250,28 @@ async fn main() -> anyhow::Result<()> {
             resolved_config
                 .as_ref()
                 .expect("DryRun requires resolved config"),
+        )
+        .await;
+    }
+
+    // Handle Preview command early: after config resolution (needs schema) but before
+    // state manager / job ID (doesn't need full pipeline infra).
+    if let Command::Preview = cli.command {
+        let resolved = resolved_config
+            .as_ref()
+            .expect("Preview requires resolved config");
+        let preview_api_key = cli.api_key.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("OPENAI_API_KEY is required for preview extraction")
+        })?;
+
+        return handle_preview_command(
+            &cli.namespace,
+            &cli.data,
+            preview_api_key,
+            &resolved.extraction_model,
+            &domain_config,
+            &registry_table,
+            &aws_config,
         )
         .await;
     }
@@ -564,6 +587,10 @@ async fn main() -> anyhow::Result<()> {
             }
             Command::Descriptor => {
                 // Handled earlier before DynamoDB state initialization
+                unreachable!()
+            }
+            Command::Preview => {
+                // Handled earlier after config resolution
                 unreachable!()
             }
         }
@@ -1282,6 +1309,328 @@ async fn handle_suggest_schema(
         "{}",
         serde_json::to_string_pretty(&proposal)?
     );
+
+    Ok(())
+}
+
+/// Handle the preview extraction subcommand.
+///
+/// Reads the PREVIEW_REQUEST from DynamoDB, samples documents using stratified
+/// sampling, runs extraction preview, and writes results back to DynamoDB.
+/// Writes progress updates during processing (status="processing", documents_completed=N).
+async fn handle_preview_command(
+    namespace: &str,
+    data: &std::path::Path,
+    api_key: &str,
+    extraction_model: &str,
+    domain_config: &std::sync::Arc<domain_config::DomainConfig>,
+    registry_table: &str,
+    aws_config: &aws_config::SdkConfig,
+) -> anyhow::Result<()> {
+    info!(namespace = namespace, "Starting preview extraction");
+
+    let dynamo_client = aws_sdk_dynamodb::Client::new(aws_config);
+    let pk = format!("NS#{}", namespace);
+
+    // Read the PREVIEW_REQUEST record to verify it exists and is "requested"
+    let request_result = dynamo_client
+        .get_item()
+        .table_name(registry_table)
+        .key("PK", aws_sdk_dynamodb::types::AttributeValue::S(pk.clone()))
+        .key(
+            "SK",
+            aws_sdk_dynamodb::types::AttributeValue::S("PREVIEW_REQUEST".to_string()),
+        )
+        .send()
+        .await?;
+
+    if let Some(item) = request_result.item() {
+        if let Some(data_attr) = item.get("data") {
+            if let Ok(data_str) = data_attr.as_s() {
+                let request: serde_json::Value = serde_json::from_str(data_str)?;
+                let status = request["status"].as_str().unwrap_or("");
+                if status != "requested" {
+                    anyhow::bail!(
+                        "Preview request status is '{}', expected 'requested'. Nothing to do.",
+                        status
+                    );
+                }
+            }
+        }
+    } else {
+        anyhow::bail!("No PREVIEW_REQUEST found for namespace '{}'. Trigger a preview from the console first.", namespace);
+    }
+
+    // Helper to write progress updates to DynamoDB
+    let write_preview_request = |client: aws_sdk_dynamodb::Client,
+                                  table: String,
+                                  pk_val: String,
+                                  status: String,
+                                  docs_completed: usize,
+                                  docs_total: usize| {
+        async move {
+            let data = serde_json::json!({
+                "namespace": namespace,
+                "status": status,
+                "documents_completed": docs_completed,
+                "documents_total": docs_total,
+            });
+            client
+                .put_item()
+                .table_name(&table)
+                .item("PK", aws_sdk_dynamodb::types::AttributeValue::S(pk_val))
+                .item(
+                    "SK",
+                    aws_sdk_dynamodb::types::AttributeValue::S("PREVIEW_REQUEST".to_string()),
+                )
+                .item(
+                    "data",
+                    aws_sdk_dynamodb::types::AttributeValue::S(data.to_string()),
+                )
+                .send()
+                .await
+        }
+    };
+
+    // Update status to "processing"
+    write_preview_request(
+        dynamo_client.clone(),
+        registry_table.to_string(),
+        pk.clone(),
+        "processing".to_string(),
+        0,
+        3,
+    )
+    .await
+    .ok();
+
+    // Sample documents using stratified sampling
+    let location = data.to_string_lossy().to_string();
+    let input = edgequake_schema::SuggestSchemaInput {
+        sample_budget: Some(3),
+        ..Default::default()
+    };
+
+    let (dataset, _sampler_stats) =
+        edgequake_schema::sampler::sample_documents_stratified(&location, &input).await?;
+
+    let documents: Vec<(String, String, String)> = dataset
+        .documents
+        .into_iter()
+        .take(3)
+        .map(|d| (d.id, d.source, d.content))
+        .collect();
+
+    if documents.is_empty() {
+        anyhow::bail!("No documents found in data path: {}", location);
+    }
+
+    info!(
+        documents = documents.len(),
+        "Sampled documents for preview"
+    );
+
+    // Build entity types list from domain config
+    let entity_types: Vec<String> = domain_config.entity_types.keys().cloned().collect();
+    let language = &domain_config.domain.language;
+
+    // Create LLM provider for synchronous (standard rate) extraction
+    let llm_provider = std::sync::Arc::new(
+        edgequake_llm::providers::openai::OpenAIProvider::new(api_key)
+            .with_model(extraction_model),
+    );
+
+    let chunk_config = edgequake_pipeline::chunker::ChunkerConfig::default();
+
+    // Set up progress callback that writes to DynamoDB
+    let progress_client = dynamo_client.clone();
+    let progress_table = registry_table.to_string();
+    let progress_pk = pk.clone();
+    let progress_namespace = namespace.to_string();
+    let on_document_complete: Option<Box<dyn Fn(usize, usize) + Send>> =
+        Some(Box::new(move |completed, total| {
+            let client = progress_client.clone();
+            let table = progress_table.clone();
+            let pk_val = progress_pk.clone();
+            let ns = progress_namespace.clone();
+            // Spawn a task to write progress (fire-and-forget from sync callback)
+            tokio::spawn(async move {
+                let data = serde_json::json!({
+                    "namespace": ns,
+                    "status": "processing",
+                    "documents_completed": completed,
+                    "documents_total": total,
+                });
+                let _ = client
+                    .put_item()
+                    .table_name(&table)
+                    .item("PK", aws_sdk_dynamodb::types::AttributeValue::S(pk_val))
+                    .item(
+                        "SK",
+                        aws_sdk_dynamodb::types::AttributeValue::S("PREVIEW_REQUEST".to_string()),
+                    )
+                    .item(
+                        "data",
+                        aws_sdk_dynamodb::types::AttributeValue::S(data.to_string()),
+                    )
+                    .send()
+                    .await;
+            });
+        }));
+
+    // Run preview extraction
+    let result = match edgequake_pipeline::preview::preview_extraction(
+        documents.clone(),
+        &entity_types,
+        language,
+        llm_provider,
+        &chunk_config,
+        on_document_complete,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            // Write failed status
+            write_preview_request(
+                dynamo_client.clone(),
+                registry_table.to_string(),
+                pk.clone(),
+                "failed".to_string(),
+                0,
+                3,
+            )
+            .await
+            .ok();
+            return Err(anyhow::anyhow!("Preview extraction failed: {}", e));
+        }
+    };
+
+    // Build the PREVIEW_RESULT document for DynamoDB
+    // Shape matches the PreviewResult GraphQL type
+    let entity_type_counts: Vec<serde_json::Value> = result
+        .entity_type_counts
+        .iter()
+        .map(|(type_name, count)| {
+            serde_json::json!({ "typeName": type_name, "count": count })
+        })
+        .collect();
+
+    let relation_type_counts: Vec<serde_json::Value> = result
+        .relation_type_counts
+        .iter()
+        .map(|(type_name, count)| {
+            serde_json::json!({ "typeName": type_name, "count": count })
+        })
+        .collect();
+
+    let coverage_rows: Vec<serde_json::Value> = result
+        .coverage_matrix
+        .iter()
+        .map(|row| {
+            serde_json::json!({
+                "entityType": row.entity_type,
+                "counts": row.counts,
+            })
+        })
+        .collect();
+
+    let document_columns: Vec<serde_json::Value> = result
+        .documents
+        .iter()
+        .map(|doc| {
+            let truncated = if doc.document_name.len() > 20 {
+                format!("{}...", &doc.document_name[..17])
+            } else {
+                doc.document_name.clone()
+            };
+            serde_json::json!({
+                "id": doc.document_id,
+                "name": doc.document_name,
+                "truncatedName": truncated,
+            })
+        })
+        .collect();
+
+    let preview_result_data = serde_json::json!({
+        "status": "completed",
+        "entityTypeCounts": entity_type_counts,
+        "relationTypeCounts": relation_type_counts,
+        "coverageRows": coverage_rows,
+        "documentColumns": document_columns,
+        "totalChunks": result.total_chunks,
+        "totalEntities": result.total_entities,
+        "totalRelationships": result.total_relationships,
+        "cost": {
+            "inputTokens": result.cost.input_tokens,
+            "outputTokens": result.cost.output_tokens,
+            "totalCostUsd": result.cost.total_cost_usd,
+            "model": result.cost.model,
+        },
+        "processingTimeMs": result.processing_time_ms,
+        "documentsCompleted": result.documents.len(),
+        "documentsTotal": result.documents.len(),
+    });
+
+    // Write PREVIEW_RESULT to DynamoDB
+    dynamo_client
+        .put_item()
+        .table_name(registry_table)
+        .item("PK", aws_sdk_dynamodb::types::AttributeValue::S(pk.clone()))
+        .item(
+            "SK",
+            aws_sdk_dynamodb::types::AttributeValue::S("PREVIEW_RESULT".to_string()),
+        )
+        .item(
+            "data",
+            aws_sdk_dynamodb::types::AttributeValue::S(preview_result_data.to_string()),
+        )
+        .send()
+        .await?;
+
+    // Update PREVIEW_REQUEST to "completed"
+    write_preview_request(
+        dynamo_client,
+        registry_table.to_string(),
+        pk,
+        "completed".to_string(),
+        result.documents.len(),
+        result.documents.len(),
+    )
+    .await
+    .ok();
+
+    // Print summary
+    println!("\n=== Preview Extraction Complete ===");
+    println!("Documents:     {}", result.documents.len());
+    println!("Total chunks:  {}", result.total_chunks);
+    println!("Entities:      {}", result.total_entities);
+    println!("Relationships: {}", result.total_relationships);
+    println!(
+        "Cost:          ${:.4} ({} input, {} output tokens)",
+        result.cost.total_cost_usd, result.cost.input_tokens, result.cost.output_tokens
+    );
+    println!(
+        "Time:          {:.1}s",
+        result.processing_time_ms as f64 / 1000.0
+    );
+    println!();
+
+    println!("Entity type counts:");
+    for (type_name, count) in &result.entity_type_counts {
+        let indicator = if *count == 0 { " (zero!)" } else { "" };
+        println!("  {:30} {}{}", type_name, count, indicator);
+    }
+    println!();
+
+    println!("Relationship type counts:");
+    for (type_name, count) in &result.relation_type_counts {
+        let indicator = if *count == 0 { " (zero!)" } else { "" };
+        println!("  {:30} {}{}", type_name, count, indicator);
+    }
+    println!();
+
+    println!("Results written to DynamoDB (PREVIEW_RESULT). The console will show them automatically.");
 
     Ok(())
 }

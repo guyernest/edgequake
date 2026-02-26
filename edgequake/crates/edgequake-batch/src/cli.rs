@@ -198,6 +198,9 @@ pub enum Command {
     /// Preview pipeline: show document count, chunk estimate, schema summary, and estimated cost (no API calls)
     DryRun,
 
+    /// Run extraction preview on a small sample (3 documents, ~20 chunks) using approved schema
+    Preview,
+
     /// Analyze a dataset sample and propose entity/relation types for the namespace
     SuggestSchema {
         /// Sample percentage of documents to analyze (default: 10)

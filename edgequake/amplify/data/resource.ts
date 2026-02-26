@@ -96,6 +96,74 @@ const schema = a.schema({
     reviewed_at: a.float(),
   }),
 
+  // --- Preview Extraction Types ---
+
+  PreviewDocumentInfo: a.customType({
+    id: a.string().required(),
+    name: a.string().required(),
+    chunkCount: a.integer().required(),
+  }),
+
+  PreviewCostEstimate: a.customType({
+    documentCount: a.integer().required(),
+    chunkCount: a.integer().required(),
+    estimatedInputTokens: a.integer().required(),
+    estimatedOutputTokens: a.integer().required(),
+    estimatedCostUsd: a.float().required(),
+    model: a.string().required(),
+    documents: a.ref('PreviewDocumentInfo').required().array().required(),
+  }),
+
+  PreviewStatus: a.customType({
+    status: a.string().required(),
+    documentsCompleted: a.integer(),
+    documentsTotal: a.integer(),
+    cliCommand: a.string(),
+  }),
+
+  PreviewEntityCount: a.customType({
+    typeName: a.string().required(),
+    count: a.integer().required(),
+  }),
+
+  PreviewRelationCount: a.customType({
+    typeName: a.string().required(),
+    count: a.integer().required(),
+  }),
+
+  PreviewCoverageRow: a.customType({
+    entityType: a.string().required(),
+    counts: a.integer().required().array().required(),
+  }),
+
+  PreviewDocumentColumn: a.customType({
+    id: a.string().required(),
+    name: a.string().required(),
+    truncatedName: a.string().required(),
+  }),
+
+  PreviewCost: a.customType({
+    inputTokens: a.integer().required(),
+    outputTokens: a.integer().required(),
+    totalCostUsd: a.float().required(),
+    model: a.string().required(),
+  }),
+
+  PreviewResult: a.customType({
+    status: a.string().required(),
+    entityTypeCounts: a.ref('PreviewEntityCount').required().array(),
+    relationTypeCounts: a.ref('PreviewRelationCount').required().array(),
+    coverageRows: a.ref('PreviewCoverageRow').required().array(),
+    documentColumns: a.ref('PreviewDocumentColumn').required().array(),
+    totalChunks: a.integer(),
+    totalEntities: a.integer(),
+    totalRelationships: a.integer(),
+    cost: a.ref('PreviewCost'),
+    processingTimeMs: a.float(),
+    documentsCompleted: a.integer(),
+    documentsTotal: a.integer(),
+  }),
+
   // --- Pipeline Status Types ---
 
   NamespaceStatus: a.customType({
@@ -248,6 +316,56 @@ const schema = a.schema({
       a.handler.custom({
         entry: './resolvers/trigger-ingestion-write.js',
         dataSource: 'NamespaceTableDataSource',
+      }),
+    ]),
+
+  // --- Preview Extraction Operations ---
+
+  estimatePreviewCost: a
+    .query()
+    .arguments({ namespace: a.string().required() })
+    .returns(a.ref('PreviewCostEstimate').required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler([
+      a.handler.custom({
+        entry: './resolvers/estimate-preview-cost.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/estimate-preview-cost-response.js',
+        dataSource: 'NONE',
+      }),
+    ]),
+
+  triggerPreviewExtraction: a
+    .mutation()
+    .arguments({ namespace: a.string().required() })
+    .returns(a.ref('PreviewStatus').required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler([
+      a.handler.custom({
+        entry: './resolvers/trigger-preview.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/trigger-preview-response.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+    ]),
+
+  getPreviewResult: a
+    .query()
+    .arguments({ namespace: a.string().required() })
+    .returns(a.ref('PreviewResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler([
+      a.handler.custom({
+        entry: './resolvers/get-preview-result.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/get-preview-result-response.js',
+        dataSource: 'NONE',
       }),
     ]),
 

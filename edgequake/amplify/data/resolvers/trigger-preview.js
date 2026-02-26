@@ -1,0 +1,67 @@
+/**
+ * AppSync JS pipeline resolver (step 1 of 2): triggerPreviewExtraction - Read/Validate
+ *
+ * Reads the PREVIEW_REQUEST record for a namespace to check if a preview
+ * is already running (concurrent guard). If active, returns a ConflictError.
+ * If idle/completed/failed/null, prepares a preview request for step 2 to write.
+ *
+ * Follows the same pattern as trigger-ingestion.js.
+ */
+import { util } from '@aws-appsync/utils';
+
+var ACTIVE_STATUSES = ['requested', 'processing'];
+
+export function request(ctx) {
+  return {
+    operation: 'GetItem',
+    key: util.dynamodb.toMapValues({
+      PK: 'NS#' + ctx.args.namespace,
+      SK: 'PREVIEW_REQUEST',
+    }),
+  };
+}
+
+export function response(ctx) {
+  if (ctx.error) {
+    return util.error(ctx.error.message, ctx.error.type);
+  }
+
+  // Check for active preview
+  if (ctx.result) {
+    var existing = JSON.parse(ctx.result.data);
+    for (var i = 0; i < ACTIVE_STATUSES.length; i++) {
+      if (existing.status === ACTIVE_STATUSES[i]) {
+        return util.error(
+          'A preview extraction is already ' + existing.status + '. Wait for completion before starting a new one.',
+          'ConflictError'
+        );
+      }
+    }
+  }
+
+  var slug = ctx.args.namespace;
+
+  // Prepare preview request
+  var previewRequest = {
+    namespace: slug,
+    requested_at: Math.floor(util.time.nowEpochSeconds()),
+    status: 'requested',
+    documents_completed: 0,
+    documents_total: 3,
+  };
+
+  // Generate CLI command for operators
+  var cliCommand = 'edgequake-batch --namespace ' + slug + ' preview';
+
+  // Pass to write step via stash
+  ctx.stash.previewRequest = JSON.stringify(previewRequest);
+  ctx.stash.slug = slug;
+  ctx.stash.cliCommand = cliCommand;
+
+  return {
+    status: 'requested',
+    documentsCompleted: 0,
+    documentsTotal: 3,
+    cliCommand: cliCommand,
+  };
+}
