@@ -19,6 +19,45 @@ const BASELINE_ENTITY_TYPES: &[(&str, &str)] = &[
     ("DATE", "Dates, time periods, timestamps"),
 ];
 
+/// Catch-all relationship types that provide no useful information.
+/// These are filtered out as defense-in-depth (the prompt also tells the LLM
+/// not to produce them, but LLMs don't always listen).
+const RELATIONSHIP_BLOCKLIST: &[&str] = &[
+    "related_to",
+    "associated_with",
+    "has_connection",
+    "connected_to",
+    "linked_to",
+    "involves",
+    "pertains_to",
+    "concerns",
+];
+
+/// Filter out low-quality relationship types.
+///
+/// Removes:
+/// 1. Relationships whose normalized name matches the blocklist (catch-all types)
+/// 2. Relationships whose `source_type` or `target_type` doesn't match any
+///    known entity type (orphan filter)
+fn filter_relation_types(
+    relations: Vec<RelationTypeProposal>,
+    known_entity_names: &[String],
+) -> Vec<RelationTypeProposal> {
+    relations
+        .into_iter()
+        .filter(|r| {
+            // Blocklist filter
+            if RELATIONSHIP_BLOCKLIST.contains(&r.name.as_str()) {
+                return false;
+            }
+            // Orphan filter: source and target must be known entities
+            let source_known = known_entity_names.iter().any(|e| e == &r.source_type);
+            let target_known = known_entity_names.iter().any(|e| e == &r.target_type);
+            source_known && target_known
+        })
+        .collect()
+}
+
 /// Normalize a raw LLM schema proposal into a finalized SchemaProposal.
 ///
 /// This function:
@@ -41,6 +80,11 @@ pub fn normalize_proposal(
 
     // Normalize and deduplicate relation types
     let mut relation_types = normalize_relation_types(raw.relation_types);
+
+    // Quality filter: remove blocklisted catch-all types and orphan references.
+    // This runs BEFORE user-specified type merge so user types are never filtered.
+    let known_entity_names: Vec<String> = entity_types.iter().map(|e| e.name.clone()).collect();
+    relation_types = filter_relation_types(relation_types, &known_entity_names);
 
     // Merge user-specified entity types (guaranteed in output)
     if let Some(input) = suggest_input {
@@ -542,5 +586,124 @@ mod tests {
         assert_eq!(m.total_documents, 100);
         assert_eq!(m.sampled_count, 24);
         assert_eq!(m.topic_clusters_found, 5);
+    }
+
+    #[test]
+    fn test_blocklist_filtering() {
+        let raw = RawSchemaProposal {
+            entity_types: vec![
+                RawEntityType {
+                    name: "PERSON".to_string(),
+                    description: "People".to_string(),
+                    frequency: 10,
+                },
+                RawEntityType {
+                    name: "ORGANIZATION".to_string(),
+                    description: "Companies".to_string(),
+                    frequency: 8,
+                },
+            ],
+            relation_types: vec![
+                RawRelationType {
+                    name: "related_to".to_string(),
+                    description: "Generic relation".to_string(),
+                    source_type: "PERSON".to_string(),
+                    target_type: "ORGANIZATION".to_string(),
+                    frequency: 50,
+                },
+                RawRelationType {
+                    name: "associated_with".to_string(),
+                    description: "Another generic".to_string(),
+                    source_type: "PERSON".to_string(),
+                    target_type: "PERSON".to_string(),
+                    frequency: 30,
+                },
+                RawRelationType {
+                    name: "employs".to_string(),
+                    description: "Employment".to_string(),
+                    source_type: "ORGANIZATION".to_string(),
+                    target_type: "PERSON".to_string(),
+                    frequency: 20,
+                },
+            ],
+        };
+
+        let proposal = normalize_proposal(raw, 10, 100, None, None, None);
+
+        // Blocklisted types should be removed
+        assert!(!proposal.relation_types.iter().any(|r| r.name == "related_to"));
+        assert!(!proposal.relation_types.iter().any(|r| r.name == "associated_with"));
+        // Good type should remain
+        assert!(proposal.relation_types.iter().any(|r| r.name == "employs"));
+    }
+
+    #[test]
+    fn test_orphan_filtering() {
+        let raw = RawSchemaProposal {
+            entity_types: vec![
+                RawEntityType {
+                    name: "PERSON".to_string(),
+                    description: "People".to_string(),
+                    frequency: 10,
+                },
+            ],
+            relation_types: vec![
+                RawRelationType {
+                    name: "works_at".to_string(),
+                    description: "Employment".to_string(),
+                    source_type: "PERSON".to_string(),
+                    target_type: "NONEXISTENT_TYPE".to_string(),
+                    frequency: 5,
+                },
+                RawRelationType {
+                    name: "knows".to_string(),
+                    description: "Knows someone".to_string(),
+                    source_type: "PERSON".to_string(),
+                    target_type: "PERSON".to_string(),
+                    frequency: 3,
+                },
+            ],
+        };
+
+        let proposal = normalize_proposal(raw, 10, 100, None, None, None);
+
+        // Orphan relationship (target doesn't match any entity) should be removed
+        assert!(!proposal.relation_types.iter().any(|r| r.name == "works_at"));
+        // Valid relationship should remain
+        assert!(proposal.relation_types.iter().any(|r| r.name == "knows"));
+    }
+
+    #[test]
+    fn test_user_specified_types_bypass_filter() {
+        let raw = RawSchemaProposal {
+            entity_types: vec![
+                RawEntityType {
+                    name: "PERSON".to_string(),
+                    description: "People".to_string(),
+                    frequency: 10,
+                },
+            ],
+            relation_types: vec![
+                // A blocklisted type from the LLM — should be filtered
+                RawRelationType {
+                    name: "related_to".to_string(),
+                    description: "Generic".to_string(),
+                    source_type: "PERSON".to_string(),
+                    target_type: "PERSON".to_string(),
+                    frequency: 50,
+                },
+            ],
+        };
+
+        // User specifies "related_to" explicitly — it should survive
+        let input = SuggestSchemaInput {
+            expected_relationship_types: Some(vec!["related_to".to_string()]),
+            ..Default::default()
+        };
+
+        let proposal = normalize_proposal(raw, 10, 100, None, None, Some(&input));
+
+        // User-specified type is added back even though the LLM version was filtered
+        assert!(proposal.relation_types.iter().any(|r| r.name == "related_to"));
     }
 }

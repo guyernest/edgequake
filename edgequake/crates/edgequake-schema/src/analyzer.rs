@@ -117,6 +117,15 @@ pub struct RawRelationOnlyProposal {
     pub relation_types: Vec<RawRelationType>,
 }
 
+/// Response from the consolidation/review pass (Pass 3).
+///
+/// Contains cleaned and merged entity and relationship types.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsolidationResult {
+    pub entity_types: Vec<RawEntityType>,
+    pub relation_types: Vec<RawRelationType>,
+}
+
 // ===========================================================================
 // Legacy single-pass analysis (backward compatible)
 // ===========================================================================
@@ -388,14 +397,83 @@ pub async fn analyze_schema_two_pass(
     );
 
     // -----------------------------------------------------------------------
-    // Step 4: Merge into unified proposal
+    // Step 4: Pass 3 — Consolidation / review
     // -----------------------------------------------------------------------
-    let proposal = RawSchemaProposal {
-        entity_types: entity_result.entity_types,
-        relation_types: rel_result.relation_types,
+    info!("Pass 3: Consolidating and reviewing schema types");
+
+    let consolidated = consolidate_schema(
+        &entity_result.entity_types,
+        &rel_result.relation_types,
+        documents,
+        &persona,
+        openai_config,
+    )
+    .await;
+
+    let proposal = match consolidated {
+        Ok(result) => {
+            info!(
+                entity_types = result.entity_types.len(),
+                relation_types = result.relation_types.len(),
+                "Pass 3 complete: consolidated schema"
+            );
+            RawSchemaProposal {
+                entity_types: result.entity_types,
+                relation_types: result.relation_types,
+            }
+        }
+        Err(e) => {
+            warn!(
+                error = %e,
+                "Pass 3 consolidation failed, using unconsolidated Pass 1+2 results"
+            );
+            RawSchemaProposal {
+                entity_types: entity_result.entity_types,
+                relation_types: rel_result.relation_types,
+            }
+        }
     };
 
     Ok((proposal, auto_persona))
+}
+
+// ===========================================================================
+// Pass 3: Consolidation
+// ===========================================================================
+
+/// Run the consolidation/review pass (Pass 3).
+///
+/// Sends the discovered entity and relationship types plus short document
+/// excerpts to the LLM for cleanup: merging overly-specific types, removing
+/// non-relationships, removing catch-all types, and suggesting missing types.
+///
+/// This is a cheap call (~2-3K input tokens). Errors are expected to be
+/// handled gracefully by the caller (fallback to unconsolidated results).
+async fn consolidate_schema(
+    entity_types: &[RawEntityType],
+    relation_types: &[RawRelationType],
+    documents: &[SampledDocument],
+    persona: &str,
+    openai_config: &OpenAiConfig,
+) -> anyhow::Result<ConsolidationResult> {
+    let user_prompt =
+        prompt::build_consolidation_prompt(entity_types, relation_types, documents, persona);
+    let json_schema = prompt::build_consolidation_json_schema();
+
+    let system_message = format!(
+        "{}. Review and consolidate the proposed schema types. \
+         Respond ONLY with valid JSON matching the required schema.",
+        persona
+    );
+
+    call_openai_generic::<ConsolidationResult>(
+        &system_message,
+        &user_prompt,
+        json_schema,
+        openai_config,
+        0.1, // Low temperature for deterministic cleanup
+    )
+    .await
 }
 
 // ===========================================================================

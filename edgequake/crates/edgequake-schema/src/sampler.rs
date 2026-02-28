@@ -44,7 +44,7 @@ const LONG_THRESHOLD: usize = 5_000;
 const POSITIONAL_WINDOW_CHARS: usize = 2_000;
 
 /// Default sampling budget.
-const DEFAULT_BUDGET: usize = 24;
+const DEFAULT_BUDGET: usize = 80;
 
 /// Size bucket for document length stratification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,7 +281,7 @@ pub async fn sample_documents_stratified(
     let all_documents = if location.starts_with("s3://") {
         read_documents_from_s3(location).await?
     } else {
-        read_documents_from_local(location)?
+        read_documents_from_local(location, input.delimiter.as_deref())?
     };
 
     let total_count = all_documents.len();
@@ -404,10 +404,13 @@ pub async fn sample_documents_stratified(
     }
 
     // Build sampled documents, applying positional extraction for long docs
+    // (unless skip_positional_extraction is set, e.g. for preview where the
+    // chunker + cap already limits processing)
+    let skip_positional = input.skip_positional_extraction;
     let mut sampled_docs = Vec::with_capacity(sampled_indices.len());
     for &idx in &sampled_indices {
         let doc = &all_documents[idx];
-        let content = if assign_bucket(doc.content.len()) == SizeBucket::Long {
+        let content = if !skip_positional && assign_bucket(doc.content.len()) == SizeBucket::Long {
             extract_positional_content(&doc.content, POSITIONAL_WINDOW_CHARS)
         } else {
             doc.content.clone()
@@ -466,7 +469,7 @@ pub async fn sample_documents(
     let all_documents = if location.starts_with("s3://") {
         read_documents_from_s3(location).await?
     } else {
-        read_documents_from_local(location)?
+        read_documents_from_local(location, None)?
     };
 
     let total_count = all_documents.len();
@@ -507,6 +510,105 @@ pub async fn sample_documents(
 /// everything after it. Otherwise returns the input unchanged.
 /// This is a minimal inline implementation to avoid a circular dependency
 /// on the edgequake-batch crate.
+/// Split a document's content by a delimiter line into multiple `SampledDocument`s.
+///
+/// The delimiter is matched as an exact trimmed line. Each non-empty segment
+/// between delimiters becomes a separate document with id `filename#N`.
+fn split_by_delimiter(content: &str, delimiter: &str, filename: &str) -> Vec<SampledDocument> {
+    let mut segments: Vec<String> = Vec::new();
+    let mut current = String::new();
+
+    for line in content.lines() {
+        if line.trim() == delimiter {
+            let trimmed = current.trim().to_string();
+            if !trimmed.is_empty() {
+                segments.push(trimmed);
+            }
+            current.clear();
+        } else {
+            if !current.is_empty() {
+                current.push('\n');
+            }
+            current.push_str(line);
+        }
+    }
+
+    // Don't forget the last segment
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() {
+        segments.push(trimmed);
+    }
+
+    // If only one segment, return with original filename
+    if segments.len() <= 1 {
+        let content_text = segments.into_iter().next().unwrap_or_default();
+        if content_text.is_empty() {
+            return Vec::new();
+        }
+        return vec![SampledDocument {
+            id: filename.to_string(),
+            content: content_text,
+            source: filename.to_string(),
+        }];
+    }
+
+    segments
+        .into_iter()
+        .enumerate()
+        .map(|(i, text)| SampledDocument {
+            id: format!("{}#{}", filename, i),
+            content: text,
+            source: filename.to_string(),
+        })
+        .collect()
+}
+
+/// Auto-detect common delimiter patterns in file content.
+///
+/// Scans looking for lines that are entirely composed of repeated `*`, `-`,
+/// `=`, or `_` characters (at least 3). Starts with first 10KB; if no
+/// pattern found with 2+ occurrences, rescans up to 500KB.
+/// Returns the pattern if it appears 2+ times.
+fn auto_detect_delimiter(content: &str) -> Option<String> {
+    use std::collections::HashMap;
+
+    // Try progressively larger scan windows
+    let limits = [10 * 1024, 500 * 1024, content.len()];
+    for &limit in &limits {
+        let scan_limit = content.len().min(limit);
+        let result = detect_delimiter_in_slice(&content[..scan_limit]);
+        if result.is_some() {
+            return result;
+        }
+    }
+    None
+}
+
+fn detect_delimiter_in_slice(scan_slice: &str) -> Option<String> {
+    use std::collections::HashMap;
+    let mut counts: HashMap<String, usize> = HashMap::new();
+
+    for line in scan_slice.lines() {
+        let trimmed = line.trim();
+        if trimmed.len() < 3 {
+            continue;
+        }
+        let first_char = trimmed.chars().next().unwrap();
+        if matches!(first_char, '*' | '-' | '=' | '_')
+            && trimmed.chars().all(|c| c == first_char)
+        {
+            *counts.entry(trimmed.to_string()).or_insert(0) += 1;
+        }
+    }
+
+    // Return the pattern that appears most often (if 2+)
+    counts
+        .into_iter()
+        .filter(|(_, count)| *count >= 2)
+        .max_by_key(|(_, count)| *count)
+        .map(|(pattern, _)| pattern)
+}
+
 fn strip_yaml_front_matter(input: &str) -> &str {
     let normalized = input.trim_start();
     if !normalized.starts_with("---") {
@@ -530,7 +632,7 @@ fn strip_yaml_front_matter(input: &str) -> &str {
 ///
 /// Handles both a single text/markdown file and a directory containing such files.
 /// Uses `walkdir` for directory traversal, skips hidden files.
-fn read_documents_from_text_files(location: &str) -> anyhow::Result<Vec<SampledDocument>> {
+fn read_documents_from_text_files(location: &str, delimiter: Option<&str>) -> anyhow::Result<Vec<SampledDocument>> {
     let path = Path::new(location);
     let mut documents = Vec::new();
 
@@ -600,7 +702,25 @@ fn read_documents_from_text_files(location: &str) -> anyhow::Result<Vec<SampledD
                     _ => raw_content,
                 };
 
-                if !content.trim().is_empty() {
+                if content.trim().is_empty() {
+                    continue;
+                }
+
+                // Split by delimiter (explicit or auto-detected)
+                let effective_delimiter = delimiter.map(|d| d.to_string()).or_else(|| {
+                    auto_detect_delimiter(&content)
+                });
+
+                if let Some(delim) = effective_delimiter {
+                    let segments = split_by_delimiter(&content, &delim, &relative);
+                    info!(
+                        file = %relative,
+                        delimiter = %delim,
+                        segments = segments.len(),
+                        "Split file into documents by delimiter"
+                    );
+                    documents.extend(segments);
+                } else {
                     documents.push(SampledDocument {
                         id: relative.clone(),
                         content,
@@ -630,7 +750,7 @@ fn read_documents_from_text_files(location: &str) -> anyhow::Result<Vec<SampledD
 ///
 /// Handles both single files and directories. For directories, prefers parquet
 /// files if any exist (backward compatibility); falls back to text/markdown.
-fn read_documents_from_local(location: &str) -> anyhow::Result<Vec<SampledDocument>> {
+fn read_documents_from_local(location: &str, delimiter: Option<&str>) -> anyhow::Result<Vec<SampledDocument>> {
     let path = Path::new(location);
 
     if path.is_file() {
@@ -648,7 +768,7 @@ fn read_documents_from_local(location: &str) -> anyhow::Result<Vec<SampledDocume
                 return Ok(documents);
             }
             Some("txt") | Some("md") | Some("markdown") => {
-                return read_documents_from_text_files(location);
+                return read_documents_from_text_files(location, delimiter);
             }
             Some(ext) => {
                 anyhow::bail!("Unsupported file type for schema sampling: .{}", ext);
@@ -685,7 +805,7 @@ fn read_documents_from_local(location: &str) -> anyhow::Result<Vec<SampledDocume
         }
 
         // No parquet files -- try text/markdown
-        return read_documents_from_text_files(location);
+        return read_documents_from_text_files(location, delimiter);
     }
 
     anyhow::bail!(
