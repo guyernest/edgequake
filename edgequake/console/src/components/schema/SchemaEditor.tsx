@@ -245,6 +245,7 @@ export function SchemaEditor({ slug }: { slug: string }) {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showResultsPanel, setShowResultsPanel] = useState(false);
   const [finalPreviewResult, setFinalPreviewResult] = useState<PreviewResult | null>(null);
+  const [schemaSavedAfterPreview, setSchemaSavedAfterPreview] = useState(false);
 
   const {
     fetchCostEstimate,
@@ -270,6 +271,7 @@ export function SchemaEditor({ slug }: { slug: string }) {
       setFinalPreviewResult(previewResult as PreviewResult);
       setShowPreviewModal(false);
       setShowResultsPanel(true);
+      setSchemaSavedAfterPreview(false); // Fresh results, not stale
     }
   }, [previewResult?.status, previewResult]);
 
@@ -325,6 +327,10 @@ export function SchemaEditor({ slug }: { slug: string }) {
           setRelations(null);
           setDirty(false);
           setEditingApproved(false);
+          // Mark existing preview results as stale after schema change
+          if (finalPreviewResult) {
+            setSchemaSavedAfterPreview(true);
+          }
         },
       }
     );
@@ -386,7 +392,7 @@ export function SchemaEditor({ slug }: { slug: string }) {
         </div>
 
         <div className="flex gap-2">
-          {isApproved && !editingApproved && (
+          {(isApproved && !editingApproved) || isProposed ? (
             <>
               <Button
                 size="sm"
@@ -396,19 +402,22 @@ export function SchemaEditor({ slug }: { slug: string }) {
                   resetPreview();
                   void fetchCostEstimate();
                 }}
-                disabled={isPreviewRunning}
+                disabled={isPreviewRunning || dirty}
+                title={dirty ? 'Save changes before previewing' : undefined}
               >
                 <Eye className="mr-1 size-3.5" /> Preview Extraction
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setEditingApproved(true)}
-              >
-                <Pencil className="mr-1 size-3.5" /> Edit Schema
-              </Button>
+              {isApproved && !editingApproved && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditingApproved(true)}
+                >
+                  <Pencil className="mr-1 size-3.5" /> Edit Schema
+                </Button>
+              )}
             </>
-          )}
+          ) : null}
           {editingApproved && (
             <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
               Cancel
@@ -449,6 +458,12 @@ export function SchemaEditor({ slug }: { slug: string }) {
       {(approveMutation.isError || rejectMutation.isError || updateMutation.isError) && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {approveMutation.error?.message ?? rejectMutation.error?.message ?? updateMutation.error?.message}
+        </div>
+      )}
+
+      {isProposed && finalPreviewResult && !dirty && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+          Schema edits saved. Status reverted to <strong>proposed</strong>. Preview with your updated schema, then approve when satisfied.
         </div>
       )}
 
@@ -581,17 +596,23 @@ export function SchemaEditor({ slug }: { slug: string }) {
           open={showResultsPanel}
           onOpenChange={(open) => {
             setShowResultsPanel(open);
-            if (!open) setFinalPreviewResult(null);
+            if (!open) {
+              setFinalPreviewResult(null);
+              setSchemaSavedAfterPreview(false);
+            }
           }}
           result={finalPreviewResult}
           onRunAgain={() => {
             setShowResultsPanel(false);
             setFinalPreviewResult(null);
+            setSchemaSavedAfterPreview(false);
             resetPreview();
             setShowPreviewModal(true);
             void fetchCostEstimate();
           }}
           isRunning={isPreviewRunning}
+          isStale={schemaSavedAfterPreview}
+          isDirty={dirty}
         />
       )}
     </div>
