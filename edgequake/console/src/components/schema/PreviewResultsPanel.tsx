@@ -53,6 +53,8 @@ interface PreviewResultsPanelProps {
   result: PreviewResult;
   onRunAgain: () => void;
   isRunning: boolean;
+  isStale?: boolean;   // true when schema was edited+saved after this preview ran
+  isDirty?: boolean;   // true when schema has unsaved local changes
 }
 
 function formatDuration(ms: number): string {
@@ -66,6 +68,8 @@ export function PreviewResultsPanel({
   result,
   onRunAgain,
   isRunning,
+  isStale = false,
+  isDirty = false,
 }: PreviewResultsPanelProps) {
   const entityCounts = result.entityTypeCounts ?? [];
   const relationCounts = result.relationTypeCounts ?? [];
@@ -107,6 +111,14 @@ export function PreviewResultsPanel({
             </p>
           </div>
 
+          {/* Stale results banner */}
+          {isStale && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              <p className="font-medium">Results may be outdated</p>
+              <p className="mt-0.5 text-xs">Schema has been modified since this preview. Re-run preview to see updated results.</p>
+            </div>
+          )}
+
           {/* Cost line */}
           {result.cost && (
             <p className="mb-4 text-xs text-muted-foreground">
@@ -143,15 +155,16 @@ export function PreviewResultsPanel({
           <div className="mt-6 border-t pt-4">
             <Button
               onClick={onRunAgain}
-              disabled={isRunning}
+              disabled={isRunning || isDirty}
               variant="outline"
               className="w-full"
+              title={isDirty ? 'Save schema changes before re-running preview' : undefined}
             >
               <RefreshCw className={`mr-2 size-4 ${isRunning ? 'animate-spin' : ''}`} />
               {isRunning ? 'Running...' : 'Run Again'}
             </Button>
             <p className="mt-1.5 text-center text-xs text-muted-foreground">
-              Re-samples fresh documents
+              {isDirty ? 'Save changes first' : 'Re-samples fresh documents'}
             </p>
           </div>
 
