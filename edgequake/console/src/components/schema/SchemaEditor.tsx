@@ -43,11 +43,13 @@ function EntityRow({
   isEditable,
   onRemove,
   onUpdate,
+  previewCount,
 }: {
   entity: EntityType;
   isEditable: boolean;
   onRemove: () => void;
   onUpdate: (updated: EntityType) => void;
+  previewCount?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(entity.name);
@@ -92,7 +94,19 @@ function EntityRow({
 
   return (
     <tr className="border-b hover:bg-muted/50">
-      <td className="p-2 text-sm font-medium">{entity.name}</td>
+      <td className="p-2 text-sm font-medium">
+        <span className="flex items-center gap-1.5">
+          {entity.name}
+          {previewCount === 0 && (
+            <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-400">
+              0 hits
+            </span>
+          )}
+          {previewCount != null && previewCount > 0 && (
+            <span className="text-[10px] text-muted-foreground">{previewCount}</span>
+          )}
+        </span>
+      </td>
       <td className="p-2 text-sm text-muted-foreground">{entity.description}</td>
       <td className="p-2 text-center">
         {entity.is_baseline ? <Badge variant="secondary">baseline</Badge> : null}
@@ -118,11 +132,13 @@ function RelationRow({
   isEditable,
   onRemove,
   onUpdate,
+  previewCount,
 }: {
   relation: RelationType;
   isEditable: boolean;
   onRemove: () => void;
   onUpdate: (updated: RelationType) => void;
+  previewCount?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(relation.name);
@@ -181,7 +197,19 @@ function RelationRow({
 
   return (
     <tr className="border-b hover:bg-muted/50">
-      <td className="p-2 text-sm font-medium">{relation.name}</td>
+      <td className="p-2 text-sm font-medium">
+        <span className="flex items-center gap-1.5">
+          {relation.name}
+          {previewCount === 0 && (
+            <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-400">
+              0 hits
+            </span>
+          )}
+          {previewCount != null && previewCount > 0 && (
+            <span className="text-[10px] text-muted-foreground">{previewCount}</span>
+          )}
+        </span>
+      </td>
       <td className="p-2 text-sm text-muted-foreground">{relation.description}</td>
       <td className="p-2 text-sm">
         <span className="font-mono text-xs">{relation.source_type}</span>
@@ -251,6 +279,14 @@ export function SchemaEditor({ slug }: { slug: string }) {
 
   const currentEntities = entities ?? entityTypes;
   const currentRelations = relations ?? relationTypes;
+
+  // Build preview count lookups from latest preview result
+  const entityCountMap = new Map<string, number>();
+  const relationCountMap = new Map<string, number>();
+  if (finalPreviewResult) {
+    (finalPreviewResult.entityTypeCounts ?? []).forEach((c) => entityCountMap.set(c.typeName, c.count));
+    (finalPreviewResult.relationTypeCounts ?? []).forEach((c) => relationCountMap.set(c.typeName, c.count));
+  }
 
   const isProposed = schema?.status === 'proposed';
   const isApproved = schema?.status === 'approved';
@@ -458,6 +494,7 @@ export function SchemaEditor({ slug }: { slug: string }) {
                   isEditable={isEditable}
                   onRemove={() => updateEntities(currentEntities.filter((_, j) => j !== i))}
                   onUpdate={(updated) => updateEntities(currentEntities.map((e, j) => j === i ? updated : e))}
+                  previewCount={finalPreviewResult ? entityCountMap.get(entity.name) ?? 0 : undefined}
                 />
               ))}
               {currentEntities.length === 0 && (
@@ -502,6 +539,7 @@ export function SchemaEditor({ slug }: { slug: string }) {
                   isEditable={isEditable}
                   onRemove={() => updateRelations(currentRelations.filter((_, j) => j !== i))}
                   onUpdate={(updated) => updateRelations(currentRelations.map((r, j) => j === i ? updated : r))}
+                  previewCount={finalPreviewResult ? relationCountMap.get(relation.name) ?? 0 : undefined}
                 />
               ))}
               {currentRelations.length === 0 && (
