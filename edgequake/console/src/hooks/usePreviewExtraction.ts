@@ -91,5 +91,8 @@ export function usePreviewExtraction(namespace: string) {
       triggerMutation.reset();
       setIsPolling(false);
     },
+
+    // Fetch existing completed result (one-shot, no polling)
+    fetchExistingResult: previewResult.refetch,
   };
 }

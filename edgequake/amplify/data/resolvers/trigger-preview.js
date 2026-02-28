@@ -5,17 +5,22 @@
  * is already running (concurrent guard). If active, returns a ConflictError.
  * If idle/completed/failed/null, prepares a preview request for step 2 to write.
  *
+ * Only blocks on 'processing' (not 'requested') because the CLI writes a
+ * PREVIEW_RESULT record on completion but never updates PREVIEW_REQUEST.
+ * A stale 'requested' status means the previous run either completed or was
+ * never picked up -- both are safe to overwrite.
+ *
  * Follows the same pattern as trigger-ingestion.js.
  */
 import { util } from '@aws-appsync/utils';
 
-var ACTIVE_STATUSES = ['requested', 'processing'];
+const ACTIVE_STATUSES = ['processing'];
 
 export function request(ctx) {
   return {
     operation: 'GetItem',
     key: util.dynamodb.toMapValues({
-      PK: 'NS#' + ctx.args.namespace,
+      PK: `NS#${ctx.args.namespace}`,
       SK: 'PREVIEW_REQUEST',
     }),
   };
@@ -28,21 +33,19 @@ export function response(ctx) {
 
   // Check for active preview
   if (ctx.result) {
-    var existing = JSON.parse(ctx.result.data);
-    for (var i = 0; i < ACTIVE_STATUSES.length; i++) {
-      if (existing.status === ACTIVE_STATUSES[i]) {
-        return util.error(
-          'A preview extraction is already ' + existing.status + '. Wait for completion before starting a new one.',
-          'ConflictError'
-        );
-      }
+    const existing = JSON.parse(ctx.result.data);
+    if (ACTIVE_STATUSES.includes(existing.status)) {
+      return util.error(
+        `A preview extraction is already ${existing.status}. Wait for completion before starting a new one.`,
+        'ConflictError'
+      );
     }
   }
 
-  var slug = ctx.args.namespace;
+  const slug = ctx.args.namespace;
 
   // Prepare preview request
-  var previewRequest = {
+  const previewRequest = {
     namespace: slug,
     requested_at: Math.floor(util.time.nowEpochSeconds()),
     status: 'requested',
@@ -51,7 +54,7 @@ export function response(ctx) {
   };
 
   // Generate CLI command for operators
-  var cliCommand = 'edgequake-batch --namespace ' + slug + ' preview';
+  const cliCommand = `edgequake-batch --namespace ${slug} --data <path-to-documents> preview`;
 
   // Pass to write step via stash
   ctx.stash.previewRequest = JSON.stringify(previewRequest);
