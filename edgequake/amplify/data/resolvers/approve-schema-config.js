@@ -1,9 +1,9 @@
 /**
  * AppSync JS pipeline resolver (step 3 of 4): approveSchema - Read CONFIG
  *
- * Reads the PipelineConfig CONFIG record and merges entity/relation type names
- * from the approved schema using additive Set union (accumulates across
- * multiple approvals).
+ * Reads the PipelineConfig CONFIG record and replaces entity/relation type names
+ * from the approved schema using replace semantics (schema types are the
+ * authoritative set).
  *
  * Uses ctx.stash.slug (set by step 1) and ctx.stash.updatedData (the approved schema).
  */
@@ -34,22 +34,9 @@ export function response(ctx) {
   const newEntityTypes = (schema.entity_types || []).map((e) => e.name);
   const newRelationTypes = (schema.relation_types || []).map((r) => r.name);
 
-  // Additive merge — deduplicate via indexOf (Set not available in APPSYNC_JS)
-  const mergedEntities = config.entity_types || [];
-  newEntityTypes.forEach((name) => {
-    if (mergedEntities.indexOf(name) === -1) {
-      mergedEntities.push(name);
-    }
-  });
-  config.entity_types = mergedEntities;
-
-  const mergedRelations = config.relation_types || [];
-  newRelationTypes.forEach((name) => {
-    if (mergedRelations.indexOf(name) === -1) {
-      mergedRelations.push(name);
-    }
-  });
-  config.relation_types = mergedRelations;
+  // Replace: the approved schema IS the authoritative type set
+  config.entity_types = newEntityTypes;
+  config.relation_types = newRelationTypes;
 
   config.updated_at = Math.floor(util.time.nowEpochSeconds());
 
