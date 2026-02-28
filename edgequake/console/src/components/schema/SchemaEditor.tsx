@@ -262,6 +262,7 @@ export function SchemaEditor({ slug }: { slug: string }) {
     documentsTotal,
     cancelPolling,
     resetPreview,
+    fetchExistingResult,
   } = usePreviewExtraction(slug);
 
   // When preview completes (or is cancelled with partial results), store the result and open panel
@@ -274,6 +275,24 @@ export function SchemaEditor({ slug }: { slug: string }) {
       setSchemaSavedAfterPreview(false); // Fresh results, not stale
     }
   }, [previewResult?.status, previewResult]);
+
+  // Check for existing completed preview on mount / schema load
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!schema) return;
+    if (finalPreviewResult) return;
+
+    fetchExistingResult()
+      .then((result) => {
+        const data = result.data;
+        if (data && (data.status === 'completed' || data.status === 'cancelled')) {
+          setFinalPreviewResult(data as PreviewResult);
+        }
+      })
+      .catch(() => {
+        // No existing results is fine -- silent ignore
+      });
+  }, [schema?.status]); // intentionally omit finalPreviewResult to avoid re-fetch loop
 
   // Parse and initialize local state from schema data
   const entityTypes: EntityType[] = parseJsonField(schema?.entity_types);
@@ -394,6 +413,17 @@ export function SchemaEditor({ slug }: { slug: string }) {
         <div className="flex gap-2">
           {(isApproved && !editingApproved) || isProposed ? (
             <>
+              {/* View existing results (when available and panel not open) */}
+              {finalPreviewResult && !showResultsPanel && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowResultsPanel(true)}
+                >
+                  <Eye className="mr-1 size-3.5" /> View Results
+                </Button>
+              )}
+              {/* Run new preview extraction */}
               <Button
                 size="sm"
                 variant="outline"
@@ -405,7 +435,7 @@ export function SchemaEditor({ slug }: { slug: string }) {
                 disabled={isPreviewRunning || dirty}
                 title={dirty ? 'Save changes before previewing' : undefined}
               >
-                <Eye className="mr-1 size-3.5" /> Preview Extraction
+                <Eye className="mr-1 size-3.5" /> {finalPreviewResult ? 'Re-run Preview' : 'Preview Extraction'}
               </Button>
               {isApproved && !editingApproved && (
                 <Button
@@ -596,10 +626,8 @@ export function SchemaEditor({ slug }: { slug: string }) {
           open={showResultsPanel}
           onOpenChange={(open) => {
             setShowResultsPanel(open);
-            if (!open) {
-              setFinalPreviewResult(null);
-              setSchemaSavedAfterPreview(false);
-            }
+            // Do NOT nullify finalPreviewResult on close --
+            // results are retained so partner can re-open without re-running
           }}
           result={finalPreviewResult}
           onRunAgain={() => {
