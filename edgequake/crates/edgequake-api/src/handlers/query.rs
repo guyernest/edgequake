@@ -64,8 +64,8 @@ use edgequake_query::{QueryMode, QueryRequest as EngineQueryRequest};
 
 // Re-export DTOs for backward compatibility
 pub use crate::handlers::query_types::{
-    AnswerQualityDto, ConversationMessage, QueryRequest, QueryResponse, QueryStats,
-    SourceReference, StreamQueryRequest,
+    AnswerQualityDto, ConversationMessage, ExtractedKeywordsDto, QueryRequest, QueryResponse,
+    QueryStats, SourceReference, StreamQueryRequest,
 };
 
 /// Execute a RAG query with multi-mode retrieval.
@@ -425,6 +425,16 @@ pub async fn execute_query(
         fact_density: q.fact_density,
     });
 
+    let extracted_keywords = if request.extract_keywords {
+        result.extracted_keywords.map(|kw| ExtractedKeywordsDto {
+            high_level: kw.high_level,
+            low_level: kw.low_level,
+            query_intent: kw.query_intent.to_string(),
+        })
+    } else {
+        None
+    };
+
     let response = QueryResponse {
         answer: result.answer,
         mode: result.mode.to_string(),
@@ -447,6 +457,7 @@ pub async fn execute_query(
         conversation_id,
         reranked,
         quality,
+        extracted_keywords,
     };
 
     Ok(Json(response))
@@ -754,6 +765,7 @@ mod tests {
             llm_provider: None,
             llm_model: None,
             retrieval_mode: None,
+            extract_keywords: false,
         };
 
         let result = execute_query(State(state), tenant_ctx, Json(request)).await;
@@ -779,6 +791,7 @@ mod tests {
             llm_provider: None,
             llm_model: None,
             retrieval_mode: None,
+            extract_keywords: false,
         };
 
         let result = execute_query(State(state), tenant_ctx, Json(request)).await;
@@ -846,6 +859,7 @@ mod tests {
             llm_provider: None,
             llm_model: None,
             retrieval_mode: None,
+            extract_keywords: false,
         };
 
         let result = execute_query(State(state), tenant_ctx, Json(request)).await;
@@ -871,6 +885,7 @@ mod tests {
             llm_provider: None,
             llm_model: None,
             retrieval_mode: None,
+            extract_keywords: false,
         };
 
         let result = execute_query(State(state), tenant_ctx, Json(request)).await;

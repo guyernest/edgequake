@@ -24,7 +24,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::middleware::TenantContext;
 use crate::state::AppState;
 use crate::validation::validate_query;
-use super::query_types::{AnswerQualityDto, QueryRequest, QueryResponse, QueryStats, SourceReference, StreamQueryRequest};
+use super::query_types::{AnswerQualityDto, ExtractedKeywordsDto, QueryRequest, QueryResponse, QueryStats, SourceReference, StreamQueryRequest};
 
 /// Helper: resolve namespace-scoped storage and build a SOTAQueryEngine.
 async fn resolve_ns_engine(
@@ -274,6 +274,16 @@ pub async fn ns_execute_query(
         fact_density: q.fact_density,
     });
 
+    let extracted_keywords = if request.extract_keywords {
+        result.extracted_keywords.map(|kw| ExtractedKeywordsDto {
+            high_level: kw.high_level,
+            low_level: kw.low_level,
+            query_intent: kw.query_intent.to_string(),
+        })
+    } else {
+        None
+    };
+
     let response = QueryResponse {
         answer: result.answer,
         mode: result.mode.to_string(),
@@ -295,6 +305,7 @@ pub async fn ns_execute_query(
         conversation_id,
         reranked,
         quality,
+        extracted_keywords,
     };
 
     Ok(Json(response))

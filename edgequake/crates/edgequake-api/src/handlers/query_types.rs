@@ -90,6 +90,12 @@ pub struct QueryRequest {
     /// @implements RET-03: Hybrid retrieval mode configurable per query
     #[serde(default)]
     pub retrieval_mode: Option<String>,
+
+    /// Request keyword extraction results in the response.
+    /// Default false for backward compatibility. Engine still extracts
+    /// keywords for mode selection regardless of this flag.
+    #[serde(default)]
+    pub extract_keywords: bool,
 }
 
 /// Streaming query request.
@@ -118,6 +124,18 @@ pub struct AnswerQualityDto {
     pub fact_density: u32,
 }
 
+/// Extracted keywords from the query engine's keyword analysis.
+/// Surfaced in the response only when the client opts in via `extract_keywords: true`.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ExtractedKeywordsDto {
+    /// High-level keywords (concepts, themes, topics).
+    pub high_level: Vec<String>,
+    /// Low-level keywords (entities, specific terms).
+    pub low_level: Vec<String>,
+    /// Classified query intent.
+    pub query_intent: String,
+}
+
 /// Query response.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct QueryResponse {
@@ -144,6 +162,11 @@ pub struct QueryResponse {
     /// Answer quality signals (omitted for context_only / prompt_only queries).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<AnswerQualityDto>,
+
+    /// Extracted keywords from the engine's keyword analysis.
+    /// Only present when `extract_keywords: true` in the request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extracted_keywords: Option<ExtractedKeywordsDto>,
 }
 
 /// A source reference.
@@ -388,12 +411,14 @@ mod tests {
             conversation_id: None,
             reranked: false,
             quality: None,
+            extracted_keywords: None,
         };
         let json = serde_json::to_value(&response).unwrap();
         assert_eq!(json["mode"], "hybrid");
         assert!(json.get("conversation_id").is_none());
         assert!(json.get("reranked").is_none()); // skip_serializing_if
         assert!(json.get("quality").is_none()); // skip_serializing_if
+        assert!(json.get("extracted_keywords").is_none()); // skip_serializing_if
     }
 
     #[test]
@@ -421,6 +446,7 @@ mod tests {
                 source_diversity: 3,
                 fact_density: 7,
             }),
+            extracted_keywords: None,
         };
         let json = serde_json::to_value(&response).unwrap();
         let q = json.get("quality").expect("quality should be present");
