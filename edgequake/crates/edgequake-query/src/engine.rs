@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::context::{QueryContext, RetrievedChunk, RetrievedEntity, RetrievedRelationship};
 use crate::error::{QueryError, Result};
-use crate::keywords::KeywordExtractor;
+use crate::keywords::{ExtractedKeywords, KeywordExtractor};
 use crate::modes::QueryMode;
 use crate::quality::AnswerQuality;
 use crate::retrieval_mode::RetrievalMode;
@@ -302,6 +302,12 @@ pub struct QueryResponse {
     /// Answer quality signals (None for context_only / prompt_only queries).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<AnswerQuality>,
+
+    /// Extracted keywords from the query (None when keyword extraction is disabled).
+    /// The engine always populates this when extraction is enabled; the API layer
+    /// decides whether to surface it based on the per-request `extract_keywords` flag.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extracted_keywords: Option<ExtractedKeywords>,
 }
 
 /// Query processing statistics.
@@ -426,6 +432,7 @@ impl QueryEngine {
             mode,
             stats,
             quality,
+            extracted_keywords: None,
         })
     }
 

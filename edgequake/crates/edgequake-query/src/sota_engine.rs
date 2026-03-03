@@ -882,6 +882,11 @@ impl SOTAQueryEngine {
             mode,
             stats,
             quality,
+            extracted_keywords: if self.config.use_keyword_extraction {
+                Some(keywords.clone())
+            } else {
+                None
+            },
         })
     }
 
@@ -1112,6 +1117,11 @@ impl SOTAQueryEngine {
             mode,
             stats,
             quality,
+            extracted_keywords: if self.config.use_keyword_extraction {
+                Some(keywords.clone())
+            } else {
+                None
+            },
         })
     }
 
@@ -1334,6 +1344,11 @@ impl SOTAQueryEngine {
             mode,
             stats,
             quality,
+            extracted_keywords: if self.config.use_keyword_extraction {
+                Some(keywords.clone())
+            } else {
+                None
+            },
         })
     }
 
@@ -1550,6 +1565,11 @@ impl SOTAQueryEngine {
             mode,
             stats,
             quality,
+            extracted_keywords: if self.config.use_keyword_extraction {
+                Some(keywords.clone())
+            } else {
+                None
+            },
         })
     }
 
@@ -1952,6 +1972,11 @@ impl SOTAQueryEngine {
             mode,
             stats,
             quality,
+            extracted_keywords: if self.config.use_keyword_extraction {
+                Some(keywords.clone())
+            } else {
+                None
+            },
         })
     }
 
