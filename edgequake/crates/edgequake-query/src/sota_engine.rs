@@ -870,11 +870,18 @@ impl SOTAQueryEngine {
         stats.generated_tokens = generated_tokens;
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
+        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
+            Some(crate::quality::AnswerQuality::compute(&final_context, &answer))
+        } else {
+            None
+        };
+
         Ok(crate::engine::QueryResponse {
             answer,
             context: final_context,
             mode,
             stats,
+            quality,
         })
     }
 
@@ -1093,11 +1100,18 @@ impl SOTAQueryEngine {
         stats.generated_tokens = generated_tokens;
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
+        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
+            Some(crate::quality::AnswerQuality::compute(&final_context, &answer))
+        } else {
+            None
+        };
+
         Ok(crate::engine::QueryResponse {
             answer,
             context: final_context,
             mode,
             stats,
+            quality,
         })
     }
 
@@ -1308,11 +1322,18 @@ impl SOTAQueryEngine {
         stats.generated_tokens = generated_tokens;
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
+        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
+            Some(crate::quality::AnswerQuality::compute(&final_context, &answer))
+        } else {
+            None
+        };
+
         Ok(crate::engine::QueryResponse {
             answer,
             context: final_context,
             mode,
             stats,
+            quality,
         })
     }
 
@@ -1517,11 +1538,18 @@ impl SOTAQueryEngine {
         stats.generated_tokens = generated_tokens;
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
+        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
+            Some(crate::quality::AnswerQuality::compute(&final_context, &answer))
+        } else {
+            None
+        };
+
         Ok(crate::engine::QueryResponse {
             answer,
             context: final_context,
             mode,
             stats,
+            quality,
         })
     }
 
@@ -1912,11 +1940,18 @@ impl SOTAQueryEngine {
         stats.generated_tokens = generated_tokens;
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
+        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
+            Some(crate::quality::AnswerQuality::compute(&final_context, &answer))
+        } else {
+            None
+        };
+
         Ok(crate::engine::QueryResponse {
             answer,
             context: final_context,
             mode,
             stats,
+            quality,
         })
     }
 

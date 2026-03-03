@@ -56,9 +56,11 @@ pub mod chunk_retrieval;
 pub mod context;
 pub mod engine;
 pub mod error;
+pub mod fact_density;
 pub mod helpers;
 pub mod keywords;
 pub mod modes;
+pub mod quality;
 pub mod retrieval_mode;
 pub mod sota_engine;
 pub mod strategies;
@@ -94,6 +96,8 @@ pub use tokenizer::{MockTokenizer, SimpleTokenizer, Tokenizer};
 pub use truncation::{
     balance_context, truncate_chunks, truncate_entities, truncate_relationships, TruncationConfig,
 };
+pub use fact_density::{FactDensityAnalyzer, FactDensityResult};
+pub use quality::AnswerQuality;
 pub use vector_filter::{filter_by_type, get_typed_vectors, VectorType};
 
 // Re-export EmbeddingProvider and LLMProvider for workspace-specific query execution

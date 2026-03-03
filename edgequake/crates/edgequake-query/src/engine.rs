@@ -27,6 +27,7 @@ use crate::context::{QueryContext, RetrievedChunk, RetrievedEntity, RetrievedRel
 use crate::error::{QueryError, Result};
 use crate::keywords::KeywordExtractor;
 use crate::modes::QueryMode;
+use crate::quality::AnswerQuality;
 use crate::retrieval_mode::RetrievalMode;
 use crate::tokenizer::{SimpleTokenizer, Tokenizer};
 use crate::truncation::{balance_context, TruncationConfig};
@@ -297,6 +298,10 @@ pub struct QueryResponse {
 
     /// Processing statistics.
     pub stats: QueryStats,
+
+    /// Answer quality signals (None for context_only / prompt_only queries).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality: Option<AnswerQuality>,
 }
 
 /// Query processing statistics.
@@ -409,11 +414,18 @@ impl QueryEngine {
 
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
+        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
+            Some(AnswerQuality::compute(&context, &answer))
+        } else {
+            None
+        };
+
         Ok(QueryResponse {
             answer,
             context,
             mode,
             stats,
+            quality,
         })
     }
 
