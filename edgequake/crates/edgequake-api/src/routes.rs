@@ -289,6 +289,8 @@ fn api_v1_routes() -> Router<AppState> {
         // Query
         .route("/query", post(handlers::execute_query))
         .route("/query/stream", post(handlers::stream_query))
+        // Text Scoring (Phase 22 - MCP team request)
+        .route("/text/score", post(handlers::score_text))
         // Chat (Unified chat completions API - preferred for client applications)
         .route("/chat/completions", post(handlers::chat_completion))
         .route(
@@ -457,6 +459,8 @@ fn namespace_scoped_routes() -> Router<AppState> {
         // resolve namespace-scoped storage, and construct a namespace-scoped query engine.
         .route("/query", post(handlers::ns_execute_query))
         .route("/query/stream", post(handlers::ns_stream_query))
+        // Text Scoring (Phase 22 - MCP team request)
+        .route("/text/score", post(handlers::ns_score_text))
         // Documents (still using global handlers -- namespace scoping deferred to Phase 2)
         .route("/documents", post(handlers::upload_document))
         .route("/documents", get(handlers::list_documents))

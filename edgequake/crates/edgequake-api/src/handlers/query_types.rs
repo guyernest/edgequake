@@ -107,6 +107,17 @@ pub struct StreamQueryRequest {
 // Response DTOs
 // ============================================================================
 
+/// Answer quality signals for MCP tool fallback logic.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct AnswerQualityDto {
+    /// Mean relevance score across retrieved chunks.
+    pub mean_chunk_score: f32,
+    /// Number of distinct source documents in the context.
+    pub source_diversity: u32,
+    /// Fact density of the generated answer text.
+    pub fact_density: u32,
+}
+
 /// Query response.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct QueryResponse {
@@ -129,6 +140,10 @@ pub struct QueryResponse {
     /// Whether reranking was applied.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub reranked: bool,
+
+    /// Answer quality signals (omitted for context_only / prompt_only queries).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality: Option<AnswerQualityDto>,
 }
 
 /// A source reference.
@@ -289,6 +304,7 @@ mod tests {
             score: 0.95,
             rerank_score: Some(0.98),
             snippet: Some("This is a test snippet".to_string()),
+            content: Some("Full content text".to_string()),
             reference_id: Some(1),
             document_id: Some("doc_456".to_string()),
             file_path: Some("docs/test.md".to_string()),
@@ -311,6 +327,7 @@ mod tests {
             score: 0.8,
             rerank_score: None,
             snippet: None,
+            content: None,
             reference_id: None,
             document_id: None,
             file_path: None,
@@ -370,10 +387,44 @@ mod tests {
             },
             conversation_id: None,
             reranked: false,
+            quality: None,
         };
         let json = serde_json::to_value(&response).unwrap();
         assert_eq!(json["mode"], "hybrid");
         assert!(json.get("conversation_id").is_none());
         assert!(json.get("reranked").is_none()); // skip_serializing_if
+        assert!(json.get("quality").is_none()); // skip_serializing_if
+    }
+
+    #[test]
+    fn test_query_response_with_quality() {
+        let response = QueryResponse {
+            answer: "Answer text".to_string(),
+            mode: "hybrid".to_string(),
+            sources: vec![],
+            stats: QueryStats {
+                embedding_time_ms: 10,
+                retrieval_time_ms: 20,
+                generation_time_ms: 100,
+                total_time_ms: 130,
+                sources_retrieved: 0,
+                rerank_time_ms: None,
+                tokens_used: None,
+                tokens_per_second: None,
+                llm_provider: None,
+                llm_model: None,
+            },
+            conversation_id: None,
+            reranked: false,
+            quality: Some(AnswerQualityDto {
+                mean_chunk_score: 0.85,
+                source_diversity: 3,
+                fact_density: 7,
+            }),
+        };
+        let json = serde_json::to_value(&response).unwrap();
+        let q = json.get("quality").expect("quality should be present");
+        assert_eq!(q["source_diversity"], 3);
+        assert_eq!(q["fact_density"], 7);
     }
 }
