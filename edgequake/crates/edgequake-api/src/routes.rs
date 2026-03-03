@@ -348,6 +348,8 @@ fn api_v1_routes() -> Router<AppState> {
         .route("/graph/labels/search", get(handlers::search_labels))
         .route("/graph/labels/popular", get(handlers::get_popular_labels))
         .route("/graph/degrees/batch", post(handlers::get_degrees_batch))
+        // Entity resolution (Phase 22 -- MCP team batch resolve)
+        .route("/entities/resolve", post(handlers::resolve_entities))
         // Entities (Phase 2)
         .route(
             "/graph/entities",
@@ -488,6 +490,8 @@ fn namespace_scoped_routes() -> Router<AppState> {
         .route("/graph/labels/search", get(handlers::ns_search_labels))
         .route("/graph/labels/popular", get(handlers::ns_get_popular_labels))
         .route("/graph/degrees/batch", post(handlers::ns_get_degrees_batch))
+        // Entity resolution (Phase 22 -- MCP team batch resolve, namespace-scoped)
+        .route("/entities/resolve", post(handlers::ns_resolve_entities))
         // Entity list/detail use namespace-scoped handlers (Phase 11).
         // Mutation routes (create, update, delete, merge) still use global handlers.
         .route(
