@@ -1,135 +1,236 @@
-# EdgeQuake
+# EdgeQuake (AWS Cloud Fork)
 
-> **High-Performance Graph-RAG Framework in Rust**  
-> Transform documents into intelligent knowledge graphs for superior retrieval and generation
+> **Cloud-Native Graph-RAG Framework in Rust**
+> Production-scale knowledge graphs on AWS managed services with MCP integration and batch ingestion
 
 [![Rust](https://img.shields.io/badge/rust-1.78+-orange.svg?style=flat&logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg?style=flat)](https://github.com/raphaelmansuy/edgequake)
-[![Documentation](https://img.shields.io/badge/docs-available-blue.svg?style=flat)](docs/README.md)
+[![AWS](https://img.shields.io/badge/AWS-Neptune%20%7C%20S3%20Vectors%20%7C%20DynamoDB-FF9900?style=flat&logo=amazonaws)](https://aws.amazon.com)
+[![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-blueviolet?style=flat)](MCP_INTEGRATION.md)
 
 ---
 
+This is a **fork** of [raphaelmansuy/edgequake](https://github.com/raphaelmansuy/edgequake) — the original high-performance Rust implementation of the [LightRAG algorithm](https://arxiv.org/abs/2410.05779). This fork replaces the PostgreSQL storage layer with **AWS managed services**, adds a **batch ingestion pipeline** for 100K+ documents, introduces **MCP server integration** for AI agent access, and adds **answer quality signals** and **Code Mode** for programmatic graph analysis.
 
+## What This Fork Adds
 
-![Screenshot of EdgeQuake Frontend](docs/assets/01-screenshot.png)
-
-## Why EdgeQuake?
-
-Traditional RAG systems retrieve document chunks using vector similarity alone. This works for simple lookups but fails on multi-hop reasoning ("How does X relate to Y through Z?"), thematic questions ("What are the major themes?"), and relationship queries. The core problem: **vectors capture semantic similarity but lose structural relationships between concepts**.
-
-**EdgeQuake** solves this by implementing the [LightRAG algorithm](https://arxiv.org/abs/2410.05779) in Rust: documents are not just chunked and embedded — they are decomposed into a **knowledge graph** of entities and relationships. At query time, the system traverses both the vector space and the graph structure, combining the speed of vector search with the reasoning power of graph traversal.
-
-### What Sets EdgeQuake Apart
-
-- **Knowledge Graphs**: LLM-powered entity extraction and relationship mapping create a structured understanding of your documents — not just keyword matching
-- **6 Query Modes**: From fast naive vector search to graph-traversing hybrid queries, each mode optimizes for different question types
-- **Rust Performance**: Async-first Tokio architecture with zero-copy operations — handles thousands of concurrent requests
-- **Dual Storage Tiers**: Local development with PostgreSQL (Docker) **or** production-scale AWS managed services (Neptune, S3 Vectors, DynamoDB) — same trait-based API, swap backends without code changes
-- **Batch Ingestion at Scale**: Process 100K+ documents via OpenAI Batch API with 50% cost savings, domain-configurable extraction prompts, and DynamoDB-backed checkpointing for resumable pipelines
-- **Planned Advanced PDF Processing ⚠️ Available Soon**: Table detection, multi-column layout, OCR with quality-based mode fallback
-- **Production Ready**: OpenAPI 3.0 REST API, SSE streaming, health checks, multi-tenant workspace isolation
-- **Modern Frontend**: React 19 with interactive Sigma.js graph visualizations
-
-### Performance Benchmarks
-
-| Metric                 | EdgeQuake        | Traditional RAG | Improvement |
-| ---------------------- | ---------------- | --------------- | ----------- |
-| Entity Extraction      | ~2-3x more       | Baseline        | 3x          |
-| Query Latency (hybrid) | < 200ms          | ~1000ms         | 5x faster   |
-| Document Processing    | 25s (10k tokens) | ~60s            | 2.4x faster |
-| Concurrent Users       | 1000+            | ~100            | 10x         |
-| Memory Usage (per doc) | 2MB              | ~8MB            | 4x better   |
-
-⚠️ **Experimental Feature — PDF Ingestion**: PDF-to-Markdown extraction is currently in **experimental/early prototype** stage. For comprehensive testing and evaluation of EdgeQuake's core functionality (entity extraction, knowledge graphs, query modes, etc.), we recommend using **Markdown documents** in your initial setup. This ensures you can fully explore the stable features while we continue to refine the PDF processing pipeline.
+| Capability | Upstream (PostgreSQL) | This Fork (AWS Cloud) |
+|---|---|---|
+| **Graph Storage** | PostgreSQL + Apache AGE | Amazon Neptune (Gremlin, IAM SigV4) |
+| **Vector Search** | pgvector (HNSW) | Amazon S3 Vectors (serverless, auto-scaling) |
+| **Key-Value** | PostgreSQL JSONB | Amazon DynamoDB (on-demand, single-digit ms) |
+| **Analytics** | -- | Amazon Athena (serverless SQL over S3) |
+| **Batch Ingestion** | Single-doc API | 4-phase pipeline: OpenAI Batch API, 100K+ docs |
+| **AI Agent Access** | REST API only | MCP server with 4 tools + Code Mode sandbox |
+| **Answer Quality** | -- | Fact density scoring, source diversity, chunk confidence |
+| **Retrieval Modes** | Vector similarity | Vector + BM25 keyword + hybrid fusion (RRF) |
+| **Entity Resolution** | Sequential search | Batch resolution (20 terms in 1 round-trip) |
+| **Infrastructure** | Docker Compose | AWS CDK stacks (parameterized, multi-tenant) |
+| **Idle Cost** | ~$297/month (RDS always-on) | ~$7/month (serverless scales to zero) |
 
 ---
 
-## Features
+## Architecture
 
-### 🚀 High Performance
+```
+                         MCP Clients (Claude, IDEs, agents)
+                                      |
+                                      v
+                     +----------------------------------+
+                     |  MCP Server (4 tools + Code Mode)|
+                     |  ask | explore_entity | search   |
+                     |  validate_code | execute_code     |
+                     +----------------------------------+
+                                      |
++-------------------------------------+-------------------------------------+
+|                              EdgeQuake System                              |
+|                                                                            |
+|  Frontend (React 19 + Next.js)          REST API (Axum)                    |
+|  - Sigma.js graph visualization         - OpenAPI 3.0 + Swagger UI         |
+|  - SSE streaming responses              - SSE streaming                    |
+|  - Document upload (drag-and-drop)      - /api/v1/* (100+ endpoints)       |
+|  - Dark mode, i18n                      - Health: /health, /ready, /live   |
+|                                                                            |
+|  Backend (Rust - 14 Crates)                                                |
+|  +----------------------------------------------------------------------+  |
+|  | edgequake-core          | Orchestration, pipeline coordination      |  |
+|  | edgequake-query         | 6 query modes, BM25, hybrid retrieval     |  |
+|  | edgequake-pipeline      | Document ingestion pipeline               |  |
+|  | edgequake-llm           | OpenAI, Ollama, LM Studio providers       |  |
+|  | edgequake-storage       | Trait abstraction (GraphStorage, etc.)     |  |
+|  | edgequake-storage-aws   | Neptune, S3 Vectors, DynamoDB, Athena      |  |
+|  | edgequake-batch         | Batch ingestion CLI (100K+ docs)           |  |
+|  | edgequake-schema        | LLM-assisted domain schema generation      |  |
+|  | edgequake-api           | REST API + entity resolution + Code Mode   |  |
+|  | edgequake-pdf           | PDF extraction (text/vision/hybrid)        |  |
+|  | edgequake-auth          | JWT + API key authentication               |  |
+|  | edgequake-audit         | Compliance and audit logging               |  |
+|  | edgequake-tasks         | Background job processing                  |  |
+|  | edgequake-rate-limiter  | Per-tenant rate limiting                   |  |
+|  +----------------------------------------------------------------------+  |
+|                                                                            |
+|  Storage Backends (swap via traits, no code changes)                       |
+|  +----------------------------+  +-------------------------------------+  |
+|  | Local (Docker)             |  | AWS Managed (Production)            |  |
+|  | - PostgreSQL + AGE (graph) |  | - Neptune (graph, Gremlin)          |  |
+|  | - pgvector (vectors)       |  | - S3 Vectors (vector search)        |  |
+|  | - PostgreSQL (KV)          |  | - DynamoDB (key-value, state)       |  |
+|  | - In-Memory (dev/test)     |  | - Athena (analytics, SQL over S3)   |  |
+|  +----------------------------+  +-------------------------------------+  |
++----------------------------------------------------------------------------+
+```
 
-- **Async-First**: Tokio-based runtime for maximum concurrency
-- **Zero-Copy**: Efficient memory management with Rust ownership
-- **Parallel Processing**: Multi-threaded entity extraction and embeddings
-- **Pluggable Storage**: PostgreSQL (AGE + pgvector) for local dev, AWS managed services for production scale
+---
 
-### Knowledge Graph
+## AWS Storage Backends
 
-- **Entity Extraction**: Automatic detection of people, organizations, locations, concepts, events, technologies, and products (7 configurable types)
-- **Relationship Mapping**: LLM-powered relationship identification with keyword tagging
-- **Gleaning**: Multi-pass extraction catches 15-25% more entities than single-pass
-- **Community Detection**: Louvain modularity optimization clusters related entities for thematic queries
-- **Graph Visualization**: Interactive Sigma.js-powered frontend with zoom/pan
+EdgeQuake implements a trait-based storage abstraction (`GraphStorage`, `VectorStorage`, `KVStorage`). The AWS backends are designed for production workloads where serverless scaling and pay-per-use pricing matter.
 
-### 📄 Advanced PDF Processing (⚠️ Available Soon)
+| Layer | AWS Service | Why | Key Specs |
+|---|---|---|---|
+| **Graph** | Neptune Serverless | Managed graph DB, Gremlin queries, IAM auth, auto-replication | 1-100ms latency, scales 2.5-128 NCUs, scales to zero |
+| **Vector** | S3 Vectors | Native cosine search, no capacity planning, auto-indexing | Pay-per-request, scales with data volume |
+| **Key-Value** | DynamoDB On-Demand | Single-digit ms reads, batch operations, PITR | $1.25/M writes, $0.25/M reads, $0.25/GB-month |
+| **Analytics** | Athena | Serverless SQL over Parquet/JSON in S3 | $5/TB scanned, no infrastructure to manage |
 
-- **Text Mode**: Fast extraction for text-based PDFs
-- **Vision Mode**: OCR for scanned documents and images
-- **Hybrid Mode**: Automatic quality assessment and fallback
-- **Table Detection**: Enhanced detection for complex tables
-- **Multi-Column Layout**: Accurate reading order detection
+### Cost Comparison (100GB vectors, 1M graph nodes, 100K documents)
 
-### 🔍 6 Query Modes
+| Scenario | PostgreSQL (RDS) | AWS Serverless | Savings |
+|---|---|---|---|
+| Active workload | $297/month | $95/month | **68%** |
+| Idle workload | $297/month | $7/month | **98%** |
+| Annual (50% idle) | $3,570/year | $610/year | **$2,960/year** |
 
-1. **Naive**: Simple vector similarity — fastest for keyword-like lookups (~100-300ms)
-2. **Local**: Entity-centric with local graph neighborhood — best for specific relationships (~200-500ms)
-3. **Global**: Community-based semantic search — best for thematic/high-level questions (~300-800ms)
-4. **Hybrid** _(default)_: Combines local + global for balanced, comprehensive results (~400-1000ms)
-5. **Mix**: Weighted combination of naive + graph results with configurable ratios
-6. **Bypass**: Direct LLM query without RAG retrieval — useful for general questions
+### Infrastructure as Code
 
-### 🌐 REST API
-
-- **OpenAPI 3.0**: Full Swagger documentation at `/swagger-ui`
-- **Streaming**: Server-Sent Events (SSE) for real-time responses
-- **Versioned**: `/api/v1/*` with backward compatibility
-- **Health Checks**: Kubernetes-ready `/health`, `/ready`, `/live`
-
-### 🎯 React 19 Frontend
-
-- **Real-Time Streaming**: Token-by-token generation display
-- **Graph Visualization**: Interactive network graph with zoom/pan
-- **Document Upload**: Drag-and-drop with progress tracking
-- **Configuration UI**: Visual PDF processing config builder
-
-### 🗄️ Storage Backends
-
-EdgeQuake implements a trait-based storage abstraction (`GraphStorage`, `VectorStorage`, `KVStorage`) so you can swap backends without changing application code.
-
-| Layer | Local (Docker) | AWS Managed (Production) |
-| --- | --- | --- |
-| **Graph** | PostgreSQL + Apache AGE | Amazon Neptune (Gremlin, IAM SigV4 auth) |
-| **Vector** | pgvector (HNSW) | Amazon S3 Vectors (native cosine search, pay-per-request) |
-| **Key-Value** | PostgreSQL | Amazon DynamoDB (single-digit ms latency, on-demand billing) |
-| **Analytics** | — | Amazon Athena (serverless SQL over S3, $5/TB scanned) |
-| **Dev/Test** | In-memory adapters | — |
-
-The AWS backends in `edgequake-storage-aws` are designed for production scale:
-- **Neptune** — Fully managed graph database with automatic replication, point-in-time recovery, and read replicas for high-throughput graph traversal
-- **S3 Vectors** — Serverless vector search with automatic indexing and no capacity planning; scales with your data
-- **DynamoDB** — On-demand billing with zero idle costs, batch operations, and point-in-time recovery for state management and metadata
-- **Athena** — Serverless SQL analytics over Parquet/JSON data in S3 for ad-hoc queries without provisioning infrastructure
-
-### 📦 Batch Ingestion Pipeline
-
-The `edgequake-batch` CLI processes large document datasets (100K+ documents) using the OpenAI Batch API for 50% cost savings on entity extraction.
-
-- **4-Phase Pipeline**: Prepare (parse + chunk) → Extract (OpenAI Batch API) → Embed (generate vectors) → Store (Neptune + S3 Vectors + DynamoDB)
-- **Domain-Configurable**: Extraction prompts, entity types, aliases, and few-shot examples are defined in a `domain.toml` file — switch domains without code changes
-- **Resumable**: DynamoDB-backed state management with per-phase checkpointing; resume from any phase after interruption
-- **Cost-Optimized**: Batch API (50% off) + prompt caching (50% off cached tokens) = ~75% savings on system prompt costs
+Deploy the full AWS stack with CDK:
 
 ```bash
-# Full pipeline
-make batch-run
-
-# Or run individual phases
-make batch-prepare    # Phase 1: Parse parquet, chunk, build JSONL
-make batch-extract    # Phase 2: Submit to OpenAI Batch API
-make batch-embed      # Phase 3: Generate embeddings
-make batch-store      # Phase 4: Write to Neptune/S3/DynamoDB
+make infra-deploy           # Deploy all stacks
+make infra-deploy-core      # DynamoDB, S3, S3 Vectors, IAM
+make infra-deploy-neptune   # VPC, Neptune cluster, security groups
+make infra-env              # Generate .env from deployed stack outputs
 ```
+
+Parameterized by tenant ID and environment (dev/staging/prod). Outputs stored in SSM Parameter Store for service discovery.
+
+---
+
+## MCP Server Integration
+
+EdgeQuake exposes its knowledge graph through the [Model Context Protocol](https://modelcontextprotocol.io/), enabling AI agents (Claude, IDE copilots, custom agents) to query, explore, and analyze the graph programmatically.
+
+### 4 Tools + Code Mode
+
+| Tool | Purpose | When to Use |
+|---|---|---|
+| `ask` | Answer questions with full retrieval pipeline | Natural language questions about your documents |
+| `explore_entity` | Find entities and traverse their connections | "Who is connected to X?" / relationship mapping |
+| `search` | Raw retrieval (semantic, keyword, hybrid) | When you need chunks/entities without LLM generation |
+| `validate_code` + `execute_code` | Run JavaScript in a sandboxed environment | Complex analysis, cross-entity comparison, bulk operations |
+
+The `ask` tool implements a multi-step retrieval strategy internally: extract keywords, batch-resolve entities, select query mode based on entity degree, query with fallback chain. MCP clients get optimized answers in a single tool call instead of orchestrating 3-5 calls manually.
+
+**Code Mode** enables programmatic graph analysis via a JavaScript sandbox with an `api` object for internal REST calls. Useful for cross-referencing entities, building comparison tables, or running custom filters that individual tools can't express.
+
+See [MCP_INTEGRATION.md](MCP_INTEGRATION.md) and [MCP_QUICKSTART.md](MCP_QUICKSTART.md) for setup.
+
+---
+
+## Batch Ingestion Pipeline
+
+Process large document datasets (100K+ documents) with the `edgequake-batch` CLI. Uses the OpenAI Batch API for **50% cost savings** on entity extraction.
+
+### 4-Phase Pipeline
+
+```
+Phase 1: Prepare     Phase 2: Extract        Phase 3: Embed      Phase 4: Store
+Parse parquet/text   OpenAI Batch API        Generate vectors     Write to Neptune,
+Chunk documents  --> Submit JSONL batches --> for chunks and   --> S3 Vectors,
+Build JSONL          Poll for results        entities             DynamoDB
+```
+
+- **Domain-Configurable**: Entity types, aliases, extraction prompts, and few-shot examples defined in `domain.toml` -- switch domains without code changes
+- **Resumable**: DynamoDB-backed state management with per-phase checkpointing; resume from any phase after interruption
+- **Cost-Optimized**: Batch API (50% off) + prompt caching (50% off cached tokens) = ~75% savings on extraction costs
+
+```bash
+make batch-run            # Full pipeline
+make batch-prepare        # Phase 1: Parse, chunk, build JSONL
+make batch-extract        # Phase 2: Submit to OpenAI Batch API
+make batch-embed          # Phase 3: Generate embeddings
+make batch-store          # Phase 4: Write to Neptune/S3/DynamoDB
+make batch-status         # Show job progress
+make batch-resume         # Resume from checkpoint
+```
+
+---
+
+## Query Engine
+
+EdgeQuake implements the [LightRAG algorithm](https://arxiv.org/abs/2410.05779) with extensions for hybrid retrieval and answer quality scoring.
+
+### 6 Query Modes
+
+| Mode | Latency | Best For | How It Works |
+|---|---|---|---|
+| **Naive** | ~100-300ms | Fact lookups (who/what/when) | Vector similarity on chunks only |
+| **Local** | ~200-500ms | Entity-centric questions | Vector search + local graph neighborhood traversal |
+| **Global** | ~300-800ms | Thematic/high-level questions | Louvain community detection + cluster summaries |
+| **Hybrid** _(default)_ | ~400-1000ms | General questions | Combines local + global context |
+| **Mix** | configurable | Tuning precision/recall | Weighted blend of naive + graph results |
+| **Bypass** | LLM only | General knowledge | Skip retrieval, direct LLM query |
+
+### 3 Retrieval Modes
+
+Each query mode can use one of three retrieval backends:
+
+- **Semantic** (default) -- Vector similarity via embeddings
+- **BM25** -- Full-text keyword search with stemming (best for exact names, rare terms)
+- **Hybrid** -- Reciprocal rank fusion of semantic + BM25 (recommended for most queries)
+
+### Answer Quality Signals
+
+Every query response includes quality metrics:
+
+```json
+{
+  "answer": "...",
+  "quality": {
+    "mean_chunk_score": 0.82,
+    "source_diversity": 5,
+    "fact_density": 3
+  },
+  "extracted_keywords": {
+    "high_level": ["financial relationship", "banking connections"],
+    "low_level": ["Jeffrey Epstein", "Deutsche Bank"]
+  }
+}
+```
+
+- **mean_chunk_score**: Average relevance of retrieved chunks (0.0-1.0)
+- **source_diversity**: Number of distinct source documents
+- **fact_density**: Count of proper nouns + dates + numbers in the answer
+
+---
+
+## Knowledge Graph
+
+- **Entity Extraction**: LLM-powered detection of people, organizations, locations, concepts, events, technologies, and products (7 configurable types)
+- **Relationship Mapping**: Keyword-tagged relationships between entities
+- **Gleaning**: Multi-pass extraction catches 15-25% more entities than single-pass
+- **Normalization**: Case normalization + description merging reduces duplicates by ~36-40%
+- **Community Detection**: Louvain modularity optimization for thematic clustering
+- **Batch Entity Resolution**: Resolve 20 terms against the graph in a single round-trip
+
+### Indexing Pipeline (per document)
+
+1. **Chunk** -- Split into ~1200-token segments with 100-token overlap
+2. **Extract** -- LLM parses each chunk into entities and relationships
+3. **Glean** -- Optional second pass for missed entities (~18% recall improvement)
+4. **Normalize** -- Deduplicate via case normalization and description merging
+5. **Embed** -- Generate vector embeddings for chunks and entities
+6. **Store** -- Write to storage backends (swap PostgreSQL/AWS via config)
 
 ---
 
@@ -137,467 +238,212 @@ make batch-store      # Phase 4: Write to Neptune/S3/DynamoDB
 
 ### Prerequisites
 
-- **Rust**: 1.78 or later ([Install Rust](https://rustup.rs))
+- **Rust**: 1.78+ ([Install Rust](https://rustup.rs))
 - **Node.js**: 18+ or Bun 1.0+ ([Install Node](https://nodejs.org))
-- **Docker**: For PostgreSQL ([Install Docker](https://www.docker.com/get-started))
-- **Ollama**: For local LLM (optional, [Install Ollama](https://ollama.ai))
+- **Docker**: For local PostgreSQL dev mode ([Install Docker](https://www.docker.com/get-started))
+- **AWS Account**: For production deployment (Neptune, S3 Vectors, DynamoDB)
 
-### Installation (5 minutes)
+### Local Development (PostgreSQL)
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/raphaelmansuy/edgequake.git
+# Clone the fork
+git clone https://github.com/guyernest/edgequake.git
 cd edgequake
 
-# 2. Install dependencies
+# Install dependencies and start full stack
 make install
-
-# 3. Start the full stack (PostgreSQL + Backend + Frontend)
 make dev
 ```
-
-**That's it!** 🎉
 
 - **Backend**: http://localhost:8080
 - **Frontend**: http://localhost:3000
 - **Swagger UI**: http://localhost:8080/swagger-ui
-- **Provider**: Ollama (local, free)
 
-### First Document Upload
+### AWS Deployment
 
 ```bash
-# Upload a file (PDF, TXT, MD, etc.)
+# Deploy infrastructure
+make infra-deploy
+
+# Generate .env from deployed stack outputs
+make infra-env
+
+# Start with AWS backends
+make backend-dev
+```
+
+### Upload a Document
+
+```bash
 curl -X POST http://localhost:8080/api/v1/documents/upload \
-  -F "file=@your-document.pdf"
+  -F "file=@your-document.md"
 ```
 
-**Response**:
-
-```json
-{
-  "id": "doc-123",
-  "status": "completed",
-  "chunk_count": 15,
-  "entity_count": 12,
-  "relationship_count": 8,
-  "processing_time_ms": 2500
-}
-```
-
-### First Query
+### Query the Knowledge Graph
 
 ```bash
-# Query the knowledge graph
 curl -X POST http://localhost:8080/api/v1/query \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "What are the main concepts?",
-    "mode": "hybrid"
-  }'
-```
-
-**Response**:
-
-```json
-{
-  "answer": "The main concepts are: knowledge graphs, entity extraction, and hybrid retrieval...",
-  "sources": [
-    { "chunk_id": "chunk-1", "similarity": 0.92 },
-    { "chunk_id": "chunk-5", "similarity": 0.87 }
-  ],
-  "entities": ["KNOWLEDGE_GRAPH", "ENTITY_EXTRACTION"],
-  "relationships": [
-    {
-      "source": "KNOWLEDGE_GRAPH",
-      "target": "ENTITY_EXTRACTION",
-      "type": "ENABLES"
-    }
-  ]
-}
+  -d '{"query": "What are the main concepts?", "mode": "hybrid", "retrieval_mode": "hybrid"}'
 ```
 
 ---
 
-## Architecture
+## REST API
 
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                              EdgeQuake System                              │
-└────────────────────────────────────────────────────────────────────────────┘
+OpenAPI 3.0 specification with 100+ endpoints. Full Swagger UI at `/swagger-ui`.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Frontend (React 19 + TypeScript)                                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  Document    │  │    Query     │  │    Graph     │  │   Settings   │     │
-│  │   Upload     │  │  Interface   │  │ Visualization│  │   Config     │     │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
-│         │                 │                 │                 │             │
-│         └─────────────────┴─────────────────┴─────────────────┘             │
-│                                    │                                        │
-│                                    ▼                                        │
-│  ┌────────────────────────────────────────────────────────────────────┐     │
-│  │                         REST API (Axum)                            │     │
-│  │  /api/v1/documents  •  /api/v1/query  •  /api/v1/graph             │     │
-│  │  OpenAPI 3.0 Spec  •  SSE Streaming  •  Health Checks              │     │
-│  └────────────────────────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Backend (Rust - 13 Crates)                                                 │
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │  edgequake-core          │  Orchestration & Pipeline                 │   │
-│  │  edgequake-llm           │  OpenAI, Ollama, LM Studio, Mock          │   │
-│  │  edgequake-storage       │  PostgreSQL AGE, Memory adapters          │   │
-│  │  edgequake-storage-aws   │  Neptune, S3 Vectors, DynamoDB, Athena    │   │
-│  │  edgequake-batch         │  Batch ingestion CLI (100K+ docs)         │   │
-│  │  edgequake-api           │  REST API server                          │   │
-│  │  edgequake-pipeline      │  Document ingestion pipeline              │   │
-│  │  edgequake-query         │  Query engine (6 modes)                   │   │
-│  │  edgequake-pdf           │  PDF extraction (text/vision/hybrid)      │   │
-│  │  edgequake-auth          │  Authentication & authorization           │   │
-│  │  edgequake-audit         │  Compliance & audit logging               │   │
-│  │  edgequake-tasks         │  Background job processing                │   │
-│  │  edgequake-rate-limiter  │  Rate limiting middleware                 │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                        │
-│                    ┌───────────────┴───────────────┐                        │
-│                    ▼                               ▼                        │
-│  ┌─────────────────────────────┐   ┌──────────────────────────────────┐     │
-│  │   LLM Providers             │   │   Storage Backends               │     │
-│  │  • OpenAI (gpt-4.1-nano)    │   │                                  │     │
-│  │  • Ollama (gemma3:12b)      │   │  Local:                          │     │
-│  │  • LM Studio (local models) │   │  • PostgreSQL 15+ (AGE + vector) │     │
-│  │  • Mock (testing, free)     │   │  • In-Memory (dev/testing)       │     │
-│  │  Auto-detection via env     │   │                                  │     │
-│  │                             │   │  AWS Managed:                    │     │
-│  │                             │   │  • Neptune (graph)               │     │
-│  │                             │   │  • S3 Vectors (vector search)    │     │
-│  │                             │   │  • DynamoDB (key-value)          │     │
-│  │                             │   │  • Athena (analytics)            │     │
-│  └─────────────────────────────┘   └──────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────────────────┘
+### Key Endpoints
 
-                    Data Flow: Document → Chunks → Entities → Graph
-                    Query Flow: Question → Graph Traversal → LLM → Answer
-```
-
-### How the Algorithm Works
-
-EdgeQuake implements the [LightRAG algorithm](https://arxiv.org/abs/2410.05779) in Rust. The core insight: **extract a knowledge graph during indexing, then traverse it during querying**.
-
-**Indexing Pipeline** (per document):
-1. **Chunk** — Split document into ~1200-token segments with 100-token overlap
-2. **Extract** — LLM parses each chunk into `(entity, type, description)` and `(source, target, keywords, description)` tuples
-3. **Glean** — Optional second pass catches missed entities (improves recall by ~18%)
-4. **Normalize** — Deduplicate entities via case normalization and description merging (reduces duplicates by ~36-40%)
-5. **Embed** — Generate vector embeddings for chunks and entities
-6. **Store** — Write to storage backends: chunks to pgvector or S3 Vectors, entities/relationships to Apache AGE or Neptune graph, metadata to PostgreSQL or DynamoDB
-
-**Query Flow** (6 modes):
-- **Naive** — Vector similarity on chunks only (fast, no graph)
-- **Local** — Find relevant entities via vector search, then traverse their local graph neighborhood
-- **Global** — Use Louvain community detection to find thematic clusters, retrieve community summaries
-- **Hybrid** _(default)_ — Combine local entity context + global community context
-- **Mix** — Weighted blend of naive vector results and graph-enhanced results
-- **Bypass** — Skip retrieval entirely, pass question directly to LLM
-
-See [LightRAG Algorithm Deep Dive](docs/deep-dives/lightrag-algorithm.md) for the complete technical explanation.
+| Category | Endpoints | Description |
+|---|---|---|
+| **Query** | `POST /api/v1/query`, `GET /api/v1/query/stream` | Execute queries with 6 modes, SSE streaming |
+| **Documents** | `POST /api/v1/documents/upload`, `GET /api/v1/documents` | Upload, list, delete, retry |
+| **Entities** | `GET /api/v1/entities/search`, `POST /api/v1/entities/resolve` | Search, batch resolve, get neighborhood |
+| **Graph** | `GET /api/v1/graph`, `GET /api/v1/entities/{name}/neighborhood` | Visualize, traverse, community detection |
+| **Search** | `POST /api/v1/search/hybrid`, `GET /api/v1/vectors/search`, `GET /api/v1/bm25/search` | Semantic, keyword, and hybrid search |
+| **Text** | `POST /api/v1/text/score`, `POST /api/v1/text/extract-terms` | Fact density scoring, keyword extraction |
+| **Code Mode** | `POST /api/v1/code/validate`, `POST /api/v1/code/execute` | Sandboxed JavaScript execution |
+| **Admin** | `POST /api/v1/entities/merge`, `PUT /api/v1/entities/{name}` | Entity merge, update, delete |
+| **Health** | `/health`, `/ready`, `/live` | Kubernetes-ready probes |
 
 ---
 
-## Documentation
+## LLM Providers
 
+| Provider | Models | Use Case |
+|---|---|---|
+| **OpenAI** | GPT-4o, GPT-4.1-nano, text-embedding-3-small/large | Production (extraction + embeddings) |
+| **Ollama** | Gemma3, Mistral, Llama, nomic-embed-text | Local development (free) |
+| **LM Studio** | Any GGUF model | Local development |
+| **Mock** | -- | Testing (no API calls) |
 
-### 📚 Complete Documentation Index
+Auto-detected via environment variables. Set `OPENAI_API_KEY` for OpenAI, or configure `EDGEQUAKE_LLM_PROVIDER` explicitly.
 
-Explore the full documentation at [docs/README.md](docs/README.md)
+---
 
-### 📦 SDKs
+## Frontend
 
-EdgeQuake provides official SDKs for multiple languages:
+React 19 + Next.js with interactive graph visualization.
 
-- [Python SDK](sdks/python/README.md) ([Changelog](sdks/python/CHANGELOG.md))
-- [TypeScript SDK](sdks/typescript/README.md) ([Changelog](sdks/typescript/CHANGELOG.md))
-- [Rust SDK](sdks/rust/README.md)
-- [Other SDKs](sdks/) for C#, Go, Java, Kotlin, PHP, Ruby, Swift
-
-See the [CHANGELOG.md](CHANGELOG.md) for SDK and core updates.
-
-### 🚀 Getting Started (15 minutes)
-
-| Guide                                                      | Description                | Time   |
-| ---------------------------------------------------------- | -------------------------- | ------ |
-| [Installation](docs/getting-started/installation.md)       | Prerequisites and setup    | 5 min  |
-| [Quick Start](docs/getting-started/quick-start.md)         | First ingestion and query  | 10 min |
-| [First Ingestion](docs/getting-started/first-ingestion.md) | Understanding the pipeline | 15 min |
-
-### 📖 Tutorials (Hands-On)
-
-| Tutorial                                                               | Description                     |
-| ---------------------------------------------------------------------- | ------------------------------- |
-| [Building Your First RAG App](docs/tutorials/first-rag-app.md)         | End-to-end tutorial             |
-| [PDF Ingestion](docs/tutorials/pdf-ingestion.md)                       | PDF upload and configuration    |
-| [Multi-Tenant Setup](docs/tutorials/multi-tenant.md)                   | Workspace isolation             |
-| [Document Ingestion](docs/tutorials/document-ingestion.md)             | Upload and processing workflows |
-| [Migration from LightRAG](docs/tutorials/migration-from-lightrag.md)   | Python to Rust migration guide  |
-
-### 🏗️ Architecture (How It Works)
-
-| Document                                     | Description                           |
-| -------------------------------------------- | ------------------------------------- |
-| [Overview](docs/architecture/overview.md)    | System design and components          |
-| [Data Flow](docs/architecture/data-flow.md)  | How documents flow through the system |
-| [Crate Reference](docs/architecture/crates/) | 13 Rust crates explained              |
-
-### 💡 Core Concepts (Theory)
-
-| Concept                                                 | Description                       |
-| ------------------------------------------------------- | --------------------------------- |
-| [Graph-RAG](docs/concepts/graph-rag.md)                 | Why knowledge graphs enhance RAG  |
-| [Entity Extraction](docs/concepts/entity-extraction.md) | LLM-based entity recognition      |
-| [Knowledge Graph](docs/concepts/knowledge-graph.md)     | Nodes, edges, and communities     |
-| [Hybrid Retrieval](docs/concepts/hybrid-retrieval.md)   | Combining vector and graph search |
-
-### Deep Dives (Advanced)
-
-| Article                                                         | Description                                  |
-| --------------------------------------------------------------- | -------------------------------------------- |
-| [LightRAG Algorithm](docs/deep-dives/lightrag-algorithm.md)     | Core algorithm: extraction, graph, retrieval |
-| [Query Modes](docs/deep-dives/query-modes.md)                   | 6 modes explained with trade-offs            |
-| [Entity Normalization](docs/deep-dives/entity-normalization.md) | Deduplication and description merging        |
-| [Gleaning](docs/deep-dives/gleaning.md)                         | Multi-pass extraction for completeness       |
-| [Community Detection](docs/deep-dives/community-detection.md)   | Louvain clustering for global queries        |
-| [Chunking Strategies](docs/deep-dives/chunking-strategies.md)   | Token-based segmentation with overlap        |
-| [Embedding Models](docs/deep-dives/embedding-models.md)         | Model selection and dimension trade-offs     |
-| [Graph Storage](docs/deep-dives/graph-storage.md)               | Apache AGE property graph backend            |
-| [Vector Storage](docs/deep-dives/vector-storage.md)             | pgvector HNSW indexing and search            |
-| [PDF Processing](docs/deep-dives/pdf-processing.md)             | Text/Vision/Hybrid extraction pipeline       |
-| [Cost Tracking](docs/deep-dives/cost-tracking.md)               | LLM cost monitoring per operation            |
-| [Pipeline Progress](docs/deep-dives/pipeline-progress.md)       | Real-time progress tracking                  |
-
-### 📊 Comparisons
-
-| Comparison                                                     | Key Insights                       |
-| -------------------------------------------------------------- | ---------------------------------- |
-| [vs LightRAG (Python)](docs/comparisons/vs-lightrag-python.md) | Performance and design differences |
-| [vs GraphRAG](docs/comparisons/vs-graphrag.md)                 | Microsoft's approach comparison    |
-| [vs Traditional RAG](docs/comparisons/vs-traditional-rag.md)   | Why graphs matter                  |
-
-### API Reference
-
-| API                                                    | Description              |
-| ------------------------------------------------------ | ------------------------ |
-| [REST API](docs/api-reference/rest-api.md)             | HTTP endpoints           |
-| [Extended API](docs/api-reference/extended-api.md)     | Advanced API features    |
-
-### Operations (Production)
-
-| Guide                                                           | Description            |
-| --------------------------------------------------------------- | ---------------------- |
-| [Deployment](docs/operations/deployment.md)                     | Production deployment  |
-| [Configuration](docs/operations/configuration.md)               | All config options     |
-| [Monitoring](docs/operations/monitoring.md)                     | Observability setup    |
-| [Performance Tuning](docs/operations/performance-tuning.md)     | Optimization guide     |
-
-### 🐛 Troubleshooting
-
-| Guide                                                    | Description                  |
-| -------------------------------------------------------- | ---------------------------- |
-| [Common Issues](docs/troubleshooting/common-issues.md)   | Debugging guide              |
-| [PDF Extraction](docs/troubleshooting/pdf-extraction.md) | PDF-specific troubleshooting |
-
-### 🔗 Integrations
-
-| Integration                                           | Description                          |
-| ----------------------------------------------------- | ------------------------------------ |
-| [OpenWebUI](docs/integrations/open-webui.md)          | Chat interface with Ollama emulation |
-| [LangChain](docs/integrations/langchain.md)           | Retriever and agent integration      |
-| [Custom Clients](docs/integrations/custom-clients.md) | Python, TypeScript, Rust, Go clients |
-
-### 📓 More Resources
-
-- [FAQ](docs/faq.md) - Frequently asked questions
-- [Cookbook](docs/cookbook.md) - Practical recipes
-- [Security](docs/security/) - Security best practices
+- **Graph Visualization**: Sigma.js 3.0 with force-directed, circular, and ForceAtlas2 layouts
+- **SSE Streaming**: Token-by-token answer generation display
+- **Document Upload**: Drag-and-drop with progress tracking
+- **Dark Mode**: Automatic theme switching
+- **i18n**: Multi-language support via i18next
+- **Virtualized Lists**: TanStack Virtual for large entity/document lists
+- **Markdown Rendering**: Syntax highlighting (Shiki), KaTeX math, GFM tables
 
 ---
 
 ## Development
 
-### Building and Testing
+### Build Commands
 
 ```bash
-# Build backend
-cd edgequake && cargo build --release
+# Build backend (offline mode, no running PostgreSQL needed)
+cd edgequake && SQLX_OFFLINE=true cargo build --release
 
 # Run tests
 cargo test
 
-# Lint and format
-cargo clippy
-cargo fmt
-
 # Build frontend
-cd edgequake_webui
-bun run build
+cd edgequake_webui && bun run build
 ```
 
-### Make Commands
-
-EdgeQuake uses a unified Makefile for all development tasks:
+### Make Targets
 
 ```bash
 # Full development stack
-make dev              # Start all services (PostgreSQL + Backend + Frontend)
-make dev-bg           # Start in background (for agents/automation)
-make dev-memory       # Start with in-memory storage (testing only)
+make dev              # PostgreSQL + Backend + Frontend
+make dev-bg           # Background mode (for agents/automation)
+make dev-memory       # In-memory storage (testing only)
 make stop             # Stop all services
-make status           # Check service status
 
-# Backend only
-make backend-dev      # Run backend with PostgreSQL
-make backend-memory   # Run backend with in-memory storage
-make backend-bg       # Run backend in background
+# Backend
+make backend-dev      # Run with PostgreSQL
+make backend-memory   # Run with in-memory storage
 make backend-test     # Run backend tests
 
-# Frontend only
-make frontend-dev     # Start frontend dev server
-make frontend-build   # Build frontend for production
+# Frontend
+make frontend-dev     # Start dev server with hot reload
+make frontend-build   # Production build
 
-# Database
-make db-start         # Start PostgreSQL container
-make db-stop          # Stop PostgreSQL container
-make db-wait          # Wait for database to be ready
-
-# Batch ingestion (AWS-scale pipeline)
-make batch-build      # Build batch ingestion CLI
-make batch-run        # Run full pipeline (prepare+extract+embed+store)
-make batch-prepare    # Phase 1: Parse, chunk, build JSONL
-make batch-extract    # Phase 2: OpenAI Batch API extraction
-make batch-embed      # Phase 3: Generate embeddings
-make batch-store      # Phase 4: Write to Neptune/S3/DynamoDB
-make batch-status     # Show job progress
+# Batch ingestion
+make batch-run        # Full 4-phase pipeline
+make batch-status     # Show progress
 make batch-resume     # Resume from checkpoint
 
-# Quality checks
-make test             # Run all tests
-make lint             # Lint all code
-make format           # Format all code
-make clean            # Clean build artifacts
+# Infrastructure (AWS CDK)
+make infra-deploy     # Deploy all stacks
+make infra-diff       # Preview changes
+make infra-destroy    # Tear down
+
+# Quality
+make test             # All tests
+make lint             # Clippy + ESLint
+make format           # rustfmt + Prettier
 ```
 
-### Agent Workflow
+---
 
-EdgeQuake development follows a **Specification-Driven Development** approach using the `edgecode` SOTA coding agent.
+## Crate Reference
 
-- **AGENTS.md**: Comprehensive agent guidelines and workflow
-- **specs/**: All development specifications
-- **OODA Loop**: Iterative development cycles (Observe, Orient, Decide, Act)
-
-See [AGENTS.md](AGENTS.md) for detailed agent workflow documentation.
+| Crate | Lines | Description |
+|---|---|---|
+| `edgequake-core` | -- | Pipeline orchestration, configuration |
+| `edgequake-query` | -- | 6 query modes, BM25 scorer, fact density, hybrid retrieval |
+| `edgequake-pipeline` | -- | Document ingestion (chunk, extract, embed, store) |
+| `edgequake-llm` | -- | OpenAI, Ollama, LM Studio, Mock providers |
+| `edgequake-storage` | -- | Trait definitions (`GraphStorage`, `VectorStorage`, `KVStorage`) |
+| `edgequake-storage-aws` | ~2,500 | Neptune, S3 Vectors, DynamoDB, Athena implementations |
+| `edgequake-batch` | -- | Batch ingestion CLI with OpenAI Batch API |
+| `edgequake-schema` | -- | LLM-assisted domain schema generation from sample docs |
+| `edgequake-api` | -- | REST API server, entity resolution, Code Mode sandbox |
+| `edgequake-pdf` | -- | PDF extraction: text mode, vision mode (GPT-4o OCR), hybrid |
+| `edgequake-auth` | -- | JWT tokens, API keys, multi-tenant isolation |
+| `edgequake-audit` | -- | Structured event logging, compliance |
+| `edgequake-tasks` | -- | Background job processing, status tracking |
+| `edgequake-rate-limiter` | -- | Per-tenant rate limiting middleware |
 
 ---
 
-## Contributing
+## Documentation
 
-EdgeQuake is developed using the **edgecode** SOTA coding agent created by **Raphaël MANSUY**. The project follows a **Specification-Driven Development** approach where all changes are specified in the `specs/` directory before implementation.
+| Section | Link | Description |
+|---|---|---|
+| **Getting Started** | [docs/getting-started/](docs/getting-started/) | Installation, quick start, first ingestion |
+| **Architecture** | [docs/architecture/](docs/architecture/) | System design, data flow, crate reference |
+| **Deep Dives** | [docs/deep-dives/](docs/deep-dives/) | LightRAG algorithm, query modes, entity normalization |
+| **API Reference** | [docs/api-reference/](docs/api-reference/) | REST endpoints, extended API |
+| **Tutorials** | [docs/tutorials/](docs/tutorials/) | First RAG app, PDF ingestion, multi-tenant setup |
+| **Operations** | [docs/operations/](docs/operations/) | Deployment, configuration, monitoring, tuning |
+| **MCP Integration** | [MCP_INTEGRATION.md](MCP_INTEGRATION.md) | MCP server setup and tool reference |
+| **MCP Quick Start** | [MCP_QUICKSTART.md](MCP_QUICKSTART.md) | 5-minute MCP setup guide |
+| **AWS Storage** | [AWS_STORAGE_COMPLETE_SUMMARY.md](AWS_STORAGE_COMPLETE_SUMMARY.md) | Cost analysis, architecture, implementation details |
 
-**Current Status**: `edgecode` is not yet public but will be released soon.
+### SDKs
 
-**For now, contributions should go through Raphaël MANSUY directly:**
+Auto-generated from OpenAPI 3.0 schema:
 
-- **GitHub Issues**: Report bugs and request features
-- **GitHub Discussions**: Ask questions and share ideas
-- **Direct Contact**: For major contributions, contact [@raphaelmansuy](https://github.com/raphaelmansuy)
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
-
----
-
-## Community & Support
-
-### Code of Conduct
-
-We are committed to providing a welcoming and inclusive environment. Please read our [Code of Conduct](CODE_OF_CONDUCT.md).
-
-### Support Channels
-
-- **GitHub Issues**: Bug reports and feature requests
-- **GitHub Discussions**: Questions and community help
-- **LinkedIn**: [@raphaelmansuy](https://www.linkedin.com/in/raphaelmansuy)
-- **Twitter/X**: [@raphaelmansuy](https://twitter.com/raphaelmansuy)
-
-### Founder
-
-**Raphaël MANSUY** 🇫🇷 - 🇭🇰🇨🇳 — Permanent Resident of Hong Kong, building the future of intelligent document retrieval systems and context graph systems.
+- [Python](sdks/python/README.md) | [TypeScript](sdks/typescript/README.md) | [Rust](sdks/rust/README.md) | [Go, Java, Kotlin, PHP, Ruby, Swift, C#](sdks/)
 
 ---
 
 ## License
 
-Licensed under the Apache License, Version 2.0 (the "License").  
-You may obtain a copy of the License at:
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
 
-http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the [LICENSE](LICENSE) file for the specific language governing permissions and limitations.
-
-**Copyright © 2024-2026 Raphaël MANSUY**
+**Original work Copyright 2024-2026 Raphael MANSUY**
+**Fork modifications Copyright 2025-2026 Guy Ernest**
 
 ---
 
 ## Acknowledgments
 
-EdgeQuake is inspired by and builds upon the excellent work of:
+This fork builds on the excellent work of:
 
-- **LightRAG Research Paper** ([arxiv.org/abs/2410.05779](https://arxiv.org/abs/2410.05779)): We are grateful to the authors of the foundational LightRAG algorithm which powers the core knowledge graph extraction and retrieval capabilities in EdgeQuake. Their innovative approach to entity extraction, relationship mapping, and hybrid retrieval has been instrumental in our framework's design.
-
-  **Special thanks to the LightRAG authors:**
-  - [Zirui Guo](https://arxiv.org/search/cs?searchtype=author&query=Guo,+Z)
-  - [Lianghao Xia](https://arxiv.org/search/cs?searchtype=author&query=Xia,+L)
-  - [Yanhua Yu](https://arxiv.org/search/cs?searchtype=author&query=Yu,+Y)
-  - [Tu Ao](https://arxiv.org/search/cs?searchtype=author&query=Ao,+T)
-  - [Chao Huang](https://arxiv.org/search/cs?searchtype=author&query=Huang,+C)
-
-- **GraphRAG** ([arxiv.org/abs/2404.16130](https://arxiv.org/abs/2404.16130)): Microsoft's "From Local to Global" knowledge graph approach to query-focused summarization.
-  - [Shuai Wang](https://www.microsoft.com/en-us/research/people/shuaiw/)
-  - [Yingqiang Ge](https://www.microsoft.com/en-us/research/people/yinge/)
-  - [Ying Shen](https://www.microsoft.com/en-us/research/people/yingshen/)
-  - [Jianfeng Gao](https://www.microsoft.com/en-us/research/people/jfgao/)
-  - [Xiaodong Liu](https://www.microsoft.com/en-us/research/people/xiaodl/)
-  - [Yelong Shen](https://www.microsoft.com/en-us/research/people/yelongshen/)
-  - [Jianfeng Wang](https://www.microsoft.com/en-us/research/people/jianfw/)
-  - [Ming Zhou](https://www.microsoft.com/en-us/research/people/zhou/)
-- **Rust Community**: For the amazing async ecosystem (Tokio, Axum, SQLx) that enables EdgeQuake's high performance
-- **React Community**: For React 19 and the modern frontend stack that powers our interactive UI
-
----
-
-## Quick Links
-
-| Resource              | URL                                                                              |
-| --------------------- | -------------------------------------------------------------------------------- |
-| 📚 Full Documentation | [docs/README.md](docs/README.md)                                                 |
-| 🚀 Quick Start Guide  | [docs/getting-started/quick-start.md](docs/getting-started/quick-start.md)       |
-| 📦 SDKs Overview      | [sdks/](sdks/)                                                                   |
-| 🐍 Python SDK         | [sdks/python/README.md](sdks/python/README.md)                                   |
-| 🦀 Rust SDK           | [sdks/rust/README.md](sdks/rust/README.md)                                       |
-| 🟦 TypeScript SDK     | [sdks/typescript/README.md](sdks/typescript/README.md)                           |
-| 📜 CHANGELOG          | [CHANGELOG.md](CHANGELOG.md)                                                     |
-| 🔧 Agent Workflow     | [AGENTS.md](AGENTS.md)                                                           |
-| 🤝 Contributing       | [CONTRIBUTING.md](CONTRIBUTING.md)                                               |
-| 📜 Code of Conduct    | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)                                         |
-| 📄 License            | [LICENSE](LICENSE)                                                               |
-| 🐛 Report Issues      | [GitHub Issues](https://github.com/raphaelmansuy/edgequake/issues)               |
-| 💬 Discussions        | [GitHub Discussions](https://github.com/raphaelmansuy/edgequake/discussions)     |
-| 🌐 Repository         | [github.com/raphaelmansuy/edgequake](https://github.com/raphaelmansuy/edgequake) |
-
----
-
-**Ready to build intelligent document retrieval?** [Get started now!](docs/getting-started/quick-start.md)
-
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=raphaelmansuy/edgequake&type=date&legend=top-left)](https://www.star-history.com/#raphaelmansuy/edgequake&type=date&legend=top-left)
+- **[Raphael MANSUY](https://github.com/raphaelmansuy)** -- Creator of EdgeQuake and the original Rust implementation of LightRAG. The core architecture (13-crate workspace, trait-based storage, 6 query modes, entity extraction pipeline, React frontend) is his work. This fork extends it with AWS backends, batch ingestion, and MCP integration.
+- **LightRAG** ([arxiv.org/abs/2410.05779](https://arxiv.org/abs/2410.05779)) -- The foundational algorithm for knowledge graph extraction and hybrid retrieval. Authors: Zirui Guo, Lianghao Xia, Yanhua Yu, Tu Ao, Chao Huang.
+- **GraphRAG** ([arxiv.org/abs/2404.16130](https://arxiv.org/abs/2404.16130)) -- Microsoft's "From Local to Global" approach to query-focused summarization.
+- **Rust Community** -- Tokio, Axum, SQLx, and the async ecosystem that makes this performance possible.
