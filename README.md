@@ -39,10 +39,10 @@ This is a **fork** of [raphaelmansuy/edgequake](https://github.com/raphaelmansuy
                      +----------------------------------+
                      |  MCP Server (4 tools + Code Mode)|
                      |  ask | explore_entity | search   |
-                     |  validate_code | execute_code     |
+                     |  validate_code | execute_code    |
                      +----------------------------------+
                                       |
-+-------------------------------------+-------------------------------------+
++-------------------------------------+--------------------------------------+
 |                              EdgeQuake System                              |
 |                                                                            |
 |  Frontend (React 19 + Next.js)          REST API (Axum)                    |
