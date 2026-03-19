@@ -19,7 +19,7 @@ This is a **fork** of [raphaelmansuy/edgequake](https://github.com/raphaelmansuy
 | **Graph Storage** | PostgreSQL + Apache AGE | Amazon Neptune (Gremlin, IAM SigV4) |
 | **Vector Search** | pgvector (HNSW) | Amazon S3 Vectors (serverless, auto-scaling) |
 | **Key-Value** | PostgreSQL JSONB | Amazon DynamoDB (on-demand, single-digit ms) |
-| **Analytics** | -- | Amazon Athena (serverless SQL over S3) |
+| **BM25 Search** | -- | Amazon Athena + Iceberg tables (serverless BM25 scoring over S3) |
 | **Batch Ingestion** | Single-doc API | 4-phase pipeline: OpenAI Batch API, 100K+ docs |
 | **AI Agent Access** | REST API only | MCP server with 4 tools + Code Mode sandbox |
 | **Answer Quality** | -- | Fact density scoring, source diversity, chunk confidence |
@@ -53,10 +53,10 @@ This is a **fork** of [raphaelmansuy/edgequake](https://github.com/raphaelmansuy
 |                                                                            |
 |  Backend (Rust - 14 Crates)                                                |
 |  +----------------------------------------------------------------------+  |
-|  | edgequake-core          | Orchestration, pipeline coordination      |  |
-|  | edgequake-query         | 6 query modes, BM25, hybrid retrieval     |  |
-|  | edgequake-pipeline      | Document ingestion pipeline               |  |
-|  | edgequake-llm           | OpenAI, Ollama, LM Studio providers       |  |
+|  | edgequake-core          | Orchestration, pipeline coordination       |  |
+|  | edgequake-query         | 6 query modes, BM25, hybrid retrieval      |  |
+|  | edgequake-pipeline      | Document ingestion pipeline                |  |
+|  | edgequake-llm           | OpenAI, Ollama, LM Studio providers        |  |
 |  | edgequake-storage       | Trait abstraction (GraphStorage, etc.)     |  |
 |  | edgequake-storage-aws   | Neptune, S3 Vectors, DynamoDB, Athena      |  |
 |  | edgequake-batch         | Batch ingestion CLI (100K+ docs)           |  |
@@ -70,13 +70,13 @@ This is a **fork** of [raphaelmansuy/edgequake](https://github.com/raphaelmansuy
 |  +----------------------------------------------------------------------+  |
 |                                                                            |
 |  Storage Backends (swap via traits, no code changes)                       |
-|  +----------------------------+  +-------------------------------------+  |
-|  | Local (Docker)             |  | AWS Managed (Production)            |  |
-|  | - PostgreSQL + AGE (graph) |  | - Neptune (graph, Gremlin)          |  |
-|  | - pgvector (vectors)       |  | - S3 Vectors (vector search)        |  |
-|  | - PostgreSQL (KV)          |  | - DynamoDB (key-value, state)       |  |
-|  | - In-Memory (dev/test)     |  | - Athena (analytics, SQL over S3)   |  |
-|  +----------------------------+  +-------------------------------------+  |
+|  +----------------------------+  +-------------------------------------+   |
+|  | Local (Docker)             |  | AWS Managed (Production)            |   |
+|  | - PostgreSQL + AGE (graph) |  | - Neptune (graph, Gremlin)          |   |
+|  | - pgvector (vectors)       |  | - S3 Vectors (vector search)        |   |
+|  | - PostgreSQL (KV)          |  | - DynamoDB (key-value, state)       |   |
+|  | - In-Memory (dev/test)     |  | - Athena + Iceberg (BM25 search)    |   |
+|  +----------------------------+  +-------------------------------------+   |
 +----------------------------------------------------------------------------+
 ```
 
@@ -84,14 +84,14 @@ This is a **fork** of [raphaelmansuy/edgequake](https://github.com/raphaelmansuy
 
 ## AWS Storage Backends
 
-EdgeQuake implements a trait-based storage abstraction (`GraphStorage`, `VectorStorage`, `KVStorage`). The AWS backends are designed for production workloads where serverless scaling and pay-per-use pricing matter.
+EdgeQuake implements a trait-based storage abstraction (`GraphStorage`, `VectorStorage`, `KVStorage`, `Bm25Storage`). The AWS backends are designed for production workloads where serverless scaling and pay-per-use pricing matter.
 
 | Layer | AWS Service | Why | Key Specs |
 |---|---|---|---|
 | **Graph** | Neptune Serverless | Managed graph DB, Gremlin queries, IAM auth, auto-replication | 1-100ms latency, scales 2.5-128 NCUs, scales to zero |
 | **Vector** | S3 Vectors | Native cosine search, no capacity planning, auto-indexing | Pay-per-request, scales with data volume |
 | **Key-Value** | DynamoDB On-Demand | Single-digit ms reads, batch operations, PITR | $1.25/M writes, $0.25/M reads, $0.25/GB-month |
-| **Analytics** | Athena | Serverless SQL over Parquet/JSON in S3 | $5/TB scanned, no infrastructure to manage |
+| **BM25 Search** | Athena + Iceberg | Serverless Okapi BM25 scoring via SQL over Parquet on S3 | $5/TB scanned, no infrastructure to manage |
 
 ### Cost Comparison (100GB vectors, 1M graph nodes, 100K documents)
 
@@ -183,11 +183,39 @@ EdgeQuake implements the [LightRAG algorithm](https://arxiv.org/abs/2410.05779) 
 
 ### 3 Retrieval Modes
 
-Each query mode can use one of three retrieval backends:
+Each query mode can use one of three retrieval backends (orthogonal to query mode -- you can combine any query mode with any retrieval mode):
 
-- **Semantic** (default) -- Vector similarity via embeddings
-- **BM25** -- Full-text keyword search with stemming (best for exact names, rare terms)
-- **Hybrid** -- Reciprocal rank fusion of semantic + BM25 (recommended for most queries)
+- **Vector** (default) -- Cosine similarity via embeddings (S3 Vectors)
+- **BM25** -- Keyword search via Athena SQL (best for exact names, rare terms, numbers)
+- **Hybrid** -- Reciprocal Rank Fusion of vector + BM25 results (recommended for most queries)
+
+#### BM25 via Athena (this fork's addition)
+
+The upstream project has no keyword search. This fork adds a full **Okapi BM25** implementation backed by Amazon Athena and Apache Iceberg tables on S3:
+
+```
+Batch ingestion                    Query time
+
+Documents --> Tokenize + stem      Query --> Tokenize + stem
+           |                                |
+           v                                v
+    Write Parquet to S3 staging     Athena SQL: BM25 scoring
+           |                        (IDF * TF-norm per term)
+           v                                |
+    INSERT INTO Iceberg tables              v
+    (postings, term_stats,          Ranked doc_ids + scores
+     docs, corpus_stats)
+```
+
+Four Iceberg tables per namespace store the inverted index:
+- `{ns}_postings`: term -> doc_id -> term frequency
+- `{ns}_term_stats`: term -> document frequency
+- `{ns}_docs`: doc_id -> document length, source chunk ID
+- `{ns}_corpus_stats`: total documents (N), average document length (avgdl)
+
+Data is ingested via **Parquet staging** (Arrow RecordBatch -> Parquet -> S3 -> `INSERT INTO...SELECT`) to avoid Athena's small-file anti-pattern. At query time, BM25 scoring runs as a single Athena SQL query using the standard Okapi formula with k1=1.5, b=0.75.
+
+In **hybrid** retrieval mode, vector and BM25 results are fused using Reciprocal Rank Fusion (RRF), combining semantic understanding with exact keyword matching.
 
 ### Answer Quality Signals
 
@@ -395,8 +423,8 @@ make format           # rustfmt + Prettier
 | `edgequake-query` | -- | 6 query modes, BM25 scorer, fact density, hybrid retrieval |
 | `edgequake-pipeline` | -- | Document ingestion (chunk, extract, embed, store) |
 | `edgequake-llm` | -- | OpenAI, Ollama, LM Studio, Mock providers |
-| `edgequake-storage` | -- | Trait definitions (`GraphStorage`, `VectorStorage`, `KVStorage`) |
-| `edgequake-storage-aws` | ~2,500 | Neptune, S3 Vectors, DynamoDB, Athena implementations |
+| `edgequake-storage` | -- | Trait definitions (`GraphStorage`, `VectorStorage`, `KVStorage`, `Bm25Storage`) |
+| `edgequake-storage-aws` | ~2,500 | Neptune (graph), S3 Vectors (vector), DynamoDB (KV), Athena BM25 (keyword search) |
 | `edgequake-batch` | -- | Batch ingestion CLI with OpenAI Batch API |
 | `edgequake-schema` | -- | LLM-assisted domain schema generation from sample docs |
 | `edgequake-api` | -- | REST API server, entity resolution, Code Mode sandbox |
