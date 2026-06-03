@@ -165,14 +165,24 @@ impl DomainConfig {
             entity_types.insert(et.name.clone(), et.description.clone());
         }
 
-        // 2. Relationship keywords from relation types
+        // 2. Relationship keywords from relation types (include entity type constraints)
         let mut relationship_keywords = IndexMap::new();
         let keywords: Vec<RelationshipKeyword> = proposal
             .relation_types
             .iter()
-            .map(|rt| RelationshipKeyword {
-                keyword: rt.name.clone(),
-                description: rt.description.clone(),
+            .map(|rt| {
+                let type_hint = if !rt.source_type.is_empty() && !rt.target_type.is_empty() {
+                    format!(
+                        "{} — connects {} → {}",
+                        rt.description, rt.source_type, rt.target_type
+                    )
+                } else {
+                    rt.description.clone()
+                };
+                RelationshipKeyword {
+                    keyword: rt.name.clone(),
+                    description: type_hint,
+                }
             })
             .collect();
         if !keywords.is_empty() {
@@ -190,7 +200,11 @@ impl DomainConfig {
         let prompts = PromptConfig {
             role_description: format!(
                 "You are a Knowledge Graph Specialist responsible for extracting entities \
-                 and relationships from documents in the '{}' domain.",
+                 and relationships from documents in the '{}' domain. \
+                 Your output will be used to build a structured knowledge graph where \
+                 entities are nodes and relationships are typed edges. \
+                 Every relationship MUST use one of the defined relationship types as its keyword. \
+                 If no defined type fits a relationship, do NOT extract it.",
                 namespace_name
             ),
             canonicalization_examples: vec![],
@@ -198,13 +212,16 @@ impl DomainConfig {
             user_instructions: vec![],
         };
 
+        // 5. Generate a few-shot example from the first 3 relation types
+        let examples = Self::generate_schema_example(&proposal.relation_types, &proposal.entity_types);
+
         DomainConfig {
             domain,
             entity_types,
             aliases: IndexMap::new(),
             prompts,
             relationship_keywords,
-            examples: vec![],
+            examples,
         }
     }
 
@@ -259,6 +276,61 @@ impl DomainConfig {
             }
         }
         pairs
+    }
+
+    /// Generate a synthetic few-shot example from the schema's relation types.
+    ///
+    /// Picks up to 3 relation types and builds a plausible input/output pair
+    /// showing entities and relationships using the exact defined keywords.
+    fn generate_schema_example(
+        relation_types: &[crate::schema::RelationTypeProposal],
+        entity_types: &[crate::schema::EntityTypeProposal],
+    ) -> Vec<FewShotExample> {
+        if relation_types.is_empty() || entity_types.is_empty() {
+            return vec![];
+        }
+
+        // Pick up to 3 relation types for the example
+        let sample: Vec<_> = relation_types.iter().take(3).collect();
+
+        // Build synthetic input text
+        let mut input_lines = Vec::new();
+        let mut output_lines = Vec::new();
+
+        // Add entity lines and relationship lines for each sampled relation
+        for rt in &sample {
+            let src_name = format!("Example {}", rt.source_type.to_lowercase());
+            let tgt_name = format!("Example {}", rt.target_type.to_lowercase());
+
+            // Entities
+            output_lines.push(format!(
+                "entity{{td}}{}{{td}}{}{{td}}An example {} entity.",
+                src_name, rt.source_type, rt.source_type.to_lowercase()
+            ));
+            output_lines.push(format!(
+                "entity{{td}}{}{{td}}{}{{td}}An example {} entity.",
+                tgt_name, rt.target_type, rt.target_type.to_lowercase()
+            ));
+
+            // Relationship using the exact keyword
+            output_lines.push(format!(
+                "relation{{td}}{}{{td}}{}{{td}}{}{{td}}{}",
+                src_name, tgt_name, rt.name, rt.description
+            ));
+
+            input_lines.push(format!(
+                "{} is connected to {} ({}).",
+                src_name, tgt_name, rt.description
+            ));
+        }
+
+        output_lines.push("{cd}".to_string());
+
+        vec![FewShotExample {
+            title: "Schema relationship types".to_string(),
+            input: input_lines.join(" "),
+            output: output_lines.join("\n"),
+        }]
     }
 }
 

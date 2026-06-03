@@ -43,6 +43,12 @@ pub struct SuggestSchemaInput {
     pub domain_hint: Option<String>,
     /// Total sampling budget (default: 24 documents).
     pub sample_budget: Option<usize>,
+    /// Document delimiter for splitting a single file into multiple documents.
+    pub delimiter: Option<String>,
+    /// Skip positional content extraction for long documents (return full content).
+    /// Useful for preview where the chunker + cap already limits processing.
+    #[serde(default)]
+    pub skip_positional_extraction: bool,
 }
 
 /// Metadata about the stratified sampling process.

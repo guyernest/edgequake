@@ -33,6 +33,7 @@ sqlx = { workspace = true, optional = true }
 toml = "0.8"
 indexmap = { version = "2.7", features = ["serde"] }
 anyhow = { workspace = true }
+sha2 = "0.10"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }

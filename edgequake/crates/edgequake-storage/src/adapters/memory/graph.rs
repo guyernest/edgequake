@@ -49,13 +49,19 @@ impl MemoryGraphStorage {
         }
     }
 
-    /// Normalize edge key (alphabetically sorted for consistency).
+    /// Preserve directed edge identity.
     fn edge_key(source: &str, target: &str) -> (String, String) {
-        if source <= target {
-            (source.to_string(), target.to_string())
-        } else {
-            (target.to_string(), source.to_string())
-        }
+        (source.to_string(), target.to_string())
+    }
+
+    fn edge_count_for_node(
+        edges: &HashMap<(String, String), HashMap<String, serde_json::Value>>,
+        node_id: &str,
+    ) -> usize {
+        edges
+            .keys()
+            .filter(|(source, target)| source == node_id || target == node_id)
+            .count()
     }
 }
 
@@ -150,26 +156,23 @@ impl GraphStorage for MemoryGraphStorage {
     }
 
     async fn node_degree(&self, node_id: &str) -> Result<usize> {
-        let adjacency = self
-            .adjacency
+        let edges = self
+            .edges
             .read()
             .map_err(|e| StorageError::Database(format!("Lock error: {}", e)))?;
 
-        Ok(adjacency.get(node_id).map(|n| n.len()).unwrap_or(0))
+        Ok(Self::edge_count_for_node(&edges, node_id))
     }
 
     async fn node_degrees_batch(&self, node_ids: &[String]) -> Result<Vec<(String, usize)>> {
-        let adjacency = self
-            .adjacency
+        let edges = self
+            .edges
             .read()
             .map_err(|e| StorageError::Database(format!("Lock error: {}", e)))?;
 
         Ok(node_ids
             .iter()
-            .map(|id| {
-                let degree = adjacency.get(id).map(|n| n.len()).unwrap_or(0);
-                (id.clone(), degree)
-            })
+            .map(|id| (id.clone(), Self::edge_count_for_node(&edges, id)))
             .collect())
     }
 
@@ -256,22 +259,23 @@ impl GraphStorage for MemoryGraphStorage {
             .nodes
             .read()
             .map_err(|e| StorageError::Database(format!("Lock error: {}", e)))?;
-        let adjacency = self
-            .adjacency
+        let edges = self
+            .edges
             .read()
             .map_err(|e| StorageError::Database(format!("Lock error: {}", e)))?;
 
         let mut result = Vec::new();
         for id in node_ids {
             if let Some(props) = nodes.get(id) {
-                let degree = adjacency.get(id).map(|n| n.len()).unwrap_or(0);
+                let in_degree = edges.keys().filter(|(_, target)| target == id).count();
+                let out_degree = edges.keys().filter(|(source, _)| source == id).count();
                 result.push((
                     GraphNode {
                         id: id.clone(),
                         properties: props.clone(),
                     },
-                    degree, // in_degree (symmetric graph, so same)
-                    degree, // out_degree
+                    in_degree,
+                    out_degree,
                 ));
             }
         }
@@ -345,12 +349,15 @@ impl GraphStorage for MemoryGraphStorage {
         let key = Self::edge_key(source, target);
         edges.remove(&key);
 
-        // Update adjacency
-        if let Some(neighbors) = adjacency.get_mut(source) {
-            neighbors.remove(target);
-        }
-        if let Some(neighbors) = adjacency.get_mut(target) {
-            neighbors.remove(source);
+        // Update traversal adjacency only when no reciprocal directed edge remains.
+        let reverse_key = Self::edge_key(target, source);
+        if !edges.contains_key(&reverse_key) {
+            if let Some(neighbors) = adjacency.get_mut(source) {
+                neighbors.remove(target);
+            }
+            if let Some(neighbors) = adjacency.get_mut(target) {
+                neighbors.remove(source);
+            }
         }
 
         Ok(())
@@ -457,14 +464,18 @@ impl GraphStorage for MemoryGraphStorage {
     }
 
     async fn get_popular_labels(&self, limit: usize) -> Result<Vec<String>> {
-        let adjacency = self
-            .adjacency
+        let nodes = self
+            .nodes
+            .read()
+            .map_err(|e| StorageError::Database(format!("Lock error: {}", e)))?;
+        let edges = self
+            .edges
             .read()
             .map_err(|e| StorageError::Database(format!("Lock error: {}", e)))?;
 
-        let mut node_degrees: Vec<(String, usize)> = adjacency
-            .iter()
-            .map(|(id, neighbors)| (id.clone(), neighbors.len()))
+        let mut node_degrees: Vec<(String, usize)> = nodes
+            .keys()
+            .map(|id| (id.clone(), Self::edge_count_for_node(&edges, id)))
             .collect();
 
         node_degrees.sort_by(|a, b| b.1.cmp(&a.1));
@@ -505,8 +516,8 @@ impl GraphStorage for MemoryGraphStorage {
             .read()
             .map_err(|e| StorageError::Database(format!("Lock error: {}", e)))?;
 
-        let adjacency = self
-            .adjacency
+        let edges = self
+            .edges
             .read()
             .map_err(|e| StorageError::Database(format!("Lock error: {}", e)))?;
 
@@ -563,8 +574,8 @@ impl GraphStorage for MemoryGraphStorage {
                 true
             })
             .map(|(node_id, props)| {
-                // Calculate degree from adjacency list
-                let degree = adjacency.get(node_id).map(|n| n.len()).unwrap_or(0);
+                // Calculate degree from directed edge count.
+                let degree = Self::edge_count_for_node(&edges, node_id);
                 let node = GraphNode {
                     id: node_id.clone(),
                     properties: props.clone(),
@@ -736,9 +747,31 @@ mod tests {
         storage.upsert_edge("alice", "bob", props).await.unwrap();
 
         assert!(storage.has_edge("alice", "bob").await.unwrap());
-        assert!(storage.has_edge("bob", "alice").await.unwrap()); // Symmetric
+        assert!(!storage.has_edge("bob", "alice").await.unwrap());
 
         assert_eq!(storage.node_degree("alice").await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_graph_preserves_reciprocal_directed_edges() {
+        let storage = MemoryGraphStorage::new("test");
+
+        storage.upsert_node("A", HashMap::new()).await.unwrap();
+        storage.upsert_node("B", HashMap::new()).await.unwrap();
+        storage.upsert_edge("A", "B", HashMap::new()).await.unwrap();
+        storage.upsert_edge("B", "A", HashMap::new()).await.unwrap();
+
+        assert!(storage.has_edge("A", "B").await.unwrap());
+        assert!(storage.has_edge("B", "A").await.unwrap());
+        assert_eq!(storage.edge_count().await.unwrap(), 2);
+
+        storage.delete_edge("A", "B").await.unwrap();
+
+        assert!(!storage.has_edge("A", "B").await.unwrap());
+        assert!(storage.has_edge("B", "A").await.unwrap());
+        assert_eq!(storage.edge_count().await.unwrap(), 1);
+        assert_eq!(storage.node_degree("A").await.unwrap(), 1);
+        assert_eq!(storage.node_degree("B").await.unwrap(), 1);
     }
 
     #[tokio::test]

@@ -48,6 +48,7 @@ pub mod namespace;
 #[cfg(feature = "pipeline")]
 pub mod orchestrator;
 pub mod schema;
+pub mod snapshot;
 pub mod query;
 #[cfg(feature = "pipeline")]
 pub mod tenant_manager;
@@ -102,6 +103,7 @@ pub use namespace::{
 
 // Re-export schema proposal types
 pub use schema::{EntityTypeProposal, RelationTypeProposal, SchemaProposal, SchemaStatus};
+pub use snapshot::{LoadedSnapshot, SnapshotLoader, SnapshotManifest};
 
 // Re-export MCP descriptor types
 pub use mcp_descriptor::{
