@@ -364,6 +364,39 @@ impl SOTAQueryEngine {
         self
     }
 
+    /// Build a `QueryResponse` with quality scoring and optional keyword extraction.
+    ///
+    /// Shared by all query mode methods to avoid duplicating the response
+    /// construction logic.
+    fn build_response(
+        &self,
+        answer: String,
+        context: crate::context::QueryContext,
+        mode: QueryMode,
+        stats: crate::engine::QueryStats,
+        keywords: &ExtractedKeywords,
+        request: &crate::engine::QueryRequest,
+    ) -> crate::engine::QueryResponse {
+        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
+            Some(crate::quality::AnswerQuality::compute(&context, &answer))
+        } else {
+            None
+        };
+
+        crate::engine::QueryResponse {
+            answer,
+            context,
+            mode,
+            stats,
+            quality,
+            extracted_keywords: if self.config.use_keyword_extraction {
+                Some(keywords.clone())
+            } else {
+                None
+            },
+        }
+    }
+
     /// Rerank chunks using the configured reranker.
     ///
     /// Applies reranking to improve retrieval precision:
@@ -870,24 +903,7 @@ impl SOTAQueryEngine {
         stats.generated_tokens = generated_tokens;
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
-        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
-            Some(crate::quality::AnswerQuality::compute(&final_context, &answer))
-        } else {
-            None
-        };
-
-        Ok(crate::engine::QueryResponse {
-            answer,
-            context: final_context,
-            mode,
-            stats,
-            quality,
-            extracted_keywords: if self.config.use_keyword_extraction {
-                Some(keywords.clone())
-            } else {
-                None
-            },
-        })
+        Ok(self.build_response(answer, final_context, mode, stats, &keywords, &request))
     }
 
     /// Execute a query with a workspace-specific embedding provider override.
@@ -1105,24 +1121,7 @@ impl SOTAQueryEngine {
         stats.generated_tokens = generated_tokens;
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
-        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
-            Some(crate::quality::AnswerQuality::compute(&final_context, &answer))
-        } else {
-            None
-        };
-
-        Ok(crate::engine::QueryResponse {
-            answer,
-            context: final_context,
-            mode,
-            stats,
-            quality,
-            extracted_keywords: if self.config.use_keyword_extraction {
-                Some(keywords.clone())
-            } else {
-                None
-            },
-        })
+        Ok(self.build_response(answer, final_context, mode, stats, &keywords, &request))
     }
 
     /// Execute a query with workspace-specific vector storage and embedding provider.
@@ -1332,24 +1331,7 @@ impl SOTAQueryEngine {
         stats.generated_tokens = generated_tokens;
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
-        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
-            Some(crate::quality::AnswerQuality::compute(&final_context, &answer))
-        } else {
-            None
-        };
-
-        Ok(crate::engine::QueryResponse {
-            answer,
-            context: final_context,
-            mode,
-            stats,
-            quality,
-            extracted_keywords: if self.config.use_keyword_extraction {
-                Some(keywords.clone())
-            } else {
-                None
-            },
-        })
+        Ok(self.build_response(answer, final_context, mode, stats, &keywords, &request))
     }
 
     /// Execute a query with full workspace configuration AND optional LLM override.
@@ -1553,24 +1535,7 @@ impl SOTAQueryEngine {
         stats.generated_tokens = generated_tokens;
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
-        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
-            Some(crate::quality::AnswerQuality::compute(&final_context, &answer))
-        } else {
-            None
-        };
-
-        Ok(crate::engine::QueryResponse {
-            answer,
-            context: final_context,
-            mode,
-            stats,
-            quality,
-            extracted_keywords: if self.config.use_keyword_extraction {
-                Some(keywords.clone())
-            } else {
-                None
-            },
-        })
+        Ok(self.build_response(answer, final_context, mode, stats, &keywords, &request))
     }
 
     /// Execute a query streaming with full config (workspace embedding + storage + optional LLM override).
@@ -1960,24 +1925,7 @@ impl SOTAQueryEngine {
         stats.generated_tokens = generated_tokens;
         stats.total_time_ms = start.elapsed().as_millis() as u64;
 
-        let quality = if !answer.is_empty() && !request.context_only && !request.prompt_only {
-            Some(crate::quality::AnswerQuality::compute(&final_context, &answer))
-        } else {
-            None
-        };
-
-        Ok(crate::engine::QueryResponse {
-            answer,
-            context: final_context,
-            mode,
-            stats,
-            quality,
-            extracted_keywords: if self.config.use_keyword_extraction {
-                Some(keywords.clone())
-            } else {
-                None
-            },
-        })
+        Ok(self.build_response(answer, final_context, mode, stats, &keywords, &request))
     }
 
     /// Execute a streaming query with full SOTA pipeline.
