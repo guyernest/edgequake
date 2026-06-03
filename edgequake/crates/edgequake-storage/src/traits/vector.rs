@@ -81,41 +81,6 @@ pub trait VectorStorage: Send + Sync {
         filter_ids: Option<&[String]>,
     ) -> Result<Vec<VectorSearchResult>>;
 
-    /// Perform similarity search filtered by vector type metadata.
-    ///
-    /// When the index contains multiple vector types (chunk, entity, relationship),
-    /// this method filters results server-side for much better recall. Backends
-    /// that support native metadata filtering (e.g. S3 Vectors) should override
-    /// this. The default implementation falls back to `query()` + client-side
-    /// filtering, which may miss results if non-matching types dominate the top-K.
-    ///
-    /// # Arguments
-    ///
-    /// * `query_embedding` - The query vector
-    /// * `top_k` - Maximum number of results to return
-    /// * `type_filter` - Value of the `type` metadata field to filter on (e.g. "chunk")
-    /// * `filter_ids` - Optional list of IDs to restrict search to
-    async fn query_by_type(
-        &self,
-        query_embedding: &[f32],
-        top_k: usize,
-        type_filter: &str,
-        filter_ids: Option<&[String]>,
-    ) -> Result<Vec<VectorSearchResult>> {
-        // Default: query without filter, then filter client-side
-        let results = self.query(query_embedding, top_k, filter_ids).await?;
-        Ok(results
-            .into_iter()
-            .filter(|r| {
-                r.metadata
-                    .get("type")
-                    .and_then(|v| v.as_str())
-                    .map(|t| t == type_filter)
-                    .unwrap_or(false)
-            })
-            .collect())
-    }
-
     /// Insert or update vectors with metadata.
     ///
     /// # Arguments
@@ -150,6 +115,60 @@ pub trait VectorStorage: Send + Sync {
 
     /// Clear all vectors.
     async fn clear(&self) -> Result<()>;
+
+    /// Perform similarity search filtered by vector type.
+    ///
+    /// Uses server-side metadata filtering when the backend supports it
+    /// (e.g., S3 Vectors native `filter` parameter), otherwise falls back
+    /// to client-side filtering after retrieval.
+    ///
+    /// # Why This Method Exists
+    ///
+    /// All vector types (chunks, entities, relationships) share a single index
+    /// per namespace. Entity descriptions are semantically denser than chunk text,
+    /// so they dominate cosine similarity rankings. A naive `query()` call with
+    /// `top_k=100` can return ~26 entities + ~74 relationships and **zero chunks**.
+    ///
+    /// Server-side filtering guarantees the correct type fills the full `top_k`.
+    ///
+    /// # Arguments
+    ///
+    /// * `query_embedding` - The query vector
+    /// * `top_k` - Maximum number of results to return
+    /// * `vector_type` - Metadata type to filter for: `"chunk"`, `"entity"`, or `"relationship"`
+    /// * `filter_ids` - Optional list of IDs to restrict search to
+    ///
+    /// # Default Implementation
+    ///
+    /// Calls `query()` with 3x oversampling, then filters client-side by metadata `type` field.
+    /// Backends with native metadata filtering should override this for better recall.
+    async fn query_by_type(
+        &self,
+        query_embedding: &[f32],
+        top_k: usize,
+        vector_type: &str,
+        filter_ids: Option<&[String]>,
+    ) -> Result<Vec<VectorSearchResult>> {
+        // Default: oversample to compensate for mixed types, then filter client-side.
+        let oversample = if filter_ids.is_some() {
+            // When filtering by IDs, the ID filter already narrows results
+            top_k
+        } else {
+            (top_k * 3).min(100)
+        };
+        let results = self.query(query_embedding, oversample, filter_ids).await?;
+        Ok(results
+            .into_iter()
+            .filter(|r| {
+                r.metadata
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .map(|t| t == vector_type)
+                    .unwrap_or(false)
+            })
+            .take(top_k)
+            .collect())
+    }
 
     /// Clear vectors for a specific workspace.
     ///

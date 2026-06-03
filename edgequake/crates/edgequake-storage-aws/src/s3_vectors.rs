@@ -353,7 +353,7 @@ impl VectorStorage for S3VectorsStorage {
         &self,
         query_embedding: &[f32],
         top_k: usize,
-        type_filter: &str,
+        vector_type: &str,
         filter_ids: Option<&[String]>,
     ) -> edgequake_storage::error::Result<Vec<VectorSearchResult>> {
         let request_top_k = if filter_ids.is_some() {
@@ -362,12 +362,12 @@ impl VectorStorage for S3VectorsStorage {
             (top_k).min(100) as i32
         };
 
-        // Build native metadata filter: {"type": "<type_filter>"}
+        // Build native metadata filter: {"type": "<vector_type>"}
         let filter = {
             let mut map = HashMap::new();
             map.insert(
                 "type".to_string(),
-                Document::String(type_filter.to_string()),
+                Document::String(vector_type.to_string()),
             );
             Document::Object(map)
         };
@@ -414,7 +414,7 @@ impl VectorStorage for S3VectorsStorage {
 
         results.truncate(top_k);
         debug!(
-            type_filter = type_filter,
+            vector_type = vector_type,
             results = results.len(),
             "S3 Vectors query_by_type with native metadata filter"
         );
