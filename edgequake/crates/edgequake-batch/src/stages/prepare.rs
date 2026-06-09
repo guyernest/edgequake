@@ -46,7 +46,11 @@ enum InputType {
 /// Returns documents, their input type, and a front matter map for markdown files.
 fn read_input_data(
     config: &BatchConfig,
-) -> anyhow::Result<(Vec<ReconstructedDocument>, InputType, HashMap<String, FrontMatter>)> {
+) -> anyhow::Result<(
+    Vec<ReconstructedDocument>,
+    InputType,
+    HashMap<String, FrontMatter>,
+)> {
     let data_path = &config.data_path;
     let mut front_matter_map: HashMap<String, FrontMatter> = HashMap::new();
 
@@ -115,8 +119,7 @@ fn read_input_data(
                 let base_dir = data_path.parent().unwrap_or(Path::new("."));
 
                 // Collect front matter before reading (read_single_file discards it)
-                if let Ok((_, Some(fm))) =
-                    document_reader::read_markdown_file(data_path, base_dir)
+                if let Ok((_, Some(fm))) = document_reader::read_markdown_file(data_path, base_dir)
                 {
                     let rel = data_path
                         .strip_prefix(base_dir)
@@ -144,10 +147,7 @@ fn read_input_data(
             ),
         }
     } else {
-        anyhow::bail!(
-            "Data path does not exist: {}",
-            data_path.display()
-        )
+        anyhow::bail!("Data path does not exist: {}", data_path.display())
     }
 }
 
@@ -329,10 +329,8 @@ pub async fn run_prepare(
 
     // Create two chunkers: standard for text/parquet, heading-based for markdown
     let text_chunker = Chunker::new(chunker_config.clone());
-    let md_chunker = Chunker::with_strategy(
-        chunker_config,
-        Arc::new(HeadingBoundaryChunking::new()),
-    );
+    let md_chunker =
+        Chunker::with_strategy(chunker_config, Arc::new(HeadingBoundaryChunking::new()));
 
     let bar = progress.document_bar(documents.len() as u64, "Chunking documents");
     let mut all_chunks: Vec<PreparedChunk> = Vec::new();
@@ -421,8 +419,8 @@ pub async fn run_prepare(
             .collect();
 
         // Build front matter metadata for this document (if available)
-        let fm_metadata = lookup_front_matter(&doc.filename, &front_matter_map)
-            .map(build_front_matter_metadata);
+        let fm_metadata =
+            lookup_front_matter(&doc.filename, &front_matter_map).map(build_front_matter_metadata);
 
         // Create prepared chunks with custom IDs and optional metadata
         for (idx, chunk) in chunks.into_iter().enumerate() {

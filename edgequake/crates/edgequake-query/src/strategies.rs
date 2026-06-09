@@ -91,10 +91,11 @@ impl<V: VectorStorage> QueryStrategy for NaiveStrategy<V> {
     ) -> Result<QueryContext> {
         let mut context = QueryContext::new();
 
-        // Simple vector similarity search
+        // Vector similarity search filtered to chunks only.
+        // Uses server-side type filtering to avoid entity-density crowding.
         let results = self
             .vector_storage
-            .query(query_embedding, config.max_chunks, None)
+            .query_by_type(query_embedding, config.max_chunks, "chunk", None)
             .await?;
 
         for result in results {
@@ -145,17 +146,12 @@ impl<V: VectorStorage, G: GraphStorage> QueryStrategy for LocalStrategy<V, G> {
         let mut context = QueryContext::new();
 
         // Step 1: Vector search for entities (as per LightRAG Local mode spec)
-        // Local mode should search entity_vdb, not chunks
-        let vector_results = self
+        // Local mode should search entity_vdb, not chunks.
+        // Uses server-side type filtering to guarantee entity results.
+        let entity_results = self
             .vector_storage
-            .query(query_embedding, config.max_entities * 2, None) // Get more for filtering
+            .query_by_type(query_embedding, config.max_entities, "entity", None)
             .await?;
-
-        // Filter to entity vectors only
-        let entity_results = crate::vector_filter::filter_by_type(
-            vector_results,
-            crate::vector_filter::VectorType::Entity,
-        );
 
         let mut entity_ids = HashSet::new();
 
@@ -258,17 +254,17 @@ impl<V: VectorStorage, G: GraphStorage> QueryStrategy for GlobalStrategy<V, G> {
         let mut context = QueryContext::new();
 
         // Step 1: Vector search for relationships (as per LightRAG Global mode spec)
-        // Global mode should search relations_vdb
-        let vector_results = self
+        // Global mode should search relations_vdb.
+        // Uses server-side type filtering to guarantee relationship results.
+        let relationship_results = self
             .vector_storage
-            .query(query_embedding, config.max_entities * 3, None) // Get more for filtering
+            .query_by_type(
+                query_embedding,
+                config.max_entities * 2,
+                "relationship",
+                None,
+            )
             .await?;
-
-        // Filter to relationship vectors only
-        let relationship_results = crate::vector_filter::filter_by_type(
-            vector_results,
-            crate::vector_filter::VectorType::Relationship,
-        );
 
         let mut seen_relationships = HashSet::new();
         let mut entity_ids = HashSet::new();

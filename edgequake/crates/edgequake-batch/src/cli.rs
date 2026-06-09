@@ -157,6 +157,14 @@ pub struct Cli {
     #[arg(long, env = "ATHENA_OUTPUT_LOCATION")]
     pub athena_output_location: Option<String>,
 
+    /// Destination for portable embedded snapshot output (s3://bucket/prefix or local directory)
+    #[arg(long, env = "SNAPSHOT_URI")]
+    pub snapshot_uri: Option<String>,
+
+    /// Snapshot output mode: write-and-store or snapshot-only
+    #[arg(long, default_value = "write-and-store", env = "SNAPSHOT_MODE")]
+    pub snapshot_mode: crate::config::SnapshotMode,
+
     #[command(subcommand)]
     pub command: Command,
 }

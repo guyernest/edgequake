@@ -328,12 +328,16 @@ const schema = a.schema({
     .authorization((allow) => [allow.authenticated()])
     .handler([
       a.handler.custom({
-        entry: './resolvers/estimate-preview-cost.js',
+        entry: './resolvers/estimate-preview-cost-config.js',
         dataSource: 'NamespaceTableDataSource',
       }),
       a.handler.custom({
-        entry: './resolvers/estimate-preview-cost-response.js',
-        dataSource: 'NONE',
+        entry: './resolvers/estimate-preview-cost-schema.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/estimate-preview-cost-compute.js',
+        dataSource: 'NamespaceTableDataSource',
       }),
     ]),
 
@@ -360,12 +364,16 @@ const schema = a.schema({
     .authorization((allow) => [allow.authenticated()])
     .handler([
       a.handler.custom({
-        entry: './resolvers/get-preview-result.js',
+        entry: './resolvers/get-preview-result-request.js',
         dataSource: 'NamespaceTableDataSource',
       }),
       a.handler.custom({
-        entry: './resolvers/get-preview-result-response.js',
-        dataSource: 'NONE',
+        entry: './resolvers/get-preview-result-data.js',
+        dataSource: 'NamespaceTableDataSource',
+      }),
+      a.handler.custom({
+        entry: './resolvers/get-preview-result-combine.js',
+        dataSource: 'NamespaceTableDataSource',
       }),
     ]),
 

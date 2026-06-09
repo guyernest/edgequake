@@ -81,15 +81,16 @@ pub async fn verify_stored_data(
             namespace: config.namespace.clone(),
         };
         let s3v_client = edgequake_storage_aws::aws_sdk_s3vectors::Client::new(aws_config);
-        let s3v = edgequake_storage_aws::S3VectorsStorage::new_with_client(
-            vectors_config,
-            s3v_client,
-        );
+        let s3v =
+            edgequake_storage_aws::S3VectorsStorage::new_with_client(vectors_config, s3v_client);
         counts.vectors = s3v.count().await.unwrap_or_else(|e| {
             warn!(error = %e, "Failed to query S3 Vectors count");
             0
         });
-        info!(vectors = counts.vectors, "S3 Vectors verification count retrieved");
+        info!(
+            vectors = counts.vectors,
+            "S3 Vectors verification count retrieved"
+        );
     }
 
     counts
@@ -162,10 +163,7 @@ pub fn print_final_report(
                 "extracting" => {
                     let errors = job.errors_per_phase.get("extracting").copied().unwrap_or(0);
                     if errors > 0 {
-                        format!(
-                            "{} chunks processed ({} failed)",
-                            job.total_chunks, errors
-                        )
+                        format!("{} chunks processed ({} failed)", job.total_chunks, errors)
                     } else {
                         format!("{} chunks processed", job.total_chunks)
                     }
@@ -174,9 +172,7 @@ pub fn print_final_report(
                     format!("{} embeddings generated", job.total_embeddings)
                 }
                 "storing" => {
-                    format!(
-                        "Stored to Neptune + S3 Vectors + DynamoDB"
-                    )
+                    format!("Stored to Neptune + S3 Vectors + DynamoDB")
                 }
                 _ => String::new(),
             };
@@ -238,26 +234,16 @@ pub fn print_final_report(
     if let Some(desc) = descriptor {
         println!("--- MCP Connection Info ---");
         println!("Namespace:        {}", desc.namespace.slug);
-        println!(
-            "Neptune:          {}",
-            desc.storage.neptune.endpoint
-        );
+        println!("Neptune:          {}", desc.storage.neptune.endpoint);
         println!(
             "S3 Vectors:       {} / {}",
             desc.storage.s3_vectors.bucket_name, desc.storage.s3_vectors.index_name
         );
-        println!(
-            "DynamoDB:         {}",
-            desc.storage.dynamodb.table_name
-        );
+        println!("DynamoDB:         {}", desc.storage.dynamodb.table_name);
     } else {
         println!("--- MCP Connection Info ---");
-        println!(
-            "MCP descriptor not found for this namespace."
-        );
-        println!(
-            "Create one via the management console to enable MCP server queries."
-        );
+        println!("MCP descriptor not found for this namespace.");
+        println!("Create one via the management console to enable MCP server queries.");
     }
     println!("===========================");
     println!();
@@ -311,9 +297,12 @@ mod tests {
         job.total_relationships = 89;
         job.total_embeddings = 996;
         job.phase = Phase::Completed;
-        job.phase_started_at.insert("preparing".to_string(), 1000000);
-        job.phase_started_at.insert("extracting".to_string(), 1004200);
-        job.phase_started_at.insert("embedding".to_string(), 1155300);
+        job.phase_started_at
+            .insert("preparing".to_string(), 1000000);
+        job.phase_started_at
+            .insert("extracting".to_string(), 1004200);
+        job.phase_started_at
+            .insert("embedding".to_string(), 1155300);
         job.phase_started_at.insert("storing".to_string(), 1173600);
 
         let counts = VerificationCounts {

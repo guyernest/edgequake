@@ -14,7 +14,7 @@ export function request(ctx) {
   return {
     operation: 'PutItem',
     key: util.dynamodb.toMapValues({
-      PK: 'NS#' + ctx.stash.slug,
+      PK: `NS#${ctx.stash.slug}`,
       SK: 'PREVIEW_REQUEST',
     }),
     attributeValues: util.dynamodb.toMapValues({

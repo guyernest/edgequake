@@ -159,9 +159,9 @@ pub fn read_markdown_file(
     let fm_result = strip_front_matter(&raw);
 
     // Parse FrontMatter from the JSON value if present
-    let front_matter = fm_result.metadata.and_then(|val| {
-        serde_json::from_value::<FrontMatter>(val).ok()
-    });
+    let front_matter = fm_result
+        .metadata
+        .and_then(|val| serde_json::from_value::<FrontMatter>(val).ok());
 
     let relative = path
         .strip_prefix(base_dir)
@@ -191,10 +191,7 @@ pub fn read_single_file(
     delimiter: Option<&str>,
     no_split: bool,
 ) -> anyhow::Result<Vec<ReconstructedDocument>> {
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
     match ext {
         "txt" => {
@@ -234,7 +231,10 @@ pub fn read_all_documents(
             Ok(docs) => all_docs.extend(docs),
             Err(e) => {
                 let msg = e.to_string();
-                if msg.contains("UTF-8") || msg.contains("utf-8") || msg.contains("stream did not contain valid UTF-8") {
+                if msg.contains("UTF-8")
+                    || msg.contains("utf-8")
+                    || msg.contains("stream did not contain valid UTF-8")
+                {
                     warn!(
                         path = %file.display(),
                         error = %e,
@@ -282,7 +282,8 @@ fn maybe_split(
         ))
     } else {
         // Try auto-detect
-        if let Some(detected) = document_splitter::auto_detect_delimiter(&doc.content, is_markdown) {
+        if let Some(detected) = document_splitter::auto_detect_delimiter(&doc.content, is_markdown)
+        {
             Ok(document_splitter::split_by_delimiter(
                 &doc.content,
                 &detected,

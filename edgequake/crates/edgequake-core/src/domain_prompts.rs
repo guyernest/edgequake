@@ -70,32 +70,30 @@ impl DomainExtractionPrompts {
 2.  **Relationship Extraction & Output:**
     *   **Identification:** Identify direct, clearly stated, and meaningful relationships between extracted entities.
     *   **N-ary Relationship Decomposition:** Decompose N-ary relationships into binary pairs.
-    *   **Relationship Type Keywords:** Use these specific keywords as the FIRST keyword in `relationship_keywords` when applicable:
+    *   **CRITICAL — Use ONLY the defined relationship types below.** Do NOT invent new relationship types. If no defined type fits, skip the relationship. Each relationship keyword must be one of the types listed below.
+    *   **Relationship Type Keywords:** Use these specific keywords as the FIRST keyword in `relationship_keywords`:
 "#,
             td = td,
         ));
 
-        // Relationship keywords by category
-        for (category, keywords) in &self.config.relationship_keywords {
-            let capitalized = capitalize_first(category);
-            let keyword_list: Vec<String> = keywords
-                .iter()
-                .map(|kw| format!("`{}` ({})", kw.keyword, kw.description))
-                .collect();
-            prompt.push_str(&format!(
-                "        *   **{}:** {}\n",
-                capitalized,
-                keyword_list.join(", ")
-            ));
+        // Relationship keywords — one per line for clarity
+        prompt.push_str("\n    **Allowed relationship types (use ONLY these):**\n");
+        for (_category, keywords) in &self.config.relationship_keywords {
+            for kw in keywords {
+                prompt.push_str(&format!(
+                    "        - `{}`: {}\n",
+                    kw.keyword, kw.description
+                ));
+            }
         }
 
         prompt.push_str(&format!(
-            r#"    *   You may combine multiple keywords (e.g., `financial_transaction, travel_companion`) but always lead with the most specific typed keyword.
+            r#"    *   You may combine multiple keywords (e.g., `employed_by, has_job_title`) but always lead with the most specific typed keyword. **Do NOT use generic words** like "discussion", "comparison", "example", "context" as relationship keywords.
     *   **Relationship Details:** For each binary relationship:
         *   `source_entity`: Source entity name (consistent with entity extraction)
         *   `target_entity`: Target entity name (consistent with entity extraction)
-        *   `relationship_keywords`: One or more typed keywords separated by comma (use vocabulary above)
-        *   `relationship_description`: Concise explanation of the relationship
+        *   `relationship_keywords`: One or more typed keywords from the list above, separated by comma. The first keyword defines the edge type in the knowledge graph.
+        *   `relationship_description`: Concise explanation including HOW the entities are related based on the text
     *   **Output Format - Relationships:** 5 fields delimited by `{td}`, on a single line. First field must be `relation`.
         *   Format: `relation{td}source_entity{td}target_entity{td}relationship_keywords{td}relationship_description`
 
@@ -172,28 +170,32 @@ impl DomainExtractionPrompts {
         let entity_types_str = self.config.entity_type_names().join(", ");
         let cd = &self.completion_delimiter;
 
+        // Build allowed relationship types list
+        let relation_types_str: String = self
+            .config
+            .relationship_keywords
+            .values()
+            .flat_map(|kws| kws.iter().map(|kw| kw.keyword.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ");
+
         let mut instructions = vec![
             "Strictly adhere to all format requirements for entity and relationship lists.".to_string(),
             "Output *only* the extracted list of entities and relationships. No introductory or concluding remarks.".to_string(),
             format!("Output `{}` as the final line after all extractions.", cd),
             format!("Ensure the output language is {}.", self.config.domain.language),
+            "Use ONLY the relationship types listed below. Do NOT invent new types.".to_string(),
         ];
 
         // Append domain-specific user instructions
         for (i, instr) in self.config.prompts.user_instructions.iter().enumerate() {
-            instructions.push(format!("{}. {}", i + 5, instr.content));
+            instructions.push(format!("{}. {}", i + 6, instr.content));
         }
 
         let instructions_str: String = instructions
             .iter()
             .enumerate()
-            .map(|(i, instr)| {
-                if i < 4 {
-                    format!("{}. {}", i + 1, instr)
-                } else {
-                    instr.clone()
-                }
-            })
+            .map(|(i, instr)| format!("{}. {}", i + 1, instr))
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -208,6 +210,9 @@ Extract entities and relationships from the input text below.
 <Entity_types>
 [{entity_types}]
 
+<Relationship_types>
+[{relation_types}]
+
 <Input Text>
 ```
 {text}
@@ -216,6 +221,7 @@ Extract entities and relationships from the input text below.
 <Output>"#,
             instructions = instructions_str,
             entity_types = entity_types_str,
+            relation_types = relation_types_str,
             text = chunk_text,
         )
     }

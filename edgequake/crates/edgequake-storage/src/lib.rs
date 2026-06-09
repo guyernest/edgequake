@@ -82,7 +82,8 @@ pub use traits::{
 
 // Re-export adapters
 pub use adapters::memory::{
-    MemoryGraphStorage, MemoryKVStorage, MemoryVectorStorage, MemoryWorkspaceVectorRegistry,
+    MemoryBm25Storage, MemoryGraphStorage, MemoryKVStorage, MemoryVectorStorage,
+    MemoryWorkspaceVectorRegistry,
 };
 
 // Conditionally export PostgreSQL adapters

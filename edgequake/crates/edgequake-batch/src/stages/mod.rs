@@ -11,4 +11,5 @@ pub mod bulk_load;
 pub mod embed;
 pub mod extract;
 pub mod prepare;
+pub mod snapshot;
 pub mod store;

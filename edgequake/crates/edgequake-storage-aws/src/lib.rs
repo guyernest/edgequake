@@ -85,7 +85,7 @@ pub use s3_vector::{S3Config, S3VectorStorage};
 pub use s3_vectors::{S3VectorsConfig, S3VectorsStorage};
 
 #[cfg(feature = "neptune")]
-pub use neptune_graph::{NeptuneConfig, NeptuneGraphStorage};
+pub use neptune_graph::{NamespaceMode, NeptuneConfig, NeptuneGraphStorage};
 
 #[cfg(feature = "dynamodb")]
 pub use dynamodb_kv::{DynamoKVConfig, DynamoKVStorage};

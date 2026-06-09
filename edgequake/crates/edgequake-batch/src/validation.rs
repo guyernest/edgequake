@@ -8,7 +8,7 @@
 //! `NamespaceConfigResolver::resolve()` which runs before this validation.
 //! This module checks the remaining preconditions that the resolver does not cover.
 
-use crate::config::BatchConfig;
+use crate::config::{BatchConfig, SnapshotMode};
 use crate::directory_scanner::DirectoryScanner;
 use tracing::debug;
 
@@ -67,11 +67,7 @@ pub async fn validate_upfront(config: &BatchConfig, api_key: &str) -> anyhow::Re
         }
     } else if config.data_path.is_file() {
         // 2b. Single file: check extension
-        match config
-            .data_path
-            .extension()
-            .and_then(|e| e.to_str())
-        {
+        match config.data_path.extension().and_then(|e| e.to_str()) {
             Some("txt") | Some("md") | Some("markdown") | Some("parquet") => {
                 debug!(
                     path = %config.data_path.display(),
@@ -105,35 +101,44 @@ pub async fn validate_upfront(config: &BatchConfig, api_key: &str) -> anyhow::Re
         errors.push(format!("{} is empty", key_name));
     }
 
-    // 4. Neptune endpoint is configured
-    if config.neptune_endpoint.is_none() {
-        errors.push(
-            "Neptune endpoint not configured (set NEPTUNE_ENDPOINT or --neptune-endpoint)"
-                .to_string(),
-        );
-    }
+    if config.snapshot_mode == SnapshotMode::SnapshotOnly {
+        if config.snapshot_uri.is_none() {
+            errors.push(
+                "Snapshot-only mode requires snapshot_uri (set SNAPSHOT_URI or --snapshot-uri)"
+                    .to_string(),
+            );
+        }
+    } else {
+        // 4. Neptune endpoint is configured
+        if config.neptune_endpoint.is_none() {
+            errors.push(
+                "Neptune endpoint not configured (set NEPTUNE_ENDPOINT or --neptune-endpoint)"
+                    .to_string(),
+            );
+        }
 
-    // 5. Vector bucket is configured
-    if config.vector_bucket.is_none() {
-        errors.push(
-            "Vector bucket not configured (set VECTOR_BUCKET or --vector-bucket)".to_string(),
-        );
-    }
+        // 5. Vector bucket is configured
+        if config.vector_bucket.is_none() {
+            errors.push(
+                "Vector bucket not configured (set VECTOR_BUCKET or --vector-bucket)".to_string(),
+            );
+        }
 
-    // 6. S3 bucket for Neptune bulk load
-    if config.s3_bucket.is_none() {
-        errors.push(
-            "S3 bucket for Neptune bulk load not configured (set S3_BUCKET or --s3-bucket)"
-                .to_string(),
-        );
-    }
+        // 6. S3 bucket for Neptune bulk load
+        if config.s3_bucket.is_none() {
+            errors.push(
+                "S3 bucket for Neptune bulk load not configured (set S3_BUCKET or --s3-bucket)"
+                    .to_string(),
+            );
+        }
 
-    // 7. Neptune role ARN
-    if config.neptune_role_arn.is_none() {
-        errors.push(
-            "Neptune IAM role ARN not configured (set NEPTUNE_ROLE_ARN or --neptune-role-arn)"
-                .to_string(),
-        );
+        // 7. Neptune role ARN
+        if config.neptune_role_arn.is_none() {
+            errors.push(
+                "Neptune IAM role ARN not configured (set NEPTUNE_ROLE_ARN or --neptune-role-arn)"
+                    .to_string(),
+            );
+        }
     }
 
     // Report all errors at once
@@ -197,6 +202,8 @@ mod tests {
             max_failures: 0,
             anthropic_api_key: None,
             embedding_dimension: 1536,
+            snapshot_uri: None,
+            snapshot_mode: SnapshotMode::WriteAndStore,
         }
     }
 
@@ -258,6 +265,37 @@ mod tests {
         let config = test_config(dir.path().to_path_buf());
         let result = validate_upfront(&config, "sk-test-key").await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_only_skips_managed_backend_requirements() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("test.txt"), "hello world").unwrap();
+        let mut config = test_config(dir.path().to_path_buf());
+        config.snapshot_mode = SnapshotMode::SnapshotOnly;
+        config.snapshot_uri = Some(dir.path().join("snapshot").display().to_string());
+        config.neptune_endpoint = None;
+        config.vector_bucket = None;
+        config.s3_bucket = None;
+        config.neptune_role_arn = None;
+
+        let result = validate_upfront(&config, "sk-test-key").await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_only_requires_snapshot_uri() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("test.txt"), "hello world").unwrap();
+        let mut config = test_config(dir.path().to_path_buf());
+        config.snapshot_mode = SnapshotMode::SnapshotOnly;
+        config.snapshot_uri = None;
+
+        let result = validate_upfront(&config, "sk-test-key").await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("snapshot_uri"));
     }
 
     #[tokio::test]

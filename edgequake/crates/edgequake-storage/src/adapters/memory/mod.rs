@@ -23,11 +23,13 @@
 //! - [`BR0201`]: Testing isolation via ephemeral storage
 //! - [`BR0210`]: Thread-safe concurrent access via RwLock
 
+mod bm25;
 mod graph;
 mod kv;
 mod vector;
 mod workspace_vector;
 
+pub use bm25::MemoryBm25Storage;
 pub use graph::MemoryGraphStorage;
 pub use kv::MemoryKVStorage;
 pub use vector::MemoryVectorStorage;

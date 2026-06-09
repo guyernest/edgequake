@@ -125,20 +125,17 @@ impl DirectoryScanner {
             walker = walker.max_depth(1);
         }
 
-        for entry in walker
-            .into_iter()
-            .filter_entry(|e| {
-                // Always allow the root directory itself (depth 0)
-                if e.depth() == 0 {
-                    return true;
-                }
-                // Skip hidden files and directories (start with '.')
-                e.file_name()
-                    .to_str()
-                    .map(|s| !s.starts_with('.'))
-                    .unwrap_or(false)
-            })
-        {
+        for entry in walker.into_iter().filter_entry(|e| {
+            // Always allow the root directory itself (depth 0)
+            if e.depth() == 0 {
+                return true;
+            }
+            // Skip hidden files and directories (start with '.')
+            e.file_name()
+                .to_str()
+                .map(|s| !s.starts_with('.'))
+                .unwrap_or(false)
+        }) {
             let entry = entry?;
 
             // Only process files
@@ -149,9 +146,7 @@ impl DirectoryScanner {
             let path = entry.path().to_path_buf();
 
             // Compute relative path for glob matching
-            let rel_path = path
-                .strip_prefix(&self.root)
-                .unwrap_or(&path);
+            let rel_path = path.strip_prefix(&self.root).unwrap_or(&path);
             let rel_str = rel_path.to_string_lossy();
 
             // Check exclude patterns first
@@ -226,7 +221,10 @@ mod tests {
 
         let result = DirectoryScanner::new(dir.path()).scan().unwrap();
         assert_eq!(result.txt_files.len(), 1);
-        assert_eq!(result.txt_files[0].file_name().unwrap().to_str().unwrap(), "visible.txt");
+        assert_eq!(
+            result.txt_files[0].file_name().unwrap().to_str().unwrap(),
+            "visible.txt"
+        );
     }
 
     #[test]

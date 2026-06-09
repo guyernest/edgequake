@@ -6,19 +6,29 @@
 //!
 //! ## Namespace Isolation
 //!
-//! Neptune namespace isolation uses a **label-prefix strategy**:
+//! Neptune namespace isolation supports two strategies (selected via `NamespaceMode`):
+//!
+//! ### Label-Prefix (default)
 //! - Vertex labels: `{namespace}:Entity` (e.g., `epstein-files:Entity`)
 //! - Edge labels: `{namespace}:relates_to` (e.g., `epstein-files:relates_to`)
 //! - Node IDs: `{namespace}:{id}` (e.g., `epstein-files:JOHN_DOE`)
 //!
-//! This approach is recommended by AWS Prescriptive Guidance over property-based
-//! filtering (`has('namespace', ...)`), which is an anti-pattern at scale.
-//! Label-prefix filtering uses Neptune's index on labels for O(1) partition
-//! pruning instead of scanning all vertices.
+//! This approach is recommended by AWS Prescriptive Guidance for O(1) partition
+//! pruning via Neptune's index on labels.
 //!
-//! The namespace prefix on IDs (`T.id`) prevents cross-namespace ID collisions:
-//! two namespaces can each have a node called "JOHN_DOE" without conflict.
-//! Prefixes are stripped transparently when returning data to callers.
+//! ### Property-Filter
+//! - Bare vertex labels: `Entity`
+//! - Bare edge labels: `relates_to`
+//! - Bare node IDs: `JOHN_DOE`
+//! - Namespace stored as a vertex/edge property: `namespace = "{namespace}"`
+//!
+//! This mode is used by the edgequake batch ingestion pipeline, which writes
+//! data with property-based namespace isolation.
+//!
+//! The namespace prefix on IDs (`T.id`) in label-prefix mode prevents
+//! cross-namespace ID collisions: two namespaces can each have a node called
+//! "JOHN_DOE" without conflict. Prefixes are stripped transparently when
+//! returning data to callers.
 //!
 //! ## Architecture
 //!
@@ -72,6 +82,16 @@ fn gremlin_escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('\'', "\\'")
 }
 
+/// Controls how namespace isolation is implemented in Gremlin queries.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum NamespaceMode {
+    /// Namespace encoded in labels and IDs (e.g., `epstein-files:Entity`, `epstein-files:JOHN_DOE`).
+    #[default]
+    LabelPrefix,
+    /// Namespace stored as a vertex/edge property (`namespace = "acquired"`), bare labels and IDs.
+    PropertyFilter,
+}
+
 /// Configuration for Neptune graph storage.
 #[derive(Debug, Clone)]
 pub struct NeptuneConfig {
@@ -90,12 +110,8 @@ pub struct NeptuneConfig {
     pub timeout_secs: u64,
     /// Enable SSL/TLS (always true with Neptune Data API)
     pub use_ssl: bool,
-    /// When true (default), use label-prefix strategy: `{namespace}:Entity`,
-    /// `{namespace}:relates_to`, `{namespace}:{id}`.
-    /// When false, use bare labels (`Entity`, `relates_to`) with bare IDs,
-    /// and filter by the `namespace` property. This matches data ingested
-    /// by the batch pipeline which stores namespace as a vertex property.
-    pub use_label_prefix: bool,
+    /// Namespace isolation strategy.
+    pub namespace_mode: NamespaceMode,
 }
 
 impl NeptuneConfig {
@@ -112,7 +128,7 @@ impl NeptuneConfig {
             pool_size: 10,
             timeout_secs: 30,
             use_ssl: true,
-            use_label_prefix: true,
+            namespace_mode: NamespaceMode::default(),
         }
     }
 
@@ -122,14 +138,6 @@ impl NeptuneConfig {
     /// (e.g., `epstein-files:Entity`) and as an ID prefix for T.id uniqueness.
     pub fn with_namespace(mut self, namespace: impl Into<String>) -> Self {
         self.namespace = namespace.into();
-        self
-    }
-
-    /// Disable label-prefix strategy. Use bare labels (`Entity`, `relates_to`)
-    /// and filter by the `namespace` vertex property instead. This matches data
-    /// ingested by the batch pipeline.
-    pub fn with_property_namespace(mut self) -> Self {
-        self.use_label_prefix = false;
         self
     }
 
@@ -156,6 +164,12 @@ impl NeptuneConfig {
         self.use_ssl = enable;
         self
     }
+
+    /// Use property-based namespace filtering instead of label-prefix.
+    pub fn with_property_namespace(mut self) -> Self {
+        self.namespace_mode = NamespaceMode::PropertyFilter;
+        self
+    }
 }
 
 /// Amazon Neptune graph storage using the Neptune Data API.
@@ -164,12 +178,20 @@ impl NeptuneConfig {
 /// providing a fully managed, serverless graph database for storing
 /// entities and relationships in the knowledge graph.
 ///
-/// Namespace isolation is achieved via label-prefix strategy:
-/// vertices use `{namespace}:Entity`, edges use `{namespace}:relates_to`,
-/// and node IDs are prefixed with `{namespace}:` for T.id uniqueness.
+/// Namespace isolation strategy is controlled by `NamespaceMode`:
+/// - **LabelPrefix**: vertices use `{ns}:Entity`, edges use `{ns}:relates_to`,
+///   node IDs prefixed with `{ns}:` for T.id uniqueness.
+/// - **PropertyFilter**: bare labels (`Entity`, `relates_to`), bare IDs,
+///   namespace stored as a property filtered via `.has('namespace', '{ns}')`.
 pub struct NeptuneGraphStorage {
     config: NeptuneConfig,
     client: Client,
+    // Pre-computed namespace strings (avoids repeated format!() allocations)
+    cached_vertex_label: String,
+    cached_edge_label: String,
+    cached_ns_filter: String,
+    cached_ns_write_properties: String,
+    cached_ns_id_prefix: Option<String>,
 }
 
 impl NeptuneGraphStorage {
@@ -198,58 +220,89 @@ impl NeptuneGraphStorage {
 
         let client = Client::from_conf(neptune_config);
 
-        Ok(Self { config, client })
+        // Pre-compute namespace strings once
+        let cached_vertex_label = match config.namespace_mode {
+            NamespaceMode::LabelPrefix => format!("{}:Entity", config.namespace),
+            NamespaceMode::PropertyFilter => "Entity".to_string(),
+        };
+        let cached_edge_label = match config.namespace_mode {
+            NamespaceMode::LabelPrefix => format!("{}:relates_to", config.namespace),
+            NamespaceMode::PropertyFilter => "relates_to".to_string(),
+        };
+        let cached_ns_filter = match config.namespace_mode {
+            NamespaceMode::LabelPrefix => String::new(),
+            NamespaceMode::PropertyFilter => {
+                format!(".has('namespace', '{}')", gremlin_escape(&config.namespace))
+            }
+        };
+        let cached_ns_write_properties = match config.namespace_mode {
+            NamespaceMode::LabelPrefix => String::new(),
+            NamespaceMode::PropertyFilter => {
+                format!(".property('namespace', '{}')", gremlin_escape(&config.namespace))
+            }
+        };
+        let cached_ns_id_prefix = match config.namespace_mode {
+            NamespaceMode::LabelPrefix => Some(format!("{}:", config.namespace)),
+            NamespaceMode::PropertyFilter => None,
+        };
+
+        Ok(Self {
+            config,
+            client,
+            cached_vertex_label,
+            cached_edge_label,
+            cached_ns_filter,
+            cached_ns_write_properties,
+            cached_ns_id_prefix,
+        })
     }
 
     // ========== Namespace Helpers ==========
 
-    /// Return the vertex label for Gremlin queries.
+    /// Return the vertex label for this namespace mode.
     ///
-    /// With label-prefix: `epstein-files:Entity`
-    /// Without (property mode): `Entity`
-    fn vertex_label(&self) -> String {
-        if self.config.use_label_prefix {
-            format!("{}:Entity", self.config.namespace)
-        } else {
-            "Entity".to_string()
-        }
+    /// - LabelPrefix: `"{ns}:Entity"` (e.g., `epstein-files:Entity`)
+    /// - PropertyFilter: `"Entity"`
+    fn vertex_label(&self) -> &str {
+        &self.cached_vertex_label
     }
 
-    /// Return the edge label for Gremlin queries.
-    ///
-    /// With label-prefix: `epstein-files:relates_to`
-    /// Without (property mode): `relates_to`
-    fn edge_label(&self) -> String {
-        if self.config.use_label_prefix {
-            format!("{}:relates_to", self.config.namespace)
-        } else {
-            "relates_to".to_string()
-        }
+    /// Return the edge label for this namespace mode.
+    fn edge_label(&self) -> &str {
+        &self.cached_edge_label
     }
 
-    /// Prefix a caller-supplied node ID with the namespace for Neptune T.id storage.
-    ///
-    /// With label-prefix: `ns_id("JOHN_DOE")` => `"epstein-files:JOHN_DOE"`
-    /// Without (property mode): `ns_id("JOHN_DOE")` => `"JOHN_DOE"` (passthrough)
+    /// Translate a caller-supplied node ID to a Neptune T.id.
     fn ns_id(&self, node_id: &str) -> String {
-        if self.config.use_label_prefix {
-            format!("{}:{}", self.config.namespace, node_id)
-        } else {
-            node_id.to_string()
+        match &self.cached_ns_id_prefix {
+            Some(prefix) => format!("{}{}", prefix, node_id),
+            None => node_id.to_string(),
         }
     }
 
     /// Strip the namespace prefix from a Neptune T.id, returning the caller-facing ID.
-    ///
-    /// With label-prefix: `strip_ns_id("epstein-files:JOHN_DOE")` => `"JOHN_DOE"`
-    /// Without (property mode): passthrough (IDs are already bare).
     fn strip_ns_id<'a>(&self, neptune_id: &'a str) -> &'a str {
-        if self.config.use_label_prefix {
-            let prefix = format!("{}:", self.config.namespace);
-            neptune_id.strip_prefix(&prefix).unwrap_or(neptune_id)
-        } else {
-            neptune_id
+        match &self.cached_ns_id_prefix {
+            Some(prefix) => neptune_id.strip_prefix(prefix.as_str()).unwrap_or(neptune_id),
+            None => neptune_id,
         }
+    }
+
+    /// Return a Gremlin `.has('namespace', '{ns}')` filter step for PropertyFilter mode,
+    /// or an empty string for LabelPrefix mode.
+    fn ns_filter(&self) -> &str {
+        &self.cached_ns_filter
+    }
+
+    /// Return Gremlin property steps to write the namespace property in PropertyFilter mode,
+    /// or an empty string for LabelPrefix mode.
+    fn ns_write_properties(&self) -> &str {
+        &self.cached_ns_write_properties
+    }
+
+    /// Translate a caller-supplied node ID to a Gremlin-escaped Neptune T.id.
+    fn escaped_ns_id(&self, node_id: &str) -> String {
+        gremlin_escape(&self.ns_id(node_id))
     }
 
     /// Execute a Gremlin query via the Neptune Data API.
@@ -259,26 +312,12 @@ impl NeptuneGraphStorage {
     ///
     /// Response structure: `{ "result": { "data": { "@type": "g:List", "@value": [...] }, "meta": ... } }`
     async fn execute(&self, query: &str) -> crate::error::Result<Vec<JsonValue>> {
-        // In property-namespace mode, inject `.has('namespace', '{ns}')` after
-        // every `hasLabel('Entity')` so all queries are namespace-scoped.
-        // This is safe for writes too: `addV('Entity')` is not matched.
-        let query = if !self.config.use_label_prefix {
-            let bare_label = format!("hasLabel('{}')", self.vertex_label());
-            let filtered = format!(
-                "hasLabel('{}').has('namespace', '{}')",
-                self.vertex_label(),
-                gremlin_escape(&self.config.namespace),
-            );
-            query.replace(&bare_label, &filtered)
-        } else {
-            query.to_string()
-        };
         debug!("Executing Gremlin query: {}", query);
 
         let result = self
             .client
             .execute_gremlin_query()
-            .gremlin_query(&query)
+            .gremlin_query(query)
             .send()
             .await
             .map_err(neptune_err)?;
@@ -316,8 +355,8 @@ impl NeptuneGraphStorage {
 
     /// Convert properties HashMap to Gremlin property chain.
     ///
-    /// Note: Does NOT inject a `namespace` property — namespace isolation is
-    /// achieved via label-prefix on vertices and edges, not via properties.
+    /// Note: Does NOT inject the `namespace` property — that is handled
+    /// separately by `ns_write_properties()` for PropertyFilter mode.
     fn properties_to_gremlin(&self, properties: &HashMap<String, JsonValue>) -> String {
         let mut parts = Vec::new();
 
@@ -355,11 +394,11 @@ impl NeptuneGraphStorage {
 
         let mut properties = HashMap::new();
 
-        // elementMap() returns a flat object — all keys except "id" and "label"
-        // are vertex properties
+        // elementMap() returns a flat object — all keys except "id", "label",
+        // and "namespace" (internal isolation property) are vertex properties
         if let Some(obj) = vertex.as_object() {
             for (key, value) in obj {
-                if key != "id" && key != "label" {
+                if key != "id" && key != "label" && key != "namespace" {
                     properties.insert(key.clone(), value.clone());
                 }
             }
@@ -401,10 +440,10 @@ impl NeptuneGraphStorage {
 
         let mut properties = HashMap::new();
 
-        // All keys except structural ones are edge properties
+        // All keys except structural ones and "namespace" are edge properties
         if let Some(obj) = edge.as_object() {
             for (key, value) in obj {
-                if key != "id" && key != "label" && key != "IN" && key != "OUT" {
+                if key != "id" && key != "label" && key != "IN" && key != "OUT" && key != "namespace" {
                     properties.insert(key.clone(), value.clone());
                 }
             }
@@ -559,9 +598,10 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn has_node(&self, node_id: &str) -> edgequake_storage::error::Result<bool> {
         let query = format!(
-            "g.V('{}').hasLabel('{}').hasNext()",
-            gremlin_escape(&self.ns_id(node_id)),
-            self.vertex_label()
+            "g.V('{}').hasLabel('{}'){}.hasNext()",
+            self.escaped_ns_id(node_id),
+            self.vertex_label(),
+            self.ns_filter()
         );
 
         let results = self.execute(&query).await?;
@@ -570,9 +610,10 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn get_node(&self, node_id: &str) -> edgequake_storage::error::Result<Option<GraphNode>> {
         let query = format!(
-            "g.V('{}').hasLabel('{}').elementMap()",
-            gremlin_escape(&self.ns_id(node_id)),
-            self.vertex_label()
+            "g.V('{}').hasLabel('{}'){}.elementMap()",
+            self.escaped_ns_id(node_id),
+            self.vertex_label(),
+            self.ns_filter()
         );
 
         let results = self.execute(&query).await?;
@@ -591,14 +632,16 @@ impl GraphStorage for NeptuneGraphStorage {
         properties: HashMap<String, JsonValue>,
     ) -> edgequake_storage::error::Result<()> {
         let props = self.properties_to_gremlin(&properties);
-        let ns_escaped_id = gremlin_escape(&self.ns_id(node_id));
+        let ns_escaped_id = self.escaped_ns_id(node_id);
         let vlabel = self.vertex_label();
+        let ns_filter = self.ns_filter();
+        let ns_write = self.ns_write_properties();
 
         let query = format!(
-            "g.V('{}').hasLabel('{}').fold().coalesce(\
-                unfold().sideEffect(__.properties().drop()){},\
-                addV('{}').property(id, '{}'){})",
-            ns_escaped_id, vlabel, props, vlabel, ns_escaped_id, props
+            "g.V('{}').hasLabel('{}'){}.fold().coalesce(\
+                unfold().sideEffect(__.properties().drop()){}{},\
+                addV('{}').property(id, '{}'){}{})",
+            ns_escaped_id, vlabel, ns_filter, props, ns_write, vlabel, ns_escaped_id, props, ns_write
         );
 
         self.execute(&query).await?;
@@ -616,16 +659,18 @@ impl GraphStorage for NeptuneGraphStorage {
         info!("Batch upserting {} nodes", nodes.len());
 
         let vlabel = self.vertex_label();
+        let ns_filter = self.ns_filter();
+        let ns_write = self.ns_write_properties();
 
         for chunk in nodes.chunks(100) {
             for (node_id, properties) in chunk {
                 let props = self.properties_to_gremlin(properties);
-                let ns_escaped_id = gremlin_escape(&self.ns_id(node_id));
+                let ns_escaped_id = self.escaped_ns_id(node_id);
                 let query = format!(
-                    "g.V('{}').hasLabel('{}').fold().coalesce(\
-                        unfold().sideEffect(__.properties().drop()){},\
-                        addV('{}').property(id, '{}'){})",
-                    ns_escaped_id, vlabel, props, vlabel, ns_escaped_id, props
+                    "g.V('{}').hasLabel('{}'){}.fold().coalesce(\
+                        unfold().sideEffect(__.properties().drop()){}{},\
+                        addV('{}').property(id, '{}'){}{})",
+                    ns_escaped_id, vlabel, ns_filter, props, ns_write, vlabel, ns_escaped_id, props, ns_write
                 );
                 self.execute(&query).await?;
             }
@@ -636,9 +681,10 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn delete_node(&self, node_id: &str) -> edgequake_storage::error::Result<()> {
         let query = format!(
-            "g.V('{}').hasLabel('{}').drop()",
-            gremlin_escape(&self.ns_id(node_id)),
-            self.vertex_label()
+            "g.V('{}').hasLabel('{}'){}.drop()",
+            self.escaped_ns_id(node_id),
+            self.vertex_label(),
+            self.ns_filter()
         );
 
         self.execute(&query).await?;
@@ -647,9 +693,10 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn node_degree(&self, node_id: &str) -> edgequake_storage::error::Result<usize> {
         let query = format!(
-            "g.V('{}').hasLabel('{}').bothE().count()",
-            gremlin_escape(&self.ns_id(node_id)),
-            self.vertex_label()
+            "g.V('{}').hasLabel('{}'){}.bothE().count()",
+            self.escaped_ns_id(node_id),
+            self.vertex_label(),
+            self.ns_filter()
         );
 
         let results = self.execute(&query).await?;
@@ -680,8 +727,9 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn get_all_nodes(&self) -> edgequake_storage::error::Result<Vec<GraphNode>> {
         let query = format!(
-            "g.V().hasLabel('{}').elementMap()",
-            self.vertex_label()
+            "g.V().hasLabel('{}'){}.elementMap()",
+            self.vertex_label(),
+            self.ns_filter()
         );
 
         let results = self.execute(&query).await?;
@@ -706,13 +754,13 @@ impl GraphStorage for NeptuneGraphStorage {
 
         let ids_list = node_ids
             .iter()
-            .map(|id| format!("'{}'", gremlin_escape(&self.ns_id(id))))
+            .map(|id| format!("'{}'", self.escaped_ns_id(id)))
             .collect::<Vec<_>>()
             .join(",");
 
         let query = format!(
-            "g.V({}).hasLabel('{}').elementMap()",
-            ids_list, self.vertex_label()
+            "g.V({}).hasLabel('{}'){}.elementMap()",
+            ids_list, self.vertex_label(), self.ns_filter()
         );
 
         let results = self.execute(&query).await?;
@@ -739,11 +787,13 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn has_edge(&self, source: &str, target: &str) -> edgequake_storage::error::Result<bool> {
         let query = format!(
-            "g.V('{}').hasLabel('{}').outE('{}').where(inV().hasId('{}')).hasNext()",
-            gremlin_escape(&self.ns_id(source)),
+            "g.V('{}').hasLabel('{}'){}.outE('{}'){}.where(inV().hasId('{}')).hasNext()",
+            self.escaped_ns_id(source),
             self.vertex_label(),
+            self.ns_filter(),
             self.edge_label(),
-            gremlin_escape(&self.ns_id(target))
+            self.ns_filter(),
+            self.escaped_ns_id(target)
         );
 
         let results = self.execute(&query).await?;
@@ -756,11 +806,13 @@ impl GraphStorage for NeptuneGraphStorage {
         target: &str,
     ) -> edgequake_storage::error::Result<Option<GraphEdge>> {
         let query = format!(
-            "g.V('{}').hasLabel('{}').outE('{}').where(inV().hasId('{}')).elementMap()",
-            gremlin_escape(&self.ns_id(source)),
+            "g.V('{}').hasLabel('{}'){}.outE('{}'){}.where(inV().hasId('{}')).elementMap()",
+            self.escaped_ns_id(source),
             self.vertex_label(),
+            self.ns_filter(),
             self.edge_label(),
-            gremlin_escape(&self.ns_id(target))
+            self.ns_filter(),
+            self.escaped_ns_id(target)
         );
 
         let results = self.execute(&query).await?;
@@ -780,34 +832,36 @@ impl GraphStorage for NeptuneGraphStorage {
         properties: HashMap<String, JsonValue>,
     ) -> edgequake_storage::error::Result<()> {
         let props = self.properties_to_gremlin(&properties);
-        let ns_source = gremlin_escape(&self.ns_id(source));
-        let ns_target = gremlin_escape(&self.ns_id(target));
+        let ns_source = self.escaped_ns_id(source);
+        let ns_target = self.escaped_ns_id(target);
         let vlabel = self.vertex_label();
         let elabel = self.edge_label();
+        let ns_filter = self.ns_filter();
+        let ns_write = self.ns_write_properties();
 
-        // First ensure both vertices exist (with label-prefix)
+        // First ensure both vertices exist
         self.execute(&format!(
-            "g.V('{}').hasLabel('{}').fold().coalesce(unfold(), addV('{}').property(id, '{}'))",
-            ns_source, vlabel, vlabel, ns_source
+            "g.V('{}').hasLabel('{}'){}.fold().coalesce(unfold(), addV('{}').property(id, '{}'){})",
+            ns_source, vlabel, ns_filter, vlabel, ns_source, ns_write
         )).await?;
 
         self.execute(&format!(
-            "g.V('{}').hasLabel('{}').fold().coalesce(unfold(), addV('{}').property(id, '{}'))",
-            ns_target, vlabel, vlabel, ns_target
+            "g.V('{}').hasLabel('{}'){}.fold().coalesce(unfold(), addV('{}').property(id, '{}'){})",
+            ns_target, vlabel, ns_filter, vlabel, ns_target, ns_write
         )).await?;
 
         // Delete existing edge if present
         self.execute(&format!(
-            "g.V('{}').hasLabel('{}').outE('{}').where(inV().hasId('{}')).drop()",
-            ns_source, vlabel, elabel, ns_target
+            "g.V('{}').hasLabel('{}'){}.outE('{}'){}.where(inV().hasId('{}')).drop()",
+            ns_source, vlabel, ns_filter, elabel, ns_filter, ns_target
         ))
         .await?;
 
         // Add new edge (use __.V() anonymous traversal inside .to() — Neptune
         // requires child traversals to be spawned anonymously, not via g.V())
         let query = format!(
-            "g.V('{}').hasLabel('{}').addE('{}').to(__.V('{}').hasLabel('{}')){}",
-            ns_source, vlabel, elabel, ns_target, vlabel, props
+            "g.V('{}').hasLabel('{}'){}.addE('{}').to(__.V('{}').hasLabel('{}'){}){}{}",
+            ns_source, vlabel, ns_filter, elabel, ns_target, vlabel, ns_filter, props, ns_write
         );
 
         self.execute(&query).await?;
@@ -837,11 +891,13 @@ impl GraphStorage for NeptuneGraphStorage {
         target: &str,
     ) -> edgequake_storage::error::Result<()> {
         let query = format!(
-            "g.V('{}').hasLabel('{}').outE('{}').where(inV().hasId('{}')).drop()",
-            gremlin_escape(&self.ns_id(source)),
+            "g.V('{}').hasLabel('{}'){}.outE('{}'){}.where(inV().hasId('{}')).drop()",
+            self.escaped_ns_id(source),
             self.vertex_label(),
+            self.ns_filter(),
             self.edge_label(),
-            gremlin_escape(&self.ns_id(target))
+            self.ns_filter(),
+            self.escaped_ns_id(target)
         );
 
         self.execute(&query).await?;
@@ -853,9 +909,11 @@ impl GraphStorage for NeptuneGraphStorage {
         node_id: &str,
     ) -> edgequake_storage::error::Result<Vec<GraphEdge>> {
         let query = format!(
-            "g.V('{}').hasLabel('{}').bothE().elementMap()",
-            gremlin_escape(&self.ns_id(node_id)),
-            self.vertex_label()
+            "g.V('{}').hasLabel('{}'){}.bothE(){}.elementMap()",
+            self.escaped_ns_id(node_id),
+            self.vertex_label(),
+            self.ns_filter(),
+            self.ns_filter()
         );
 
         let results = self.execute(&query).await?;
@@ -872,8 +930,9 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn get_all_edges(&self) -> edgequake_storage::error::Result<Vec<GraphEdge>> {
         let query = format!(
-            "g.E().hasLabel('{}').elementMap()",
-            self.edge_label()
+            "g.E().hasLabel('{}'){}.elementMap()",
+            self.edge_label(),
+            self.ns_filter()
         );
 
         let results = self.execute(&query).await?;
@@ -898,9 +957,10 @@ impl GraphStorage for NeptuneGraphStorage {
     ) -> edgequake_storage::error::Result<KnowledgeGraph> {
         // Use emit() to collect vertices at each depth, then get edges separately.
         // hasLabel filter ensures we only traverse within the current namespace.
+        let ns_filter = self.ns_filter();
         let node_query = format!(
-            "g.V('{}').hasLabel('{}').emit().repeat(both().hasLabel('{}').simplePath()).times({}).dedup().limit({}).elementMap()",
-            gremlin_escape(&self.ns_id(start_node)), self.vertex_label(), self.vertex_label(), max_depth, max_nodes
+            "g.V('{}').hasLabel('{}'){}.emit().repeat(both().hasLabel('{}'){}.simplePath()).times({}).dedup().limit({}).elementMap()",
+            self.escaped_ns_id(start_node), self.vertex_label(), ns_filter, self.vertex_label(), ns_filter, max_depth, max_nodes
         );
 
         let node_results = self.execute(&node_query).await?;
@@ -919,13 +979,13 @@ impl GraphStorage for NeptuneGraphStorage {
         if node_ids.len() > 1 {
             let ids_list = node_ids
                 .iter()
-                .map(|id| format!("'{}'", gremlin_escape(&self.ns_id(id))))
+                .map(|id| format!("'{}'", self.escaped_ns_id(id)))
                 .collect::<Vec<_>>()
                 .join(",");
 
             let edge_query = format!(
-                "g.V({}).hasLabel('{}').outE('{}').where(inV().hasId(within({}))).elementMap()",
-                ids_list, self.vertex_label(), self.edge_label(), ids_list
+                "g.V({}).hasLabel('{}'){}.outE('{}'){}.where(inV().hasId(within({}))).elementMap()",
+                ids_list, self.vertex_label(), ns_filter, self.edge_label(), ns_filter, ids_list
             );
 
             let edge_results = self.execute(&edge_query).await?;
@@ -946,8 +1006,8 @@ impl GraphStorage for NeptuneGraphStorage {
         limit: usize,
     ) -> edgequake_storage::error::Result<Vec<String>> {
         let query = format!(
-            "g.V().hasLabel('{}').group().by(T.id).by(bothE().count()).order(local).by(values, desc).limit(local, {})",
-            self.vertex_label(), limit
+            "g.V().hasLabel('{}'){}.group().by(T.id).by(bothE().count()).order(local).by(values, desc).limit(local, {})",
+            self.vertex_label(), self.ns_filter(), limit
         );
 
         let results = self.execute(&query).await?;
@@ -976,8 +1036,8 @@ impl GraphStorage for NeptuneGraphStorage {
         // The T.id contains the namespace prefix, so we search for the prefixed pattern.
         let escaped_upper = gremlin_escape(&query_str.to_uppercase());
         let query = format!(
-            "g.V().hasLabel('{}').has(T.id, TextP.containing('{}')).limit({}).id()",
-            self.vertex_label(), escaped_upper, limit
+            "g.V().hasLabel('{}'){}.has(T.id, TextP.containing('{}')).limit({}).id()",
+            self.vertex_label(), self.ns_filter(), escaped_upper, limit
         );
 
         let results = self.execute(&query).await?;
@@ -1010,6 +1070,7 @@ impl GraphStorage for NeptuneGraphStorage {
         let escaped_upper = gremlin_escape(&query_str.to_uppercase());
 
         let mut query = format!("g.V().hasLabel('{}')", self.vertex_label());
+        query.push_str(&self.ns_filter());
 
         if let Some(et) = entity_type {
             query.push_str(&format!(".has('entity_type', '{}')", gremlin_escape(et)));
@@ -1046,9 +1107,10 @@ impl GraphStorage for NeptuneGraphStorage {
         node_id: &str,
         depth: usize,
     ) -> edgequake_storage::error::Result<Vec<GraphNode>> {
+        let ns_filter = self.ns_filter();
         let query = format!(
-            "g.V('{}').hasLabel('{}').repeat(both().hasLabel('{}').simplePath()).times({}).dedup().elementMap()",
-            gremlin_escape(&self.ns_id(node_id)), self.vertex_label(), self.vertex_label(), depth
+            "g.V('{}').hasLabel('{}'){}.repeat(both().hasLabel('{}'){}.simplePath()).times({}).dedup().elementMap()",
+            self.escaped_ns_id(node_id), self.vertex_label(), ns_filter, self.vertex_label(), ns_filter, depth
         );
 
         let results = self.execute(&query).await?;
@@ -1077,13 +1139,14 @@ impl GraphStorage for NeptuneGraphStorage {
 
         let ids_list = node_ids
             .iter()
-            .map(|id| format!("'{}'", gremlin_escape(&self.ns_id(id))))
+            .map(|id| format!("'{}'", self.escaped_ns_id(id)))
             .collect::<Vec<_>>()
             .join(",");
 
+        let ns_filter = self.ns_filter();
         let query = format!(
-            "g.V({}).hasLabel('{}').outE('{}').where(inV().hasId(within({}))).elementMap()",
-            ids_list, self.vertex_label(), self.edge_label(), ids_list
+            "g.V({}).hasLabel('{}'){}.outE('{}'){}.where(inV().hasId(within({}))).elementMap()",
+            ids_list, self.vertex_label(), ns_filter, self.edge_label(), ns_filter, ids_list
         );
 
         let results = self.execute(&query).await?;
@@ -1109,6 +1172,7 @@ impl GraphStorage for NeptuneGraphStorage {
         // Server-side Gremlin query that pushes all filters into Neptune,
         // avoiding the default trait impl's N+1 pattern and in-memory filtering.
         let mut query = format!("g.V().hasLabel('{}')", self.vertex_label());
+        query.push_str(&self.ns_filter());
 
         if let Some(et) = entity_type {
             query.push_str(&format!(".has('entity_type', '{}')", gremlin_escape(et)));
@@ -1142,8 +1206,9 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn node_count(&self) -> edgequake_storage::error::Result<usize> {
         let query = format!(
-            "g.V().hasLabel('{}').count()",
-            self.vertex_label()
+            "g.V().hasLabel('{}'){}.count()",
+            self.vertex_label(),
+            self.ns_filter()
         );
 
         let results = self.execute(&query).await?;
@@ -1154,8 +1219,9 @@ impl GraphStorage for NeptuneGraphStorage {
 
     async fn edge_count(&self) -> edgequake_storage::error::Result<usize> {
         let query = format!(
-            "g.E().hasLabel('{}').count()",
-            self.edge_label()
+            "g.E().hasLabel('{}'){}.count()",
+            self.edge_label(),
+            self.ns_filter()
         );
 
         let results = self.execute(&query).await?;
@@ -1170,7 +1236,7 @@ impl GraphStorage for NeptuneGraphStorage {
             self.config.namespace
         );
 
-        let query = format!("g.V().hasLabel('{}').drop()", self.vertex_label());
+        let query = format!("g.V().hasLabel('{}'){}.drop()", self.vertex_label(), self.ns_filter());
 
         self.execute(&query).await?;
         Ok(())

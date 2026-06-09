@@ -36,12 +36,28 @@ impl EntityExtractionPrompts {
     ///
     /// This prompt instructs the LLM on how to extract entities and relationships
     /// in a structured tuple format.
-    pub fn system_prompt(&self, entity_types: &[impl AsRef<str>], language: &str) -> String {
+    pub fn system_prompt(
+        &self,
+        entity_types: &[impl AsRef<str>],
+        relation_types: &[impl AsRef<str>],
+        language: &str,
+    ) -> String {
         let entity_types_str = entity_types
             .iter()
             .map(|s| s.as_ref())
             .collect::<Vec<_>>()
             .join(", ");
+
+        let relation_types_instruction = if relation_types.is_empty() {
+            "One or more high-level keywords summarizing the overarching nature of the relationship. Multiple keywords separated by comma. The relationship MUST be an action or structural association, NOT a metric, specific value, or duration.".to_string()
+        } else {
+            let relation_types_str = relation_types
+                .iter()
+                .map(|s| s.as_ref())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("A comma-separated list where the FIRST item is the categorization of the relationship. You MUST strictly categorize the relationship using ONE of the following types: `{}`. If absolutely none of these apply, use exactly `RELATED_TO`. Do NOT invent new relationship types. Follow this with any additional keywords summarizing the nature of the relationship. The relationship MUST be an action or structural association (e.g., a verb or clear relationship), NOT a metric, specific value, or duration.", relation_types_str)
+        };
 
         format!(
             r#"---Role---
@@ -52,7 +68,7 @@ You are a Knowledge Graph Specialist responsible for extracting entities and rel
     *   **Identification:** Identify clearly defined and meaningful entities in the input text.
     *   **Entity Details:** For each identified entity, extract the following information:
         *   `entity_name`: The name of the entity. If the entity name is case-insensitive, capitalize the first letter of each significant word (title case). Ensure **consistent naming** across the entire extraction process.
-        *   `entity_type`: Categorize the entity using one of the following types: `{entity_types}`. If none of the provided entity types apply, classify it as `Other`.
+        *   `entity_type`: Categorize the entity using ONE of the following types: `{entity_types}`. You MUST strictly use one of these exact types. If none of the provided entity types apply, you MUST classify it exactly as `OTHER`. Do NOT invent new entity types.
         *   `entity_description`: Provide a concise yet comprehensive description of the entity's attributes and activities. The description **MUST be grounded in the text being analyzed** — do NOT include general knowledge about the entity beyond what the text states.
     *   **Output Format - Entities:** Output a total of 4 fields for each entity, delimited by `{tuple_delimiter}`, on a single line. The first field *must* be the literal string `entity`.
         *   Format: `entity{tuple_delimiter}entity_name{tuple_delimiter}entity_type{tuple_delimiter}entity_description`
@@ -64,7 +80,7 @@ You are a Knowledge Graph Specialist responsible for extracting entities and rel
     *   **Relationship Details:** For each binary relationship, extract the following fields:
         *   `source_entity`: The name of the source entity. Ensure **consistent naming** with entity extraction.
         *   `target_entity`: The name of the target entity. Ensure **consistent naming** with entity extraction.
-        *   `relationship_keywords`: One or more high-level keywords summarizing the overarching nature of the relationship. Multiple keywords separated by comma.
+        *   `relationship_keywords`: {relation_types_instruction}
         *   `relationship_description`: A concise explanation of the nature of the relationship between the source and target entities.
     *   **Output Format - Relationships:** Output a total of 5 fields for each relationship, delimited by `{tuple_delimiter}`, on a single line. The first field *must* be the literal string `relation`.
         *   Format: `relation{tuple_delimiter}source_entity{tuple_delimiter}target_entity{tuple_delimiter}relationship_keywords{tuple_delimiter}relationship_description`
@@ -100,6 +116,7 @@ You are a Knowledge Graph Specialist responsible for extracting entities and rel
 ---Examples---
 {examples}"#,
             entity_types = entity_types_str,
+            relation_types_instruction = relation_types_instruction,
             tuple_delimiter = self.tuple_delimiter,
             language = language,
             completion_delimiter = self.completion_delimiter,
@@ -112,6 +129,7 @@ You are a Knowledge Graph Specialist responsible for extracting entities and rel
         &self,
         input_text: &str,
         entity_types: &[impl AsRef<str>],
+        relation_types: &[impl AsRef<str>],
         language: &str,
     ) -> String {
         let entity_types_str = entity_types
@@ -119,6 +137,17 @@ You are a Knowledge Graph Specialist responsible for extracting entities and rel
             .map(|s| s.as_ref())
             .collect::<Vec<_>>()
             .join(", ");
+
+        let relation_types_section = if relation_types.is_empty() {
+            "".to_string()
+        } else {
+            let types = relation_types
+                .iter()
+                .map(|s| s.as_ref())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("\n<Relation_types>\n[{}]\n", types)
+        };
 
         format!(
             r#"---Task---
@@ -133,7 +162,7 @@ Extract entities and relationships from the input text below.
 ---Data to be Processed---
 <Entity_types>
 [{entity_types}]
-
+{relation_types_section}
 <Input Text>
 ```
 {input_text}
@@ -143,6 +172,7 @@ Extract entities and relationships from the input text below.
             completion_delimiter = self.completion_delimiter,
             language = language,
             entity_types = entity_types_str,
+            relation_types_section = relation_types_section,
             input_text = input_text
         )
     }
@@ -233,7 +263,8 @@ mod tests {
     #[test]
     fn test_system_prompt_generation() {
         let prompts = EntityExtractionPrompts::default();
-        let system = prompts.system_prompt(&["PERSON", "ORGANIZATION"], "English");
+        let relation_types: &[&str] = &[];
+        let system = prompts.system_prompt(&["PERSON", "ORGANIZATION"], relation_types, "English");
 
         assert!(system.contains("Knowledge Graph Specialist"));
         assert!(system.contains("PERSON, ORGANIZATION"));
@@ -244,7 +275,8 @@ mod tests {
     #[test]
     fn test_user_prompt_generation() {
         let prompts = EntityExtractionPrompts::default();
-        let user = prompts.user_prompt("Test text here", &["PERSON"], "English");
+        let relation_types: &[&str] = &[];
+        let user = prompts.user_prompt("Test text here", &["PERSON"], relation_types, "English");
 
         assert!(user.contains("Test text here"));
         assert!(user.contains("<|COMPLETE|>"));
@@ -264,7 +296,8 @@ mod tests {
     #[test]
     fn test_examples_in_prompt() {
         let prompts = EntityExtractionPrompts::default();
-        let system = prompts.system_prompt(&["PERSON"], "English");
+        let relation_types: &[&str] = &[];
+        let system = prompts.system_prompt(&["PERSON"], relation_types, "English");
 
         assert!(system.contains("Example 1:"));
         assert!(system.contains("Example 2:"));

@@ -62,10 +62,8 @@ pub async fn run_dry_run(config: &BatchConfig, resolved: &ResolvedConfig) -> any
         ..ChunkerConfig::default()
     };
     let text_chunker = Chunker::new(chunker_config.clone());
-    let md_chunker = Chunker::with_strategy(
-        chunker_config,
-        Arc::new(HeadingBoundaryChunking::new()),
-    );
+    let md_chunker =
+        Chunker::with_strategy(chunker_config, Arc::new(HeadingBoundaryChunking::new()));
 
     let mut total_sample_chunks: usize = 0;
     let mut total_sample_tokens: usize = 0;
@@ -194,10 +192,7 @@ fn read_documents(
             ),
         }
     } else {
-        anyhow::bail!(
-            "Data path does not exist: {}",
-            data_path.display()
-        )
+        anyhow::bail!("Data path does not exist: {}", data_path.display())
     }
 }
 
@@ -277,7 +272,13 @@ fn estimate_anthropic_cost(
         // Haiku 4.5: $0.50 input, $2.50 output per MTok
         m if m.contains("haiku") => (0.50 / 1_000_000.0, 2.50 / 1_000_000.0),
         // Opus 4 / 4.1: $7.50 input, $37.50 output per MTok
-        m if m.contains("opus-4-1") || m.contains("opus-4-0") || (m.contains("opus-4") && !m.contains("opus-4.") && !m.contains("opus-4-5") && !m.contains("opus-4-6")) => {
+        m if m.contains("opus-4-1")
+            || m.contains("opus-4-0")
+            || (m.contains("opus-4")
+                && !m.contains("opus-4.")
+                && !m.contains("opus-4-5")
+                && !m.contains("opus-4-6")) =>
+        {
             (7.50 / 1_000_000.0, 37.50 / 1_000_000.0)
         }
         // Opus 4.5 / 4.6: $2.50 input, $12.50 output per MTok
@@ -567,7 +568,8 @@ mod tests {
 
     #[test]
     fn test_cost_estimate_gpt41() {
-        let cost_mini = estimate_openai_cost("gpt-4.1-mini", "text-embedding-3-small", 100_000.0, 100);
+        let cost_mini =
+            estimate_openai_cost("gpt-4.1-mini", "text-embedding-3-small", 100_000.0, 100);
         let cost_full = estimate_openai_cost("gpt-4.1", "text-embedding-3-small", 100_000.0, 100);
         // gpt-4.1 should be more expensive than gpt-4.1-mini
         assert!(cost_full.total > cost_mini.total);
