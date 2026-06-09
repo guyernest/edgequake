@@ -449,6 +449,342 @@
             }
           }
         },
+        "PreviewDocumentInfo": {
+          "name": "PreviewDocumentInfo",
+          "fields": {
+            "id": {
+              "name": "id",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "name": {
+              "name": "name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "chunkCount": {
+              "name": "chunkCount",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "PreviewCostEstimate": {
+          "name": "PreviewCostEstimate",
+          "fields": {
+            "documentCount": {
+              "name": "documentCount",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "chunkCount": {
+              "name": "chunkCount",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "estimatedInputTokens": {
+              "name": "estimatedInputTokens",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "estimatedOutputTokens": {
+              "name": "estimatedOutputTokens",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "estimatedCostUsd": {
+              "name": "estimatedCostUsd",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": true,
+              "attributes": []
+            },
+            "model": {
+              "name": "model",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "documents": {
+              "name": "documents",
+              "isArray": true,
+              "type": {
+                "nonModel": "PreviewDocumentInfo"
+              },
+              "isRequired": true,
+              "attributes": [],
+              "isArrayNullable": false
+            }
+          }
+        },
+        "PreviewStatus": {
+          "name": "PreviewStatus",
+          "fields": {
+            "status": {
+              "name": "status",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "documentsCompleted": {
+              "name": "documentsCompleted",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "documentsTotal": {
+              "name": "documentsTotal",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "cliCommand": {
+              "name": "cliCommand",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        },
+        "PreviewEntityCount": {
+          "name": "PreviewEntityCount",
+          "fields": {
+            "typeName": {
+              "name": "typeName",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "count": {
+              "name": "count",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "PreviewRelationCount": {
+          "name": "PreviewRelationCount",
+          "fields": {
+            "typeName": {
+              "name": "typeName",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "count": {
+              "name": "count",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "PreviewCoverageRow": {
+          "name": "PreviewCoverageRow",
+          "fields": {
+            "entityType": {
+              "name": "entityType",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "counts": {
+              "name": "counts",
+              "isArray": true,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": [],
+              "isArrayNullable": false
+            }
+          }
+        },
+        "PreviewDocumentColumn": {
+          "name": "PreviewDocumentColumn",
+          "fields": {
+            "id": {
+              "name": "id",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "name": {
+              "name": "name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "truncatedName": {
+              "name": "truncatedName",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "PreviewCost": {
+          "name": "PreviewCost",
+          "fields": {
+            "inputTokens": {
+              "name": "inputTokens",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "outputTokens": {
+              "name": "outputTokens",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "totalCostUsd": {
+              "name": "totalCostUsd",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": true,
+              "attributes": []
+            },
+            "model": {
+              "name": "model",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            }
+          }
+        },
+        "PreviewResult": {
+          "name": "PreviewResult",
+          "fields": {
+            "status": {
+              "name": "status",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "entityTypeCounts": {
+              "name": "entityTypeCounts",
+              "isArray": true,
+              "type": {
+                "nonModel": "PreviewEntityCount"
+              },
+              "isRequired": true,
+              "attributes": [],
+              "isArrayNullable": true
+            },
+            "relationTypeCounts": {
+              "name": "relationTypeCounts",
+              "isArray": true,
+              "type": {
+                "nonModel": "PreviewRelationCount"
+              },
+              "isRequired": true,
+              "attributes": [],
+              "isArrayNullable": true
+            },
+            "coverageRows": {
+              "name": "coverageRows",
+              "isArray": true,
+              "type": {
+                "nonModel": "PreviewCoverageRow"
+              },
+              "isRequired": true,
+              "attributes": [],
+              "isArrayNullable": true
+            },
+            "documentColumns": {
+              "name": "documentColumns",
+              "isArray": true,
+              "type": {
+                "nonModel": "PreviewDocumentColumn"
+              },
+              "isRequired": true,
+              "attributes": [],
+              "isArrayNullable": true
+            },
+            "totalChunks": {
+              "name": "totalChunks",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "totalEntities": {
+              "name": "totalEntities",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "totalRelationships": {
+              "name": "totalRelationships",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "cost": {
+              "name": "cost",
+              "isArray": false,
+              "type": {
+                "nonModel": "PreviewCost"
+              },
+              "isRequired": false,
+              "attributes": []
+            },
+            "processingTimeMs": {
+              "name": "processingTimeMs",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": false,
+              "attributes": []
+            },
+            "documentsCompleted": {
+              "name": "documentsCompleted",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "documentsTotal": {
+              "name": "documentsTotal",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        },
         "NamespaceStatus": {
           "name": "NamespaceStatus",
           "fields": {
@@ -660,6 +996,38 @@
             }
           }
         },
+        "estimatePreviewCost": {
+          "name": "estimatePreviewCost",
+          "isArray": false,
+          "type": {
+            "nonModel": "PreviewCostEstimate"
+          },
+          "isRequired": true,
+          "arguments": {
+            "namespace": {
+              "name": "namespace",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        },
+        "getPreviewResult": {
+          "name": "getPreviewResult",
+          "isArray": false,
+          "type": {
+            "nonModel": "PreviewResult"
+          },
+          "isRequired": false,
+          "arguments": {
+            "namespace": {
+              "name": "namespace",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        },
         "getSchemaProposal": {
           "name": "getSchemaProposal",
           "isArray": false,
@@ -756,6 +1124,22 @@
             },
             "data_path": {
               "name": "data_path",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        },
+        "triggerPreviewExtraction": {
+          "name": "triggerPreviewExtraction",
+          "isArray": false,
+          "type": {
+            "nonModel": "PreviewStatus"
+          },
+          "isRequired": true,
+          "arguments": {
+            "namespace": {
+              "name": "namespace",
               "isArray": false,
               "type": "String",
               "isRequired": true

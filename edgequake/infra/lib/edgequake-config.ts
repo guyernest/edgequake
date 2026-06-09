@@ -62,7 +62,7 @@ export function getDefaultConfig(
     neptunePublicAccess: !isProd,
     enableDeletionProtection: isProd,
     tags: {
-      Project: 'edgequake',
+      project: 'graphrag',
       Tenant: tenantId,
       Environment: environment,
       ManagedBy: 'CDK',
