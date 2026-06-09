@@ -596,6 +596,7 @@ where
 {
     llm_provider: std::sync::Arc<L>,
     entity_types: Vec<String>,
+    relation_types: Vec<String>,
     prompts: crate::prompts::EntityExtractionPrompts,
     parser: crate::prompts::HybridExtractionParser,
     language: String,
@@ -610,6 +611,7 @@ where
         Self {
             llm_provider,
             entity_types: crate::prompts::default_entity_types(),
+            relation_types: Vec::new(),
             prompts: crate::prompts::EntityExtractionPrompts::default(),
             parser: crate::prompts::HybridExtractionParser::new(true),
             language: "English".to_string(),
@@ -619,6 +621,12 @@ where
     /// Set custom entity types.
     pub fn with_entity_types(mut self, types: Vec<String>) -> Self {
         self.entity_types = types;
+        self
+    }
+
+    /// Set custom relation types.
+    pub fn with_relation_types(mut self, types: Vec<String>) -> Self {
+        self.relation_types = types;
         self
     }
 
@@ -691,10 +699,10 @@ where
         // Build system and user prompts
         let system_prompt = self
             .prompts
-            .system_prompt(&self.entity_types, &self.language);
+            .system_prompt(&self.entity_types, &self.relation_types, &self.language);
         let user_prompt =
             self.prompts
-                .user_prompt(&chunk.content, &self.entity_types, &self.language);
+                .user_prompt(&chunk.content, &self.entity_types, &self.relation_types, &self.language);
 
         // Create chat messages for system + user prompt
         let messages = vec![
@@ -1028,6 +1036,56 @@ where
             // Parse response using hybrid parser (with built-in fallbacks)
             match self.parser.parse(&response.content, &chunk.id) {
                 Ok(mut result) => {
+                    // Enforce schema types for entities (BR0003)
+                    if !self.entity_types.is_empty() {
+                        let allowed_entities: std::collections::HashSet<String> = self
+                            .entity_types
+                            .iter()
+                            .map(|t| t.to_uppercase())
+                            .collect();
+                        
+                        for entity in &mut result.entities {
+                            if !allowed_entities.contains(&entity.entity_type.to_uppercase()) {
+                                tracing::debug!(original = %entity.entity_type, "Mapping unknown entity type to OTHER");
+                                entity.entity_type = "OTHER".to_string();
+                            }
+                        }
+                    }
+
+                    // Enforce schema types for relationships
+                    if !self.relation_types.is_empty() {
+                        let mut allowed_relations_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+                        for rt in &self.relation_types {
+                            allowed_relations_map.insert(rt.to_lowercase(), rt.clone());
+                        }
+
+                        for rel in &mut result.relationships {
+                            let rel_lower = rel.relation_type.to_lowercase();
+                            
+                            // Check if the current relation type matches exactly (case-insensitive)
+                            if let Some(valid_type) = allowed_relations_map.get(&rel_lower) {
+                                rel.relation_type = valid_type.clone();
+                            } else {
+                                // Check if any of the keywords match a valid relation type
+                                let mut found_valid = false;
+                                for kw in &rel.keywords {
+                                    let kw_lower = kw.to_lowercase();
+                                    if let Some(valid_type) = allowed_relations_map.get(&kw_lower) {
+                                        rel.relation_type = valid_type.clone();
+                                        found_valid = true;
+                                        break;
+                                    }
+                                }
+                                
+                                // If no valid type found, fallback to RELATED_TO (or related_to)
+                                if !found_valid {
+                                    tracing::debug!(original = %rel.relation_type, "Mapping unknown relation type to related_to");
+                                    rel.relation_type = "related_to".to_string();
+                                }
+                            }
+                        }
+                    }
+
                     // Add token usage from response
                     result.input_tokens = response.prompt_tokens;
                     result.output_tokens = response.completion_tokens;

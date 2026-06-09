@@ -34,11 +34,12 @@ use crate::progress::{default_model_pricing, ModelPricing};
 
 /// Hard cap on total chunks across all preview documents.
 ///
-/// Keeps preview fast and cheap while providing enough signal for schema validation.
-const MAX_PREVIEW_CHUNKS: usize = 20;
+/// With 512-token preview chunks at gpt-4.1-nano rates, 60 chunks costs ~$0.03.
+/// Enough signal for schema validation across 6 diverse documents.
+const MAX_PREVIEW_CHUNKS: usize = 60;
 
 /// Default number of documents to sample for preview.
-const DEFAULT_PREVIEW_BUDGET: usize = 3;
+const DEFAULT_PREVIEW_BUDGET: usize = 6;
 
 /// Estimated system prompt overhead per chunk (tokens).
 const ESTIMATED_SYSTEM_PROMPT_TOKENS: usize = 1500;
@@ -313,6 +314,7 @@ pub fn estimate_preview_cost(
 pub async fn preview_extraction<L>(
     documents: Vec<(String, String, String)>,
     entity_types: &[String],
+    relation_types: &[String],
     language: &str,
     llm_provider: std::sync::Arc<L>,
     chunk_config: &ChunkerConfig,
@@ -327,6 +329,7 @@ where
     // Set up extractor with domain-specific entity types
     let extractor = SOTAExtractor::new(llm_provider)
         .with_entity_types(entity_types.to_vec())
+        .with_relation_types(relation_types.to_vec())
         .with_language(language);
 
     let chunker = Chunker::new(chunk_config.clone());
@@ -603,8 +606,8 @@ mod tests {
 
     #[test]
     fn test_apply_chunk_cap_single_doc() {
-        let docs = vec![("d1".to_string(), "doc1".to_string(), 50)];
-        let result = apply_chunk_cap(&docs, 50);
+        let docs = vec![("d1".to_string(), "doc1".to_string(), 100)];
+        let result = apply_chunk_cap(&docs, 100);
         assert_eq!(result[0].2, MAX_PREVIEW_CHUNKS);
     }
 
@@ -685,11 +688,11 @@ mod tests {
 
     #[test]
     fn test_max_preview_chunks_constant() {
-        assert_eq!(MAX_PREVIEW_CHUNKS, 20);
+        assert_eq!(MAX_PREVIEW_CHUNKS, 60);
     }
 
     #[test]
     fn test_default_preview_budget() {
-        assert_eq!(DEFAULT_PREVIEW_BUDGET, 3);
+        assert_eq!(DEFAULT_PREVIEW_BUDGET, 6);
     }
 }
