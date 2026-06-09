@@ -276,7 +276,11 @@ pub async fn run_extract(
 
         for (idx, path) in jsonl_paths.iter().enumerate() {
             if completed_batches.contains(&idx) {
-                info!(file = idx + 1, total = jsonl_paths.len(), "Skipping batch (checkpoint exists)");
+                info!(
+                    file = idx + 1,
+                    total = jsonl_paths.len(),
+                    "Skipping batch (checkpoint exists)"
+                );
                 continue;
             }
 
@@ -348,13 +352,16 @@ pub async fn run_extract(
             }
 
             // Save per-batch checkpoint to disk
-            save_batch_checkpoint(config, &BatchCheckpoint {
-                batch_index: idx,
-                results: batch_results_map.clone(),
-                success_count: batch_success,
-                empty_count: batch_empty,
-                error_count: batch_errors,
-            });
+            save_batch_checkpoint(
+                config,
+                &BatchCheckpoint {
+                    batch_index: idx,
+                    results: batch_results_map.clone(),
+                    success_count: batch_success,
+                    empty_count: batch_empty,
+                    error_count: batch_errors,
+                },
+            );
 
             // Merge into cumulative results
             results.extend(batch_results_map);
@@ -380,7 +387,11 @@ pub async fn run_extract(
 
         for (idx, path) in jsonl_paths.iter().enumerate() {
             if completed_batches.contains(&idx) {
-                info!(file = idx + 1, total = jsonl_paths.len(), "Skipping batch (checkpoint exists)");
+                info!(
+                    file = idx + 1,
+                    total = jsonl_paths.len(),
+                    "Skipping batch (checkpoint exists)"
+                );
                 continue;
             }
 
@@ -459,13 +470,16 @@ pub async fn run_extract(
             }
 
             // Save per-batch checkpoint to disk
-            save_batch_checkpoint(config, &BatchCheckpoint {
-                batch_index: idx,
-                results: batch_results_map.clone(),
-                success_count: batch_success,
-                empty_count: batch_empty,
-                error_count: batch_errors,
-            });
+            save_batch_checkpoint(
+                config,
+                &BatchCheckpoint {
+                    batch_index: idx,
+                    results: batch_results_map.clone(),
+                    success_count: batch_success,
+                    empty_count: batch_empty,
+                    error_count: batch_errors,
+                },
+            );
 
             // Merge into cumulative results
             results.extend(batch_results_map);
@@ -567,8 +581,7 @@ fn process_extraction(
         Ok(extraction) => {
             let extraction = resolver.resolve_extraction(extraction);
 
-            let is_empty =
-                extraction.entities.is_empty() && extraction.relationships.is_empty();
+            let is_empty = extraction.entities.is_empty() && extraction.relationships.is_empty();
 
             let is_marked_empty = extraction
                 .metadata
@@ -680,7 +693,11 @@ async fn poll_anthropic_batch(
         }
 
         let counts = &status.request_counts;
-        let total = counts.processing + counts.succeeded + counts.errored + counts.canceled + counts.expired;
+        let total = counts.processing
+            + counts.succeeded
+            + counts.errored
+            + counts.canceled
+            + counts.expired;
         info!(
             batch_id = %batch_id,
             succeeded = counts.succeeded,

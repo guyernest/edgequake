@@ -11,9 +11,7 @@
 
 use crate::cli::Cli;
 use crate::config_file::PipelineConfigFile;
-use crate::domain_config::{
-    DomainConfig, DomainMetadata, PromptConfig, RelationshipKeyword,
-};
+use crate::domain_config::{DomainConfig, DomainMetadata, PromptConfig, RelationshipKeyword};
 use edgequake_core::schema::SchemaProposal;
 use edgequake_core::{NamespaceSlug, PipelineConfig, SchemaStatus};
 use edgequake_storage_aws::{DynamoNamespaceConfig, DynamoNamespaceRegistry};
@@ -202,11 +200,7 @@ impl NamespaceConfigResolver {
                 anyhow::bail!("Configuration errors:\n{}", errors.join("\n"));
             }
             Err(e) => {
-                anyhow::bail!(
-                    "Failed to check namespace '{}': {}",
-                    self.namespace,
-                    e
-                );
+                anyhow::bail!("Failed to check namespace '{}': {}", self.namespace, e);
             }
         };
 
@@ -291,10 +285,8 @@ impl NamespaceConfigResolver {
             match registry.get_schema(&self.namespace).await {
                 Ok(Some(proposal)) => match proposal.status {
                     SchemaStatus::Approved => {
-                        let dc = build_domain_config_from_schema(
-                            &proposal,
-                            self.namespace.as_str(),
-                        );
+                        let dc =
+                            build_domain_config_from_schema(&proposal, self.namespace.as_str());
                         let summary = format!(
                             "{} entity types, {} relation types from schema '{}'",
                             proposal.entity_types.len(),
@@ -493,7 +485,9 @@ fn build_domain_config_from_config_schema(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use edgequake_core::schema::{EntityTypeProposal, RelationTypeProposal, SchemaProposal, SchemaStatus};
+    use edgequake_core::schema::{
+        EntityTypeProposal, RelationTypeProposal, SchemaProposal, SchemaStatus,
+    };
 
     fn sample_proposal() -> SchemaProposal {
         SchemaProposal {
@@ -524,6 +518,7 @@ mod tests {
             domain_hint: Some("test".to_string()),
             proposed_at: 1700000000000,
             reviewed_at: Some(1700000001000),
+            sampling_metadata: None,
         }
     }
 
@@ -545,7 +540,8 @@ mod tests {
         assert_eq!(domain_keywords[0].description, "Employment relationship");
 
         // Validate
-        dc.validate().expect("schema-derived config should be valid");
+        dc.validate()
+            .expect("schema-derived config should be valid");
     }
 
     #[test]
@@ -553,27 +549,24 @@ mod tests {
         use crate::config_file::{SchemaEntityType, SchemaRelationType, SchemaSection};
 
         let schema = SchemaSection {
-            entity_types: vec![
-                SchemaEntityType {
-                    name: "DOCUMENT".to_string(),
-                    description: "Legal documents".to_string(),
-                },
-            ],
-            relation_types: vec![
-                SchemaRelationType {
-                    name: "references".to_string(),
-                    description: "Document references another".to_string(),
-                    source_type: Some("DOCUMENT".to_string()),
-                    target_type: Some("DOCUMENT".to_string()),
-                },
-            ],
+            entity_types: vec![SchemaEntityType {
+                name: "DOCUMENT".to_string(),
+                description: "Legal documents".to_string(),
+            }],
+            relation_types: vec![SchemaRelationType {
+                name: "references".to_string(),
+                description: "Document references another".to_string(),
+                source_type: Some("DOCUMENT".to_string()),
+                target_type: Some("DOCUMENT".to_string()),
+            }],
         };
 
         let dc = build_domain_config_from_config_schema(&schema, "doc-ns");
         assert_eq!(dc.domain.name, "doc-ns");
         assert_eq!(dc.entity_types.len(), 1);
         assert!(dc.entity_types.contains_key("DOCUMENT"));
-        dc.validate().expect("config-schema-derived config should be valid");
+        dc.validate()
+            .expect("config-schema-derived config should be valid");
     }
 
     #[test]

@@ -5,7 +5,9 @@
 
 use crate::config::BatchConfig;
 use crate::parquet_reader::compute_hash8;
-use edgequake_llm::providers::anthropic_batch::{build_anthropic_jsonl_request, is_anthropic_model};
+use edgequake_llm::providers::anthropic_batch::{
+    build_anthropic_jsonl_request, is_anthropic_model,
+};
 use edgequake_llm::providers::openai_batch::build_jsonl_request;
 use edgequake_pipeline::chunker::TextChunk;
 use std::io::Write;

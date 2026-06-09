@@ -83,8 +83,16 @@ mod tests {
     #[test]
     fn test_build_bm25_documents_basic() {
         let chunks = vec![
-            make_chunk("chunk-abc-0", "Jeffrey Epstein financial documents", "hash1"),
-            make_chunk("chunk-abc-1", "Investigation into offshore accounts", "hash1"),
+            make_chunk(
+                "chunk-abc-0",
+                "Jeffrey Epstein financial documents",
+                "hash1",
+            ),
+            make_chunk(
+                "chunk-abc-1",
+                "Investigation into offshore accounts",
+                "hash1",
+            ),
         ];
 
         let docs = build_bm25_documents(&chunks);

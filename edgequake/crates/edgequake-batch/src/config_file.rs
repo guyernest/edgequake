@@ -180,7 +180,10 @@ relation_types = [
         assert_eq!(schema.entity_types.len(), 2);
         assert_eq!(schema.relation_types.len(), 1);
         assert_eq!(schema.entity_types[0].name, "PERSON");
-        assert_eq!(schema.relation_types[0].source_type.as_deref(), Some("ORGANIZATION"));
+        assert_eq!(
+            schema.relation_types[0].source_type.as_deref(),
+            Some("ORGANIZATION")
+        );
     }
 
     #[test]
