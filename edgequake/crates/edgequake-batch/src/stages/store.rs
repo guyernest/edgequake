@@ -63,6 +63,58 @@ pub async fn run_store(
     };
     state_mgr.write_latest_run(&latest).await?;
 
+    // Optional portable snapshot output for embedded MCP runtimes.
+    let snapshot_counts = if let Some(manifest) =
+        super::snapshot::write_snapshot(config, documents, chunks, extractions, embeddings).await?
+    {
+        let counts = manifest.counts.clone();
+        info!(
+            snapshot_uri = ?config.snapshot_uri,
+            documents = manifest.counts.documents,
+            chunks = manifest.counts.chunks,
+            entities = manifest.counts.entities,
+            relationships = manifest.counts.relationships,
+            vectors = manifest.counts.vectors,
+            bm25 = manifest.counts.bm25,
+            "Portable Graph-RAG snapshot written"
+        );
+        Some(counts)
+    } else {
+        None
+    };
+
+    if config.snapshot_mode == crate::config::SnapshotMode::SnapshotOnly {
+        info!("Snapshot-only mode enabled; skipping managed index writes");
+        if let Some(counts) = snapshot_counts {
+            job.total_entities = counts.entities;
+            job.total_relationships = counts.relationships;
+            job.total_embeddings = counts.vectors;
+        }
+        job.processed_documents = documents.len();
+        job.total_chunks = chunks.len();
+        job.phase = Phase::Completed;
+        job.updated_at = chrono::Utc::now().to_rfc3339();
+        state_mgr.save_job(job).await?;
+
+        let completion_millis = chrono::Utc::now().timestamp_millis();
+        let run_report = LatestRunStatus {
+            status: "completed".to_string(),
+            phase: Some("completed".to_string()),
+            job_id: Some(job.job_id.clone()),
+            total_documents: Some(job.total_documents),
+            processed_documents: Some(job.processed_documents),
+            total_chunks: Some(job.total_chunks),
+            started_at: job.run_started_at,
+            updated_at: Some(completion_millis),
+            completed_at: Some(completion_millis),
+            total_entities: Some(job.total_entities),
+            total_relationships: Some(job.total_relationships),
+            ..Default::default()
+        };
+        state_mgr.write_latest_run(&run_report).await?;
+        return Ok(());
+    }
+
     // Step 1: Store document metadata in KV
     let bar = progress.document_bar(documents.len() as u64, "Storing documents");
     let mut doc_entries: Vec<(String, serde_json::Value)> = Vec::new();

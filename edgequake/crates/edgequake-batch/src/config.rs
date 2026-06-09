@@ -1,6 +1,40 @@
 //! Batch job configuration.
 
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SnapshotMode {
+    WriteAndStore,
+    SnapshotOnly,
+}
+
+impl SnapshotMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SnapshotMode::WriteAndStore => "write-and-store",
+            SnapshotMode::SnapshotOnly => "snapshot-only",
+        }
+    }
+}
+
+impl std::str::FromStr for SnapshotMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "write-and-store" => Ok(Self::WriteAndStore),
+            "snapshot-only" => Ok(Self::SnapshotOnly),
+            other => Err(format!("unsupported snapshot mode: {}", other)),
+        }
+    }
+}
+
+impl Default for SnapshotMode {
+    fn default() -> Self {
+        Self::WriteAndStore
+    }
+}
 use std::path::PathBuf;
 
 /// Configuration for a batch ingestion job.
@@ -107,6 +141,12 @@ pub struct BatchConfig {
 
     /// Embedding vector dimension (e.g. 1536 for text-embedding-3-small, 3072 for text-embedding-3-large).
     pub embedding_dimension: u32,
+
+    /// Optional destination for a portable Graph-RAG snapshot bundle.
+    pub snapshot_uri: Option<String>,
+
+    /// Controls whether ingestion writes managed indexes in addition to the snapshot.
+    pub snapshot_mode: SnapshotMode,
 }
 
 impl BatchConfig {

@@ -63,16 +63,15 @@ async fn main() -> anyhow::Result<()> {
     // (before BatchConfig consumes the CLI fields by move)
     if let Command::ListBatches { limit } = cli.command {
         let api_key = cli.api_key.as_deref().ok_or_else(|| {
-            anyhow::anyhow!("API key is required for list-batches (set OPENAI_API_KEY or ANTHROPIC_API_KEY)")
+            anyhow::anyhow!(
+                "API key is required for list-batches (set OPENAI_API_KEY or ANTHROPIC_API_KEY)"
+            )
         })?;
         return list_openai_batches(api_key, limit).await;
     }
 
     if let Command::Descriptor = cli.command {
-        let ns_table = cli
-            .registry_table
-            .as_deref()
-            .unwrap_or(&cli.state_table);
+        let ns_table = cli.registry_table.as_deref().unwrap_or(&cli.state_table);
         return generate_descriptor_command(
             &cli.namespace,
             ns_table,
@@ -94,14 +93,12 @@ async fn main() -> anyhow::Result<()> {
         ref sample_budget,
     } = cli.command
     {
-        let api_key = cli.api_key.as_deref().ok_or_else(|| {
-            anyhow::anyhow!("OPENAI_API_KEY is required for suggest-schema")
-        })?;
-        let suggest_model = cli.model.as_deref().unwrap_or("gpt-4.1-mini");
-        let ns_table = cli
-            .registry_table
+        let api_key = cli
+            .api_key
             .as_deref()
-            .unwrap_or(&cli.state_table);
+            .ok_or_else(|| anyhow::anyhow!("OPENAI_API_KEY is required for suggest-schema"))?;
+        let suggest_model = cli.model.as_deref().unwrap_or("gpt-4.1-mini");
+        let ns_table = cli.registry_table.as_deref().unwrap_or(&cli.state_table);
 
         let input = edgequake_schema::SuggestSchemaInput {
             domain_description: domain_description.clone(),
@@ -109,6 +106,8 @@ async fn main() -> anyhow::Result<()> {
             expected_relationship_types: expected_relationship_types.clone(),
             domain_hint: domain_hint.clone(),
             sample_budget: *sample_budget,
+            delimiter: cli.delimiter.clone(),
+            skip_positional_extraction: false,
         };
 
         return handle_suggest_schema(
@@ -165,7 +164,8 @@ async fn main() -> anyhow::Result<()> {
 
         // In verbose mode, print full generated prompt
         if tracing::event_enabled!(tracing::Level::DEBUG) {
-            let prompts = domain_prompts::DomainExtractionPrompts::new(resolved.domain_config.clone());
+            let prompts =
+                domain_prompts::DomainExtractionPrompts::new(resolved.domain_config.clone());
             tracing::debug!(prompt = %prompts.system_prompt(), "Generated extraction system prompt");
         }
 
@@ -244,6 +244,8 @@ async fn main() -> anyhow::Result<()> {
                 .as_ref()
                 .map(|rc| rc.embedding_dimension)
                 .unwrap_or(1536),
+            snapshot_uri: cli.snapshot_uri.clone(),
+            snapshot_mode: cli.snapshot_mode,
         };
         return dry_run::run_dry_run(
             &dry_run_config,
@@ -260,9 +262,10 @@ async fn main() -> anyhow::Result<()> {
         let resolved = resolved_config
             .as_ref()
             .expect("Preview requires resolved config");
-        let preview_api_key = cli.api_key.as_deref().ok_or_else(|| {
-            anyhow::anyhow!("OPENAI_API_KEY is required for preview extraction")
-        })?;
+        let preview_api_key = cli
+            .api_key
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("OPENAI_API_KEY is required for preview extraction"))?;
 
         return handle_preview_command(
             &cli.namespace,
@@ -272,6 +275,7 @@ async fn main() -> anyhow::Result<()> {
             &domain_config,
             &registry_table,
             &aws_config,
+            cli.delimiter.as_deref(),
         )
         .await;
     }
@@ -314,12 +318,16 @@ async fn main() -> anyhow::Result<()> {
     let extraction_model = if let Some(ref rc) = resolved_config {
         rc.extraction_model.clone()
     } else {
-        cli.model.clone().unwrap_or_else(|| "gpt-4o-mini".to_string())
+        cli.model
+            .clone()
+            .unwrap_or_else(|| "gpt-4o-mini".to_string())
     };
     let embedding_model = if let Some(ref rc) = resolved_config {
         rc.embedding_model.clone()
     } else {
-        cli.embedding_model.clone().unwrap_or_else(|| "text-embedding-3-small".to_string())
+        cli.embedding_model
+            .clone()
+            .unwrap_or_else(|| "text-embedding-3-small".to_string())
     };
     let embedding_dimension = resolved_config
         .as_ref()
@@ -362,6 +370,8 @@ async fn main() -> anyhow::Result<()> {
         max_failures: cli.max_failures,
         anthropic_api_key: cli.anthropic_key.clone(),
         embedding_dimension,
+        snapshot_uri: cli.snapshot_uri.clone(),
+        snapshot_mode: cli.snapshot_mode,
     };
 
     // Upfront validation: check all preconditions before any processing
@@ -386,8 +396,10 @@ async fn main() -> anyhow::Result<()> {
 
     let dynamo_config =
         edgequake_storage_aws::DynamoKVConfig::new(&config.state_table, &config.namespace);
-    let dynamo_kv =
-        edgequake_storage_aws::DynamoKVStorage::new_with_client(dynamo_config, dynamo_client.clone());
+    let dynamo_kv = edgequake_storage_aws::DynamoKVStorage::new_with_client(
+        dynamo_config,
+        dynamo_client.clone(),
+    );
 
     // Verify table exists before proceeding (gives clear error on misconfiguration)
     use edgequake_storage::KVStorage;
@@ -474,14 +486,12 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
 
                 // Load cached extraction results from disk (avoids re-submitting to OpenAI)
-                let extract_results =
-                    stages::extract::load_cached_results(&config, &domain_config).ok_or_else(
-                        || {
-                            anyhow::anyhow!(
+                let extract_results = stages::extract::load_cached_results(&config, &domain_config)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
                             "No cached extraction results found. Run 'extract' first, then 'embed'."
                         )
-                        },
-                    )?;
+                    })?;
 
                 let embedding_provider =
                     create_embedding_provider(&api_key, &config.embedding_model)?;
@@ -508,14 +518,12 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
 
                 // Load cached extraction results from disk
-                let extract_results =
-                    stages::extract::load_cached_results(&config, &domain_config).ok_or_else(
-                        || {
-                            anyhow::anyhow!(
+                let extract_results = stages::extract::load_cached_results(&config, &domain_config)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
                             "No cached extraction results found. Run 'extract' first, then 'store'."
                         )
-                        },
-                    )?;
+                    })?;
 
                 // Load cached embed results, or re-run embed if not cached
                 let embed_result =
@@ -776,10 +784,8 @@ async fn run_full_pipeline(
             let registry_config = edgequake_storage_aws::DynamoNamespaceConfig {
                 table_name: config.registry_table.clone(),
             };
-            let registry = edgequake_storage_aws::DynamoNamespaceRegistry::new(
-                registry_config,
-                dynamo_client,
-            );
+            let registry =
+                edgequake_storage_aws::DynamoNamespaceRegistry::new(registry_config, dynamo_client);
 
             // Build InfrastructureConfig from batch config + AWS identity
             let account_id = match aws_sdk_sts::Client::new(aws_config)
@@ -795,17 +801,14 @@ async fn run_full_pipeline(
             };
 
             let infra = edgequake_core::InfrastructureConfig {
-                neptune_endpoint: config
-                    .neptune_endpoint
-                    .clone()
-                    .unwrap_or_default(),
-                vector_bucket_name: config
-                    .vector_bucket
-                    .clone()
-                    .unwrap_or_default(),
+                neptune_endpoint: config.neptune_endpoint.clone().unwrap_or_default(),
+                vector_bucket_name: config.vector_bucket.clone().unwrap_or_default(),
                 dynamodb_table_name: config.registry_table.clone(),
                 account_id,
-                region: aws_config.region().map(|r| r.to_string()).unwrap_or_else(|| "us-east-1".to_string()),
+                region: aws_config
+                    .region()
+                    .map(|r| r.to_string())
+                    .unwrap_or_else(|| "us-east-1".to_string()),
                 environment: "dev".to_string(),
                 external_id_suffix: {
                     use sha2::Digest;
@@ -821,7 +824,10 @@ async fn run_full_pipeline(
                 Ok(descriptor) => {
                     match registry.store_descriptor(slug, &descriptor).await {
                         Ok(()) => {
-                            info!(namespace = slug.as_str(), "Generated and stored MCP descriptor");
+                            info!(
+                                namespace = slug.as_str(),
+                                "Generated and stored MCP descriptor"
+                            );
                         }
                         Err(e) => {
                             tracing::warn!(error = %e, "Failed to store MCP descriptor (non-fatal)");
@@ -842,7 +848,13 @@ async fn run_full_pipeline(
     let pipeline_duration = pipeline_start.elapsed();
 
     // Print detailed final report
-    report::print_final_report(job, &config.namespace, &verification, descriptor.as_ref(), pipeline_duration);
+    report::print_final_report(
+        job,
+        &config.namespace,
+        &verification,
+        descriptor.as_ref(),
+        pipeline_duration,
+    );
 
     // Write success LATEST_RUN status
     let completion_millis = chrono::Utc::now().timestamp_millis();
@@ -975,11 +987,9 @@ async fn create_bm25_storage(
     })?;
 
     // Create AthenaQueryEngine (reuses existing athena_sql module)
-    let athena_config = edgequake_storage_aws::AthenaConfig::new(
-        database.clone(),
-        output_location.clone(),
-    )
-    .with_workgroup(config.athena_workgroup.clone());
+    let athena_config =
+        edgequake_storage_aws::AthenaConfig::new(database.clone(), output_location.clone())
+            .with_workgroup(config.athena_workgroup.clone());
 
     let athena_engine = edgequake_storage_aws::AthenaQueryEngine::new(athena_config).await?;
 
@@ -1064,11 +1074,13 @@ async fn generate_descriptor_command(
         .map(|r| r.to_string())
         .unwrap_or_else(|| "us-east-1".to_string());
 
-    let neptune = neptune_endpoint
-        .ok_or_else(|| anyhow::anyhow!("Neptune endpoint required (set NEPTUNE_ENDPOINT or --neptune-endpoint)"))?;
+    let neptune = neptune_endpoint.ok_or_else(|| {
+        anyhow::anyhow!("Neptune endpoint required (set NEPTUNE_ENDPOINT or --neptune-endpoint)")
+    })?;
 
-    let vectors = vector_bucket
-        .ok_or_else(|| anyhow::anyhow!("Vector bucket required (set VECTOR_BUCKET or --vector-bucket)"))?;
+    let vectors = vector_bucket.ok_or_else(|| {
+        anyhow::anyhow!("Vector bucket required (set VECTOR_BUCKET or --vector-bucket)")
+    })?;
 
     let infra = edgequake_core::InfrastructureConfig {
         neptune_endpoint: neptune.to_string(),
@@ -1094,18 +1106,28 @@ async fn generate_descriptor_command(
     let registry =
         edgequake_storage_aws::DynamoNamespaceRegistry::new(registry_config, dynamo_client);
 
-    let descriptor = registry.generate_descriptor(&slug, &infra).await
+    let descriptor = registry
+        .generate_descriptor(&slug, &infra)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to generate descriptor: {}", e))?;
 
-    registry.store_descriptor(&slug, &descriptor).await
+    registry
+        .store_descriptor(&slug, &descriptor)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to store descriptor: {}", e))?;
 
-    println!("MCP descriptor generated and stored for namespace '{}'", namespace);
+    println!(
+        "MCP descriptor generated and stored for namespace '{}'",
+        namespace
+    );
     println!();
     println!("--- Storage Endpoints ---");
     println!("Neptune:      {}", descriptor.storage.neptune.endpoint);
     println!("Label prefix: {}", descriptor.storage.neptune.label_prefix);
-    println!("S3 Vectors:   {}/{}", descriptor.storage.s3_vectors.bucket_name, descriptor.storage.s3_vectors.index_name);
+    println!(
+        "S3 Vectors:   {}/{}",
+        descriptor.storage.s3_vectors.bucket_name, descriptor.storage.s3_vectors.index_name
+    );
     println!("DynamoDB:     {}", descriptor.storage.dynamodb.table_name);
     if let Some(ref bm25) = descriptor.storage.bm25 {
         println!("BM25 DB:      {}", bm25.database);
@@ -1272,12 +1294,7 @@ async fn handle_suggest_schema(
     let openai_config = edgequake_schema::OpenAiConfig::new(api_key).with_model(model);
 
     // Run schema suggestion
-    let proposal = edgequake_schema::suggest_schema(
-        &location,
-        input,
-        &openai_config,
-    )
-    .await?;
+    let proposal = edgequake_schema::suggest_schema(&location, input, &openai_config).await?;
 
     // Store in DynamoDB
     let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
@@ -1285,15 +1302,17 @@ async fn handle_suggest_schema(
     let registry_config = edgequake_storage_aws::DynamoNamespaceConfig {
         table_name: registry_table.to_string(),
     };
-    let registry = edgequake_storage_aws::DynamoNamespaceRegistry::new(registry_config, dynamo_client);
+    let registry =
+        edgequake_storage_aws::DynamoNamespaceRegistry::new(registry_config, dynamo_client);
 
     let slug = edgequake_core::NamespaceSlug::parse(namespace)?;
 
     // Use the inherent method directly (not the trait method) to avoid needing the trait import.
     // DynamoNamespaceRegistry has store_schema as both an inherent method and a trait implementation.
-    registry.store_schema(&slug, &proposal).await.map_err(|e| {
-        anyhow::anyhow!("Failed to store schema proposal: {}", e)
-    })?;
+    registry
+        .store_schema(&slug, &proposal)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to store schema proposal: {}", e))?;
 
     info!(
         namespace = namespace,
@@ -1305,10 +1324,7 @@ async fn handle_suggest_schema(
     );
 
     // Print proposal as formatted JSON for partner review
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&proposal)?
-    );
+    println!("{}", serde_json::to_string_pretty(&proposal)?);
 
     Ok(())
 }
@@ -1326,6 +1342,7 @@ async fn handle_preview_command(
     domain_config: &std::sync::Arc<domain_config::DomainConfig>,
     registry_table: &str,
     aws_config: &aws_config::SdkConfig,
+    delimiter: Option<&str>,
 ) -> anyhow::Result<()> {
     info!(namespace = namespace, "Starting preview extraction");
 
@@ -1363,11 +1380,11 @@ async fn handle_preview_command(
 
     // Helper to write progress updates to DynamoDB
     let write_preview_request = |client: aws_sdk_dynamodb::Client,
-                                  table: String,
-                                  pk_val: String,
-                                  status: String,
-                                  docs_completed: usize,
-                                  docs_total: usize| {
+                                 table: String,
+                                 pk_val: String,
+                                 status: String,
+                                 docs_completed: usize,
+                                 docs_total: usize| {
         async move {
             let data = serde_json::json!({
                 "namespace": namespace,
@@ -1407,7 +1424,9 @@ async fn handle_preview_command(
     // Sample documents using stratified sampling
     let location = data.to_string_lossy().to_string();
     let input = edgequake_schema::SuggestSchemaInput {
-        sample_budget: Some(3),
+        sample_budget: Some(6),
+        delimiter: delimiter.map(|s| s.to_string()),
+        skip_positional_extraction: true, // Preview: let chunker + 20-chunk cap handle truncation
         ..Default::default()
     };
 
@@ -1417,7 +1436,7 @@ async fn handle_preview_command(
     let documents: Vec<(String, String, String)> = dataset
         .documents
         .into_iter()
-        .take(3)
+        .take(6)
         .map(|d| (d.id, d.source, d.content))
         .collect();
 
@@ -1425,22 +1444,32 @@ async fn handle_preview_command(
         anyhow::bail!("No documents found in data path: {}", location);
     }
 
-    info!(
-        documents = documents.len(),
-        "Sampled documents for preview"
-    );
+    info!(documents = documents.len(), "Sampled documents for preview");
 
     // Build entity types list from domain config
     let entity_types: Vec<String> = domain_config.entity_types.keys().cloned().collect();
+    let relation_types: Vec<String> = domain_config
+        .relationship_keywords
+        .values()
+        .flatten()
+        .map(|k| k.keyword.clone())
+        .collect();
     let language = &domain_config.domain.language;
 
     // Create LLM provider for synchronous (standard rate) extraction
     let llm_provider = std::sync::Arc::new(
-        edgequake_llm::providers::openai::OpenAIProvider::new(api_key)
-            .with_model(extraction_model),
+        edgequake_llm::providers::openai::OpenAIProvider::new(api_key).with_model(extraction_model),
     );
 
-    let chunk_config = edgequake_pipeline::chunker::ChunkerConfig::default();
+    // Use smaller chunks for preview to get more diversity across the document.
+    // Default is 1200 tokens; 512 tokens yields ~10 chunks per long doc,
+    // which with 3 docs and the 20-chunk cap gives better coverage.
+    let chunk_config = edgequake_pipeline::chunker::ChunkerConfig {
+        chunk_size: 512,
+        chunk_overlap: 50,
+        min_chunk_size: 50,
+        ..edgequake_pipeline::chunker::ChunkerConfig::default()
+    };
 
     // Set up progress callback that writes to DynamoDB
     let progress_client = dynamo_client.clone();
@@ -1482,6 +1511,7 @@ async fn handle_preview_command(
     let result = match edgequake_pipeline::preview::preview_extraction(
         documents.clone(),
         &entity_types,
+        &relation_types,
         language,
         llm_provider,
         &chunk_config,
@@ -1511,17 +1541,13 @@ async fn handle_preview_command(
     let entity_type_counts: Vec<serde_json::Value> = result
         .entity_type_counts
         .iter()
-        .map(|(type_name, count)| {
-            serde_json::json!({ "typeName": type_name, "count": count })
-        })
+        .map(|(type_name, count)| serde_json::json!({ "typeName": type_name, "count": count }))
         .collect();
 
     let relation_type_counts: Vec<serde_json::Value> = result
         .relation_type_counts
         .iter()
-        .map(|(type_name, count)| {
-            serde_json::json!({ "typeName": type_name, "count": count })
-        })
+        .map(|(type_name, count)| serde_json::json!({ "typeName": type_name, "count": count }))
         .collect();
 
     let coverage_rows: Vec<serde_json::Value> = result
@@ -1630,7 +1656,9 @@ async fn handle_preview_command(
     }
     println!();
 
-    println!("Results written to DynamoDB (PREVIEW_RESULT). The console will show them automatically.");
+    println!(
+        "Results written to DynamoDB (PREVIEW_RESULT). The console will show them automatically."
+    );
 
     Ok(())
 }
