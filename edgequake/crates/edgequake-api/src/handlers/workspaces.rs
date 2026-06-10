@@ -89,7 +89,7 @@ pub use crate::handlers::workspaces_types::{
     WorkspaceStatsResponse,
 };
 
-use edgequake_core::{MetricsTriggerType, Workspace};
+use edgequake_core::{MetricsTriggerType, NamespaceSlug, Workspace};
 
 // ============ Helper Functions ============
 
@@ -132,9 +132,17 @@ fn workspace_to_response(workspace: &Workspace) -> WorkspaceResponse {
         embedding_full_id: workspace.embedding_full_id(),
         created_at: workspace.created_at.to_rfc3339(),
         updated_at: workspace.updated_at.to_rfc3339(),
-        // Phase 23 Wave-0 de-risk: workspace.slug IS the namespace slug
-        // (confirmed: NamespaceSlug::parse accepts the same URL-safe slug value)
-        namespace_slug: workspace.slug.clone(),
+        // Phase 23 Wave-0 de-risk: workspace.slug IS the namespace slug —
+        // but only when it actually satisfies NamespaceSlug's rules (WR-05).
+        // Legacy/edge workspaces (>63 chars, empty, non-ASCII) get an empty
+        // namespace_slug so the webui resolveNamespaceSlug guard raises an
+        // actionable NamespaceSlugError instead of every /namespaces call
+        // failing with an opaque 400.
+        namespace_slug: if NamespaceSlug::parse(&workspace.slug).is_ok() {
+            workspace.slug.clone()
+        } else {
+            String::new()
+        },
     }
 }
 
@@ -535,6 +543,21 @@ pub async fn create_workspace(
     Json(request): Json<CreateWorkspaceApiRequest>,
 ) -> Result<(StatusCode, Json<WorkspaceResponse>), ApiError> {
     use edgequake_core::CreateWorkspaceRequest;
+
+    // WR-05: workspace.slug doubles as the namespace slug for every
+    // /namespaces/{slug}/* route. Reject explicit slugs that fail
+    // NamespaceSlug's rules up front with a clear error, instead of letting
+    // every later wizard/config call fail with an opaque 400.
+    if let Some(ref slug) = request.slug {
+        NamespaceSlug::parse(slug).map_err(|e| {
+            ApiError::BadRequest(format!(
+                "Invalid workspace slug '{}': {}. Workspace slugs must be 1-63 \
+                 lowercase alphanumeric characters or hyphens (they are also \
+                 used as the namespace slug).",
+                slug, e
+            ))
+        })?;
+    }
 
     // SPEC-032: Fetch parent tenant to inherit default model configuration if not provided
     let tenant = state
@@ -2309,15 +2332,32 @@ pub async fn reprocess_all_documents(
 // ============ Helper Functions ============
 
 /// Generate a URL-friendly slug from a name.
+///
+/// WR-05: output is constrained to NamespaceSlug-compatible form —
+/// ASCII lowercase alphanumeric + hyphens, capped at 63 bytes, no
+/// leading/trailing hyphen (slugs double as namespace slugs).
 fn generate_slug(name: &str) -> String {
-    name.to_lowercase()
+    let mut slug = name
+        .to_lowercase()
         .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        // ASCII-only: non-ASCII alphanumerics (e.g. 'é') are NOT valid in a
+        // NamespaceSlug, so map them to '-' like other separators.
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
         .collect::<Vec<&str>>()
-        .join("-")
+        .join("-");
+
+    // Cap at the 63-char NamespaceSlug limit (all-ASCII at this point, so
+    // truncate is char-boundary safe) and drop any trailing hyphen it exposes.
+    if slug.len() > 63 {
+        slug.truncate(63);
+        while slug.ends_with('-') {
+            slug.pop();
+        }
+    }
+    slug
 }
 
 #[cfg(test)]
@@ -2337,6 +2377,29 @@ mod tests {
         assert_eq!(generate_slug("UPPERCASE"), "uppercase");
         assert_eq!(generate_slug("already-slug"), "already-slug");
         assert_eq!(generate_slug("123"), "123");
+    }
+
+    #[test]
+    fn test_generate_slug_namespace_compatible() {
+        // WR-05: generated slugs must satisfy NamespaceSlug rules.
+        // Cap at 63 chars without a trailing hyphen
+        let long_name = "a".repeat(80);
+        let slug = generate_slug(&long_name);
+        assert_eq!(slug.len(), 63);
+        assert!(edgequake_core::NamespaceSlug::parse(&slug).is_ok());
+
+        // Truncation may expose a hyphen at position 63 — must be trimmed
+        let name_with_sep = format!("{}-{}", "a".repeat(62), "b".repeat(20));
+        let slug = generate_slug(&name_with_sep);
+        assert!(!slug.ends_with('-'));
+        assert!(edgequake_core::NamespaceSlug::parse(&slug).is_ok());
+
+        // Non-ASCII alphanumerics map to separators (not kept verbatim)
+        assert_eq!(generate_slug("café au lait"), "caf-au-lait");
+        assert!(edgequake_core::NamespaceSlug::parse(&generate_slug("café au lait")).is_ok());
+
+        // All-punctuation names yield an empty slug (caller must handle)
+        assert_eq!(generate_slug("!!!"), "");
     }
 
     #[test]
