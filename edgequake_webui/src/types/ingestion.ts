@@ -596,40 +596,47 @@ export interface PreviewCost {
  * Exact field names match the camelCase JSON written to SK="PREVIEW_RESULT" by
  * the batch worker (handle_preview_command, edgequake-batch/src/main.rs).
  *
- * Status values:
- *   - "pending"   — PREVIEW_REQUEST recorded; batch worker has not started
- *   - "running"   — batch worker is extracting sample documents
- *   - "completed" — extraction finished; all aggregate fields are populated
- *   - "failed"    — extraction failed; check error field
+ * Status values (matches the GET /preview handler, preview.rs — CR-05):
+ *   - "requested"  — PREVIEW_REQUEST recorded; batch worker has not started
+ *   - "processing" — batch worker is extracting sample documents
+ *   - "none"       — no preview request has been recorded for this namespace
+ *   - "completed"  — extraction finished; all aggregate fields are populated
+ *   - "failed"     — extraction failed; check error field
+ *
+ * The aggregate fields are OPTIONAL because in-flight poll bodies
+ * ({ namespace, status }) carry none of them — only a "completed" result
+ * is guaranteed to populate them. Guard all array accesses.
  */
 export interface PreviewResult {
   /** Current preview lifecycle status. */
-  status: "pending" | "running" | "completed" | "failed";
+  status: "requested" | "processing" | "none" | "completed" | "failed";
+  /** Namespace slug (injected by the GET handler). */
+  namespace?: string;
   /** Aggregate entity type counts across all sampled documents. */
-  entityTypeCounts: TypeCount[];
+  entityTypeCounts?: TypeCount[];
   /** Aggregate relation type counts across all sampled documents. */
-  relationTypeCounts: TypeCount[];
+  relationTypeCounts?: TypeCount[];
   /**
    * Coverage matrix: one row per entity type, one count per document.
    * Row indices match the entityTypeCounts order; column indices match documentColumns.
    */
-  coverageRows: CoverageRow[];
+  coverageRows?: CoverageRow[];
   /** Ordered list of sampled document column headers for the coverage matrix. */
-  documentColumns: DocumentColumn[];
+  documentColumns?: DocumentColumn[];
   /** Total number of chunks processed in the sample. */
-  totalChunks: number;
+  totalChunks?: number;
   /** Total number of entities extracted in the sample. */
-  totalEntities: number;
+  totalEntities?: number;
   /** Total number of relationships extracted in the sample. */
-  totalRelationships: number;
+  totalRelationships?: number;
   /** LLM cost for the preview run. */
-  cost: PreviewCost;
+  cost?: PreviewCost;
   /** Total processing time in milliseconds. */
-  processingTimeMs: number;
+  processingTimeMs?: number;
   /** Number of documents fully processed. */
-  documentsCompleted: number;
+  documentsCompleted?: number;
   /** Total documents in the preview budget (up to DEFAULT_PREVIEW_BUDGET=6). */
-  documentsTotal: number;
+  documentsTotal?: number;
   /** Error message when status is "failed". */
   error?: string;
 }

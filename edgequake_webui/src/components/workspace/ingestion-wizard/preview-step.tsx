@@ -83,7 +83,10 @@ export function isRelatedToRow(typeName: string): boolean {
 }
 
 /**
- * Returns true when the preview is still loading (no completed result yet).
+ * Returns true when the preview is still loading (no terminal result yet).
+ * In-flight server statuses are "requested" and "processing"; "none" means
+ * no request is recorded yet (treated as still loading while a poll is
+ * expected). Terminal statuses are "completed" and "failed" (CR-05).
  */
 export function isPreviewLoading(
   isPreviewing: boolean,
@@ -91,7 +94,11 @@ export function isPreviewLoading(
 ): boolean {
   if (isPreviewing) return true;
   if (!result) return false;
-  return result.status === "pending" || result.status === "running";
+  return (
+    result.status === "requested" ||
+    result.status === "processing" ||
+    result.status === "none"
+  );
 }
 
 // ============================================================================
@@ -151,15 +158,16 @@ export function PreviewStep({ namespace, onNext, onBack }: PreviewStepProps) {
         const result = await getPreviewResult(namespace);
         if (result.status === "completed" || result.status === "failed") {
           stopPolling();
+          // Only TERMINAL bodies are committed to the store — in-flight
+          // poll bodies ({ namespace, status }) have none of the aggregate
+          // fields and must not be stored as a PreviewResult (CR-05).
           setPreviewResult(result);
           setIsPreviewing(false);
           if (result.status === "failed") {
             setError(result.error ?? t("common.error"));
           }
-        } else {
-          // Still pending/running — keep polling
-          setPreviewResult(result);
         }
+        // Still requested/processing — keep polling without storing partials
       } catch (err) {
         stopPolling();
         setIsPreviewing(false);
@@ -203,6 +211,13 @@ export function PreviewStep({ namespace, onNext, onBack }: PreviewStepProps) {
   // ── Derived state ──────────────────────────────────────────────────────────
   const loading = isPreviewLoading(isPreviewing, previewResult);
   const result = previewResult;
+
+  // Guarded aggregate views — a "failed" (or malformed) result carries no
+  // aggregate arrays; never dereference them unguarded (CR-05).
+  const documentColumns = result?.documentColumns ?? [];
+  const coverageRows = result?.coverageRows ?? [];
+  const entityTypeCounts = result?.entityTypeCounts ?? [];
+  const relationTypeCounts = result?.relationTypeCounts ?? [];
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -256,16 +271,16 @@ export function PreviewStep({ namespace, onNext, onBack }: PreviewStepProps) {
                 <TableBody>
                   {loading ? (
                     <SkeletonRows />
-                  ) : result && result.documentColumns.length > 0 ? (
+                  ) : result && documentColumns.length > 0 ? (
                     <>
-                      {result.documentColumns.map((doc) => {
+                      {documentColumns.map((doc) => {
                         // Find chunk count from coverageRows totals per document
-                        const colIdx = result.documentColumns.findIndex(
+                        const colIdx = documentColumns.findIndex(
                           (d) => d.id === doc.id,
                         );
                         const chunkCount =
                           colIdx >= 0
-                            ? result.coverageRows.reduce(
+                            ? coverageRows.reduce(
                                 (sum, row) => sum + (row.counts[colIdx] ?? 0),
                                 0,
                               )
@@ -286,7 +301,7 @@ export function PreviewStep({ namespace, onNext, onBack }: PreviewStepProps) {
                           {t("common.all")}
                         </TableCell>
                         <TableCell className="text-xs tabular-nums">
-                          {result.totalChunks}
+                          {result.totalChunks ?? 0}
                         </TableCell>
                       </TableRow>
                     </>
@@ -316,9 +331,9 @@ export function PreviewStep({ namespace, onNext, onBack }: PreviewStepProps) {
                 <TableBody>
                   {loading ? (
                     <SkeletonRows />
-                  ) : result && result.entityTypeCounts.length > 0 ? (
+                  ) : result && entityTypeCounts.length > 0 ? (
                     <>
-                      {result.entityTypeCounts.map((row) => (
+                      {entityTypeCounts.map((row) => (
                         <TableRow key={row.typeName}>
                           <TableCell className="text-xs font-mono">
                             {row.typeName}
@@ -333,7 +348,7 @@ export function PreviewStep({ namespace, onNext, onBack }: PreviewStepProps) {
                           {t("common.all")}
                         </TableCell>
                         <TableCell className="text-xs tabular-nums">
-                          {result.totalEntities}
+                          {result.totalEntities ?? 0}
                         </TableCell>
                       </TableRow>
                     </>
@@ -363,9 +378,9 @@ export function PreviewStep({ namespace, onNext, onBack }: PreviewStepProps) {
                 <TableBody>
                   {loading ? (
                     <SkeletonRows />
-                  ) : result && result.relationTypeCounts.length > 0 ? (
+                  ) : result && relationTypeCounts.length > 0 ? (
                     <>
-                      {result.relationTypeCounts.map((row) => {
+                      {relationTypeCounts.map((row) => {
                         const isRT = isRelatedToRow(row.typeName);
                         return (
                           <TableRow
@@ -411,7 +426,7 @@ export function PreviewStep({ namespace, onNext, onBack }: PreviewStepProps) {
                           {t("common.all")}
                         </TableCell>
                         <TableCell className="text-xs tabular-nums">
-                          {result.totalRelationships}
+                          {result.totalRelationships ?? 0}
                         </TableCell>
                       </TableRow>
                     </>

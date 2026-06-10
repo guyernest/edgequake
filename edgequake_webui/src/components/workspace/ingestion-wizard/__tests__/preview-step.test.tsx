@@ -61,7 +61,11 @@ function isPreviewLoading(
 ): boolean {
   if (isPreviewing) return true;
   if (!result) return false; // nothing started — not actively loading
-  return result.status === "pending" || result.status === "running";
+  return (
+    result.status === "requested" ||
+    result.status === "processing" ||
+    result.status === "none"
+  );
 }
 
 /**
@@ -159,7 +163,7 @@ describe("annotateRelationRows — RELATED_TO row amber-highlight + badge", () =
   };
 
   it("RELATED_TO row in relationTypeCounts receives amber-highlight marker (data-testid)", () => {
-    const annotated = annotateRelationRows(mockResult.relationTypeCounts);
+    const annotated = annotateRelationRows(mockResult.relationTypeCounts!);
     const relatedToRow = annotated.find((r) => r.typeName === "RELATED_TO");
     expect(relatedToRow).toBeDefined();
     expect(relatedToRow!.isRelatedTo).toBe(true);
@@ -167,14 +171,14 @@ describe("annotateRelationRows — RELATED_TO row amber-highlight + badge", () =
   });
 
   it("non-RELATED_TO rows have no testId and isRelatedTo=false", () => {
-    const annotated = annotateRelationRows(mockResult.relationTypeCounts);
+    const annotated = annotateRelationRows(mockResult.relationTypeCounts!);
     const employs = annotated.find((r) => r.typeName === "employs");
     expect(employs!.isRelatedTo).toBe(false);
     expect(employs!.testId).toBeUndefined();
   });
 
   it("annotates all three rows correctly", () => {
-    const annotated = annotateRelationRows(mockResult.relationTypeCounts);
+    const annotated = annotateRelationRows(mockResult.relationTypeCounts!);
     expect(annotated).toHaveLength(3);
     const relatedToCount = annotated.filter((r) => r.isRelatedTo).length;
     expect(relatedToCount).toBe(1);
@@ -211,9 +215,9 @@ describe("isPreviewLoading — Skeleton shown while loading", () => {
     expect(isPreviewLoading(true, null)).toBe(true);
   });
 
-  it("returns true when result status is 'pending'", () => {
+  it("returns true when result status is 'requested'", () => {
     const pendingResult: PreviewResult = {
-      status: "pending",
+      status: "requested",
       entityTypeCounts: [],
       relationTypeCounts: [],
       coverageRows: [],
@@ -229,9 +233,9 @@ describe("isPreviewLoading — Skeleton shown while loading", () => {
     expect(isPreviewLoading(false, pendingResult)).toBe(true);
   });
 
-  it("returns true when result status is 'running'", () => {
+  it("returns true when result status is 'processing'", () => {
     const runningResult: PreviewResult = {
-      status: "running",
+      status: "processing",
       entityTypeCounts: [],
       relationTypeCounts: [],
       coverageRows: [],
@@ -303,14 +307,14 @@ describe("preview tabs render aggregate fields (not per-row data)", () => {
   };
 
   it("Entities tab: entityTypeCounts has the expected rows", () => {
-    const { entityTypeCounts } = mockCompletedResult;
+    const entityTypeCounts = mockCompletedResult.entityTypeCounts!;
     expect(entityTypeCounts).toHaveLength(2);
     expect(entityTypeCounts[0].typeName).toBe("PERSON");
     expect(entityTypeCounts[0].count).toBe(42);
   });
 
   it("Relations tab: relationTypeCounts has RELATED_TO row", () => {
-    const { relationTypeCounts } = mockCompletedResult;
+    const relationTypeCounts = mockCompletedResult.relationTypeCounts!;
     const hasRelatedTo = relationTypeCounts.some(
       (r) => r.typeName === "RELATED_TO",
     );
