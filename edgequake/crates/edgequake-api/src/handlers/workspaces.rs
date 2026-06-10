@@ -132,6 +132,9 @@ fn workspace_to_response(workspace: &Workspace) -> WorkspaceResponse {
         embedding_full_id: workspace.embedding_full_id(),
         created_at: workspace.created_at.to_rfc3339(),
         updated_at: workspace.updated_at.to_rfc3339(),
+        // Phase 23 Wave-0 de-risk: workspace.slug IS the namespace slug
+        // (confirmed: NamespaceSlug::parse accepts the same URL-safe slug value)
+        namespace_slug: workspace.slug.clone(),
     }
 }
 

@@ -279,6 +279,17 @@ pub struct WorkspaceResponse {
     pub created_at: String,
     /// Last update timestamp.
     pub updated_at: String,
+
+    // Phase 23 Wave-0 de-risk (Gemini suggestion 1):
+    // Expose the namespace slug so the webui (Plan 03) can call
+    // /namespaces/{slug}/config without a separate lookup.
+    // Confirmed: workspace.slug IS the namespace slug (same URL-safe identifier
+    // used by NamespaceSlug::parse and the /api/v1/ns/{namespace}/... routes).
+    /// Namespace slug for this workspace.
+    ///
+    /// Equals `slug` — included explicitly so the webui can resolve
+    /// `/namespaces/{namespace_slug}/config` without additional lookup.
+    pub namespace_slug: String,
 }
 
 // ============================================================================
