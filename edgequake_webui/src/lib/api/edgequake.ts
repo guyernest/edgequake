@@ -1714,16 +1714,28 @@ export async function updateNamespaceConfig(
 // ============================================================================
 
 /**
+ * Server envelope for all schema endpoints (GET/PATCH return SchemaResponse,
+ * approve/reject return SchemaActionResponse — both nest the proposal under
+ * `schema`). The client unwraps this envelope so the rest of the UI keeps the
+ * flat SchemaProposal type (CR-01 fix).
+ */
+interface SchemaEnvelope {
+  namespace: string;
+  schema: import("@/types/ingestion").SchemaProposal;
+}
+
+/**
  * Propose a new extraction schema for a namespace.
  * Calls POST /api/v1/namespaces/{namespace}/schema
- * Returns 202 Accepted immediately; poll GET /schema until status != "proposing".
+ * Returns 202 Accepted immediately with a flat { namespace, status, message }
+ * acknowledgement body; poll getNamespaceSchema until status != "proposing".
  *
  * @param namespace - Namespace slug.
  */
 export async function proposeNamespaceSchema(
   namespace: string,
-): Promise<import("@/types/ingestion").SchemaProposal> {
-  return api.post<import("@/types/ingestion").SchemaProposal>(
+): Promise<{ namespace: string; status: string; message?: string }> {
+  return api.post<{ namespace: string; status: string; message?: string }>(
     `/namespaces/${namespace}/schema`,
   );
 }
@@ -1731,7 +1743,9 @@ export async function proposeNamespaceSchema(
 /**
  * Get the current schema for a namespace.
  * Calls GET /api/v1/namespaces/{namespace}/schema
- * Returns null / { status: "none" } when no schema has been proposed.
+ * The server responds with { namespace, schema: { status, ... } } — this
+ * function unwraps the envelope and returns the inner proposal.
+ * Returns { status: "none" } when no schema has been proposed.
  * Returns { status: "proposing" } while LLM suggestion is in-progress.
  *
  * @param namespace - Namespace slug.
@@ -1739,15 +1753,17 @@ export async function proposeNamespaceSchema(
 export async function getNamespaceSchema(
   namespace: string,
 ): Promise<import("@/types/ingestion").SchemaProposal | null> {
-  return api.get<import("@/types/ingestion").SchemaProposal | null>(
+  const res = await api.get<SchemaEnvelope | null>(
     `/namespaces/${namespace}/schema`,
   );
+  return res?.schema ?? null;
 }
 
 /**
  * Merge-patch update the namespace schema.
  * Calls PATCH /api/v1/namespaces/{namespace}/schema
  * Only fields present in `data` are updated; RELATED_TO is always stripped server-side.
+ * The server responds with { namespace, schema: { ... } } — unwrapped here.
  *
  * @param namespace - Namespace slug.
  * @param data - Partial schema update.
@@ -1756,38 +1772,43 @@ export async function updateNamespaceSchema(
   namespace: string,
   data: Partial<import("@/types/ingestion").SchemaProposal>,
 ): Promise<import("@/types/ingestion").SchemaProposal> {
-  return api.patch<import("@/types/ingestion").SchemaProposal>(
+  const res = await api.patch<SchemaEnvelope>(
     `/namespaces/${namespace}/schema`,
     data,
   );
+  return res.schema;
 }
 
 /**
  * Approve the proposed namespace schema.
  * Calls POST /api/v1/namespaces/{namespace}/schema/approve
+ * The server responds with { namespace, schema: SchemaProposal } — unwrapped here.
  *
  * @param namespace - Namespace slug.
  */
 export async function approveNamespaceSchema(
   namespace: string,
 ): Promise<import("@/types/ingestion").SchemaProposal> {
-  return api.post<import("@/types/ingestion").SchemaProposal>(
+  const res = await api.post<SchemaEnvelope>(
     `/namespaces/${namespace}/schema/approve`,
   );
+  return res.schema;
 }
 
 /**
  * Reject the proposed namespace schema.
  * Calls POST /api/v1/namespaces/{namespace}/schema/reject
+ * The server responds with { namespace, schema: SchemaProposal } — unwrapped here.
  *
  * @param namespace - Namespace slug.
  */
 export async function rejectNamespaceSchema(
   namespace: string,
 ): Promise<import("@/types/ingestion").SchemaProposal> {
-  return api.post<import("@/types/ingestion").SchemaProposal>(
+  const res = await api.post<SchemaEnvelope>(
     `/namespaces/${namespace}/schema/reject`,
   );
+  return res.schema;
 }
 
 // ============================================================================

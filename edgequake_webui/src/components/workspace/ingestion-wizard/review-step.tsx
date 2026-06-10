@@ -391,14 +391,13 @@ export function ReviewStep({ namespace, onNext, onBack }: ReviewStepProps) {
       return updated;
     },
     onSuccess: (updated) => {
-      // Write filtered schema into wizard store for Preview step
+      // Write filtered schema into wizard store for Preview step.
+      // `updated` is the UNWRAPPED proposal (the API client strips the
+      // { namespace, schema } envelope) — build the store schema from it
+      // alone; never spread the raw response (CR-01).
       setSchema({
-        ...(baseSchema ?? {
-          status: "proposed" as const,
-          entity_types: [],
-          relation_types: [],
-        }),
         ...updated,
+        entity_types: updated.entity_types ?? [],
         relation_types: filterRelatedTo(updated.relation_types ?? []),
       });
       onNext();
