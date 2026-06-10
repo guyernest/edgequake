@@ -88,15 +88,29 @@ pub enum SchemaResponseBody {
 /// so the GET handler can distinguish "pending" from "real Proposed".
 pub const PENDING_SENTINEL: &str = "__pending__";
 
+/// Prefix of the failure marker stored when the spawned suggest task fails.
+/// Stored as `domain_hint = "__failed__: <message>"` with status=None so the
+/// GET handler can surface a `Failed { error }` body (CR-02).
+pub const FAILED_SENTINEL_PREFIX: &str = "__failed__:";
+
 /// Convert a stored SchemaProposal into a SchemaResponseBody.
 fn schema_proposal_to_body(proposal: SchemaProposal) -> SchemaResponseBody {
     match proposal.status {
         SchemaStatus::None => {
-            // Stored None with pending sentinel = proposing
-            if proposal.domain_hint.as_deref() == Some(PENDING_SENTINEL) {
-                SchemaResponseBody::Proposing
-            } else {
-                SchemaResponseBody::None
+            // Stored None carries either the pending sentinel (proposing),
+            // a failure marker (failed), or nothing (no schema).
+            match proposal.domain_hint.as_deref() {
+                Some(PENDING_SENTINEL) => SchemaResponseBody::Proposing,
+                Some(h) if h.starts_with(FAILED_SENTINEL_PREFIX) => {
+                    SchemaResponseBody::Failed {
+                        error: h
+                            .strip_prefix(FAILED_SENTINEL_PREFIX)
+                            .unwrap_or(h)
+                            .trim()
+                            .to_string(),
+                    }
+                }
+                _ => SchemaResponseBody::None,
             }
         }
         SchemaStatus::Proposed => {
@@ -393,8 +407,8 @@ pub async fn suggest_namespace_schema(
                     "Schema suggestion task failed"
                 );
                 // Store a failed marker so the wizard surfaces the error
-                // Use domain_hint="__failed__:<message>" to signal failure
-                let failed_msg = format!("__failed__: {}", e);
+                // Use domain_hint="__failed__: <message>" to signal failure
+                let failed_msg = format!("{} {}", FAILED_SENTINEL_PREFIX, e);
                 let failed_marker = SchemaProposal {
                     status: SchemaStatus::None,
                     entity_types: vec![],
@@ -722,5 +736,37 @@ mod tests {
     fn test_pending_sentinel_constant() {
         // The pending sentinel is stable (other plans depend on this string)
         assert_eq!(PENDING_SENTINEL, "__pending__");
+    }
+
+    #[test]
+    fn test_failed_marker_returns_failed_body() {
+        // CR-02: a failed suggest task stores status=None +
+        // domain_hint="__failed__: <msg>"; GET must surface Failed { error }.
+        let proposal = SchemaProposal {
+            status: SchemaStatus::None,
+            domain_hint: Some(format!("{} LLM call timed out", FAILED_SENTINEL_PREFIX)),
+            ..make_proposal(SchemaStatus::None)
+        };
+        let body = schema_proposal_to_body(proposal);
+        match body {
+            SchemaResponseBody::Failed { error } => {
+                assert_eq!(error, "LLM call timed out");
+            }
+            _ => panic!("Expected Failed, got {:?}", body),
+        }
+    }
+
+    #[test]
+    fn test_failed_marker_serializes_failed_status() {
+        // The client TERMINAL_STATUSES list includes "failed" — verify the wire tag.
+        let response = SchemaResponse {
+            namespace: "test-ns".to_string(),
+            schema: SchemaResponseBody::Failed {
+                error: "boom".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"status\":\"failed\""));
+        assert!(json.contains("\"error\":\"boom\""));
     }
 }

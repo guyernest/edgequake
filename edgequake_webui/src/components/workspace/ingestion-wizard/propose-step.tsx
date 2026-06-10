@@ -31,7 +31,7 @@ import { useWizardStore } from "@/stores/use-wizard-store";
 import type { SchemaProposal } from "@/types/ingestion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -46,6 +46,13 @@ const TERMINAL_STATUSES: SchemaProposal["status"][] = [
   "rejected",
   "failed",
 ];
+
+/**
+ * Maximum number of polls before giving up (10 min at 3s interval).
+ * Hard cap so a stuck non-terminal status (e.g. "none" after a marker is
+ * lost server-side) cannot poll forever (CR-02 / T-23-10).
+ */
+const MAX_POLLS = 200;
 
 function isTerminal(status: SchemaProposal["status"]): boolean {
   return TERMINAL_STATUSES.includes(status);
@@ -65,12 +72,18 @@ export function ProposeStep({ namespace, onNext }: ProposeStepProps) {
   const queryClient = useQueryClient();
   const { setSchema } = useWizardStore();
 
+  // Poll bookkeeping: hard cap + timeout surfacing (CR-02 / T-23-10)
+  const pollCountRef = useRef(0);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
+
   // ── Propose mutation ──────────────────────────────────────────────────────
   const proposeMutation = useMutation({
     mutationFn: () => proposeNamespaceSchema(namespace),
     onSuccess: () => {
       // Schema suggestion is async (spawns a tokio task server-side).
       // Invalidate the schema query so the poll starts immediately.
+      pollCountRef.current = 0;
+      setPollTimedOut(false);
       queryClient.invalidateQueries({
         queryKey: ["namespaceSchema", namespace],
       });
@@ -95,10 +108,16 @@ export function ProposeStep({ namespace, onNext }: ProposeStepProps) {
     queryKey: ["namespaceSchema", namespace],
     queryFn: () => getNamespaceSchema(namespace),
     enabled: proposeMutation.isSuccess || proposeMutation.isPending,
-    // Poll every 3 seconds while status is not terminal.
+    // Poll every 3 seconds while status is not terminal, capped at MAX_POLLS.
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       if (!status || isTerminal(status)) return false;
+      pollCountRef.current += 1;
+      if (pollCountRef.current > MAX_POLLS) {
+        // Stop the poll and surface a retryable error (no indefinite polling)
+        setPollTimedOut(true);
+        return false;
+      }
       return 3000;
     },
     staleTime: 0,
@@ -124,11 +143,12 @@ export function ProposeStep({ namespace, onNext }: ProposeStepProps) {
   // ── Render ────────────────────────────────────────────────────────────────
   const showPolling =
     proposeMutation.isSuccess &&
+    !pollTimedOut &&
     schemaData?.status !== undefined &&
     !isTerminal(schemaData.status);
 
   const hasError =
-    pollError !== null || proposeMutation.isError;
+    pollError !== null || proposeMutation.isError || pollTimedOut;
 
   return (
     <Card>
