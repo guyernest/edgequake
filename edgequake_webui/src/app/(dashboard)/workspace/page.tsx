@@ -23,6 +23,7 @@ import { RebuildEmbeddingsButton } from '@/components/workspace/rebuild-embeddin
 import { RebuildKnowledgeGraphButton } from '@/components/workspace/rebuild-knowledge-graph-button';
 import { ChunkingConfigPanel } from '@/components/workspace/chunking-config-panel';
 import { SnapshotConfigPanel } from '@/components/workspace/snapshot-config-panel';
+import { IngestionWizardEntryButton } from '@/components/workspace/ingestion-wizard-entry-button';
 import { useWorkspaceTenantValidator } from '@/hooks/use-workspace-tenant-validator';
 import { checkHealth, getWorkspace, getWorkspaceStats, updateWorkspace } from '@/lib/api/edgequake';
 import { resolveNamespaceSlug, NamespaceSlugError } from '@/lib/namespace-resolve';
@@ -755,6 +756,11 @@ export default function WorkspacePage() {
             </div>
           )}
           
+          {/* Wizard entry button — outline/secondary, to the LEFT of rebuild CTAs (Pitfall 4) */}
+          <div className="flex flex-wrap gap-2 mb-2">
+            <IngestionWizardEntryButton />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Rebuild Embeddings */}
             <RebuildEmbeddingsButton

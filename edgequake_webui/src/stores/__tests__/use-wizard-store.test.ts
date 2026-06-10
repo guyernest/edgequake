@@ -92,7 +92,7 @@ describe("setSchema", () => {
   it("stores a schema proposal", () => {
     const proposal: SchemaProposal = {
       status: "proposed",
-      entity_types: [{ name: "PERSON", description: "A person" }],
+      entity_types: [{ name: "PERSON", description: "A person", frequency: 5, is_baseline: false }],
       relation_types: [],
     };
 
@@ -106,7 +106,7 @@ describe("setSchema", () => {
   it("schema is retained after setStep", () => {
     const proposal: SchemaProposal = {
       status: "proposed",
-      entity_types: [{ name: "ORG", description: "An organisation" }],
+      entity_types: [{ name: "ORG", description: "An organisation", frequency: 3, is_baseline: false }],
       relation_types: [],
     };
 
@@ -156,7 +156,7 @@ describe("reset", () => {
   it("clears schema on reset", () => {
     const proposal: SchemaProposal = {
       status: "proposed",
-      entity_types: [{ name: "COMPANY", description: "A company" }],
+      entity_types: [{ name: "COMPANY", description: "A company", frequency: 7, is_baseline: false }],
       relation_types: [],
     };
 
@@ -183,6 +183,7 @@ describe("reset", () => {
         totalChunks: 0,
         totalEntities: 0,
         totalRelationships: 0,
+        cost: { inputTokens: 0, outputTokens: 0, totalCostUsd: 0, model: "gpt-4" },
         processingTimeMs: 0,
         documentsCompleted: 0,
         documentsTotal: 0,
