@@ -27,6 +27,29 @@ export interface SnapshotSectionProps {
 }
 
 /**
+ * Returns true when the snapshot section should be rendered (D-09).
+ * Exported so tests exercise the REAL render-decision logic (WR-06).
+ */
+export function shouldRenderSnapshot(
+  snapshot: IngestionResult['snapshot'] | null | undefined,
+): snapshot is NonNullable<IngestionResult['snapshot']> {
+  return snapshot !== undefined && snapshot !== null;
+}
+
+/**
+ * The 6 count keys rendered in the snapshot count grid (D-10).
+ * Exported so tests verify the production key list (WR-06).
+ */
+export const SNAPSHOT_COUNT_KEYS = [
+  'documents',
+  'chunks',
+  'entities',
+  'relationships',
+  'vectors',
+  'bm25',
+] as const;
+
+/**
  * Snapshot run-report card.
  *
  * Returns null when `snapshot` is undefined (D-09 — only render when run produced a snapshot).
@@ -35,7 +58,7 @@ export function SnapshotSection({ snapshot }: SnapshotSectionProps) {
   const { t } = useTranslation();
 
   // D-09: absent when no snapshot (T-23-09: safe against malformed/absent event)
-  if (!snapshot) return null;
+  if (!shouldRenderSnapshot(snapshot)) return null;
 
   const exportedAgo = (() => {
     try {
@@ -46,14 +69,7 @@ export function SnapshotSection({ snapshot }: SnapshotSectionProps) {
   })();
 
   // The 6 count keys defined in IngestionResult['snapshot']['counts']
-  const countKeys = [
-    'documents',
-    'chunks',
-    'entities',
-    'relationships',
-    'vectors',
-    'bm25',
-  ] as const;
+  const countKeys = SNAPSHOT_COUNT_KEYS;
 
   return (
     <Card>

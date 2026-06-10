@@ -3,95 +3,39 @@
  * @description Unit tests for ChunkingConfigPanel validation and logic.
  *
  * Tests cover:
- * - Master toggle OFF state: sub-fields disabled (opacity-50 pointer-events-none)
+ * - Master toggle OFF state: sub-fields disabled (DISABLED_SUBFIELDS_CLASSES)
  * - Master toggle ON: pre-fills Phase 22 defaults
  * - Overlap > 50% of target → validation error, Save disabled
  * - Target < 64 → range error
  * - Overlap helper text shows correct percentage
  *
- * Per project test style, validation logic is extracted as pure functions and
- * tested directly — no React Testing Library required.
+ * WR-06: these tests import the REAL exported helpers/constants from
+ * chunking-config-panel.tsx — no local re-implementations.
  */
 
 import { describe, expect, it } from "vitest";
 
-// ============================================================================
-// Pure validation helpers (replicate logic from chunking-config-panel.tsx)
-// ============================================================================
-
-/**
- * Returns true when target_tokens is within the 64–2048 range.
- */
-function targetInRange(v: number): boolean {
-  return v >= 64 && v <= 2048;
-}
-
-/**
- * Returns true when overlap satisfies all three rules:
- * - overlap >= 0
- * - overlap < target
- * - overlap / target <= 0.5
- */
-function isOverlapValid(target: number, overlap: number): boolean {
-  if (overlap < 0) return false;
-  if (overlap >= target) return false;
-  if (target > 0 && overlap / target > 0.5) return false;
-  return true;
-}
-
-/**
- * Returns the overlap-to-target percentage as a string with one decimal place.
- * e.g. 38 / 256 → "14.8"
- */
-function overlapPercent(target: number, overlap: number): string {
-  if (target <= 0) return "0.0";
-  return ((overlap / target) * 100).toFixed(1);
-}
-
-/**
- * Phase 22 defaults applied when the master toggle is turned ON from OFF.
- */
-const PHASE22_DEFAULTS = {
-  chunking_strategy: "heading_boundary" as const,
-  target_tokens: 256,
-  overlap_tokens: 38,
-  prepend_header_path: true,
-};
-
-/**
- * Disabled CSS classes applied to sub-fields when the master toggle is OFF.
- */
-const DISABLED_CLASSES = "opacity-50 pointer-events-none";
+import {
+  DISABLED_SUBFIELDS_CLASSES,
+  isOverlapValid,
+  overlapPercent,
+  PHASE22_DEFAULTS,
+  targetInRange,
+} from "../chunking-config-panel";
 
 // ============================================================================
 // Master toggle — OFF state
 // ============================================================================
 
 describe("ChunkingConfigPanel — master toggle OFF state", () => {
-  it("sub-fields use opacity-50 pointer-events-none when toggle is OFF", () => {
-    // Component applies DISABLED_CLASSES to the sub-fields container when
-    // chunking_enabled === false. This test asserts the CSS string is correct.
-    const isEnabled = false;
-    const subFieldsClass = isEnabled ? "" : DISABLED_CLASSES;
-    expect(subFieldsClass).toBe("opacity-50 pointer-events-none");
+  it("disabled sub-fields use opacity-50 pointer-events-none (D-06 contract)", () => {
+    expect(DISABLED_SUBFIELDS_CLASSES).toBe("opacity-50 pointer-events-none");
   });
 
-  it("sub-fields are NOT hidden (presence in DOM preserved when toggle is OFF)", () => {
-    // The plan and UI-SPEC require that sub-fields remain in the DOM when OFF;
-    // they must NOT be conditionally removed. The disabled state is visibility-only.
-    // This test asserts that the fields are rendered regardless of toggle state.
-    const isEnabled = false;
-    // When false the container is rendered with DISABLED_CLASSES (visible-but-muted)
-    // The boolean below represents "should fields be rendered in DOM"
-    const shouldRenderSubFields = true; // always true — no conditional rendering
-    expect(shouldRenderSubFields).toBe(true);
-    expect(isEnabled).toBe(false); // confirming the disabled branch
-  });
-
-  it("sub-fields use empty class string when toggle is ON", () => {
-    const isEnabled = true;
-    const subFieldsClass = isEnabled ? "" : DISABLED_CLASSES;
-    expect(subFieldsClass).toBe("");
+  it("the disabled classes are visibility-only (no display/hidden utility)", () => {
+    // D-06/UI-SPEC: sub-fields stay in the DOM when OFF — visibility-only.
+    expect(DISABLED_SUBFIELDS_CLASSES).not.toContain("hidden");
+    expect(DISABLED_SUBFIELDS_CLASSES).not.toContain("sr-only");
   });
 });
 
@@ -117,7 +61,7 @@ describe("ChunkingConfigPanel — toggle ON pre-fills Phase 22 defaults", () => 
   });
 
   it("default overlap 38/256 is valid per validation rules", () => {
-    expect(isOverlapValid(256, 38)).toBe(true);
+    expect(isOverlapValid(PHASE22_DEFAULTS.target_tokens, PHASE22_DEFAULTS.overlap_tokens)).toBe(true);
   });
 });
 
@@ -172,7 +116,7 @@ describe("isOverlapValid — overlap > 50% of target blocks save", () => {
     expect(isOverlapValid(256, 300)).toBe(false);
   });
 
-  it("returns false when overlap is exactly 50% of target (boundary: ratio must be <= 0.5)", () => {
+  it("returns true when overlap is exactly 50% of target (boundary: ratio must be <= 0.5)", () => {
     // 128/256 = 0.5 exactly — the rule is overlap/target <= 0.5, so this should pass
     expect(isOverlapValid(256, 128)).toBe(true);
   });

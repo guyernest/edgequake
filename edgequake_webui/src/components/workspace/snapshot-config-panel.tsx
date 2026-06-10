@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 
 // ============================================================================
 // Validation helpers (client-side UX mirrors server-side validate_pipeline_config_update)
+// Exported so tests exercise the REAL production logic (WR-06).
 // ============================================================================
 
 /**
@@ -48,7 +49,7 @@ import { toast } from 'sonner';
  *
  * Returns null when valid, or a translation key when invalid.
  */
-function validateSnapshotUri(uri: string): 'uriErrorBadFormat' | null {
+export function validateSnapshotUri(uri: string): 'uriErrorBadFormat' | null {
   if (uri === '') return null;
   if (uri.includes('..')) return 'uriErrorBadFormat';
   if (!uri.startsWith('s3://') && !uri.startsWith('/')) return 'uriErrorBadFormat';
@@ -56,10 +57,13 @@ function validateSnapshotUri(uri: string): 'uriErrorBadFormat' | null {
 }
 
 /** Returns true when mode RadioGroup should be enabled (URI non-empty and valid). */
-function isModeEnabled(uri: string): boolean {
+export function isModeEnabled(uri: string): boolean {
   if (uri === '') return false;
   return validateSnapshotUri(uri) === null;
 }
+
+/** Default snapshot mode (D-04). */
+export const DEFAULT_SNAPSHOT_MODE = 'write-and-store';
 
 // ============================================================================
 // Component
@@ -78,7 +82,7 @@ export function SnapshotConfigPanel({ namespace, onDirty }: SnapshotConfigPanelP
   // ---- form state ----
   const [uri, setUri] = useState('');
   const [uriError, setUriError] = useState<string | null>(null);
-  const [mode, setMode] = useState('write-and-store');
+  const [mode, setMode] = useState(DEFAULT_SNAPSHOT_MODE);
 
   // ---- remote state ----
   const { data: config, isLoading } = useQuery({
@@ -92,7 +96,7 @@ export function SnapshotConfigPanel({ namespace, onDirty }: SnapshotConfigPanelP
   useEffect(() => {
     if (config) {
       setUri(config.snapshot_uri ?? '');
-      setMode(config.snapshot_mode ?? 'write-and-store');
+      setMode(config.snapshot_mode ?? DEFAULT_SNAPSHOT_MODE);
     }
   }, [config]);
 

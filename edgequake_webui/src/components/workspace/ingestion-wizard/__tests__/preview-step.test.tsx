@@ -3,106 +3,39 @@
  * @description Unit tests for PreviewStep logic and rendering contracts.
  *
  * Tests cover:
- * (a) Budget note contains "6 documents"
- * (b) RELATED_TO row in Relations tab receives amber-highlight marker
- *     (data-testid="related-to-fallback-row") and fallback badge text
- * (c) While result is pending, Skeleton state flag is truthy
+ * (a) Budget note copy — asserted against en.json directly (the real i18n source)
+ * (b) RELATED_TO row in Relations tab receives the amber-highlight class +
+ *     data-testid="related-to-fallback-row"
+ * (c) isPreviewLoading recognises the server's real in-flight statuses
  *
- * Per project test style (see chunking-config-panel.test.tsx), logic is extracted
- * as pure functions and tested directly — no React Testing Library / jsdom required
- * (vitest runs in node environment).
+ * WR-06: these tests import the REAL exported helpers from preview-step.tsx —
+ * no local re-implementations. They fail if the production logic changes.
  */
 
-import type { PreviewResult, TypeCount } from "@/types/ingestion";
+import en from "@/locales/en.json";
+import type { PreviewResult } from "@/types/ingestion";
 import { describe, expect, it } from "vitest";
 
-// ============================================================================
-// Pure helpers (replicate logic from preview-step.tsx)
-// ============================================================================
-
-/** The sentinel name for the system-fallback relation type. */
-const RELATED_TO = "RELATED_TO";
-
-/**
- * Returns true when a relation type count row is the RELATED_TO fallback.
- * These rows receive the amber highlight wrapper + fallback badge.
- */
-function isRelatedToRow(typeName: string): boolean {
-  return typeName === RELATED_TO;
-}
-
-/**
- * Returns the data-testid to place on a relation count row.
- * RELATED_TO rows get "related-to-fallback-row"; others get undefined.
- */
-function getRelationRowTestId(
-  typeName: string,
-): string | undefined {
-  return isRelatedToRow(typeName) ? "related-to-fallback-row" : undefined;
-}
-
-/**
- * Returns the amber CSS classes for a RELATED_TO relation row highlight.
- * Matches UI-SPEC Color section (chart-4 amber tint bg + border).
- */
-function getRelationRowHighlightClass(typeName: string): string {
-  return isRelatedToRow(typeName)
-    ? "bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700"
-    : "";
-}
-
-/**
- * Returns true when the preview is still loading (no completed result yet).
- * Used to decide whether to render Skeleton placeholders in each tab.
- */
-function isPreviewLoading(
-  isPreviewing: boolean,
-  result: PreviewResult | null,
-): boolean {
-  if (isPreviewing) return true;
-  if (!result) return false; // nothing started — not actively loading
-  return (
-    result.status === "requested" ||
-    result.status === "processing" ||
-    result.status === "none"
-  );
-}
-
-/**
- * Returns the confirmed budget string (always this exact copy).
- * Maps to t('wizard.preview.budget') which equals "Sampling up to 6 documents and 60 chunks."
- */
-const BUDGET_COPY = "Sampling up to 6 documents and 60 chunks.";
-
-/**
- * Returns all relation type counts rows, annotating each with whether it is
- * the RELATED_TO fallback row (for rendering purposes).
- */
-function annotateRelationRows(
-  rows: TypeCount[],
-): Array<TypeCount & { isRelatedTo: boolean; testId?: string }> {
-  return rows.map((row) => ({
-    ...row,
-    isRelatedTo: isRelatedToRow(row.typeName),
-    testId: getRelationRowTestId(row.typeName),
-  }));
-}
+import {
+  getRelationRowHighlightClass,
+  getRelationRowTestId,
+  isPreviewLoading,
+  isRelatedToRow,
+} from "../preview-step";
 
 // ============================================================================
-// Budget note copy
+// Budget note copy — asserted against the real en.json value
 // ============================================================================
 
-describe("budget note — contains '6 documents'", () => {
-  it("BUDGET_COPY contains '6 documents'", () => {
-    expect(BUDGET_COPY).toContain("6 documents");
+describe("budget note — wizard.preview.budget in en.json", () => {
+  const budgetCopy = en.wizard.preview.budget;
+
+  it("contains '6 documents'", () => {
+    expect(budgetCopy).toContain("6 documents");
   });
 
-  it("BUDGET_COPY contains '60 chunks'", () => {
-    expect(BUDGET_COPY).toContain("60 chunks");
-  });
-
-  it("BUDGET_COPY matches the confirmed en.json value exactly", () => {
-    expect(BUDGET_COPY).toBe("Sampling up to 6 documents and 60 chunks.");
+  it("contains '60 chunks'", () => {
+    expect(budgetCopy).toContain("60 chunks");
   });
 });
 
@@ -139,76 +72,36 @@ describe("getRelationRowTestId — RELATED_TO row gets data-testid", () => {
 });
 
 // ============================================================================
-// RELATED_TO row receives amber highlight + badge — end-to-end assertion
+// getRelationRowHighlightClass — amber tint + border (UI-SPEC Color contract)
 // ============================================================================
 
-describe("annotateRelationRows — RELATED_TO row amber-highlight + badge", () => {
-  const mockResult: PreviewResult = {
-    status: "completed",
-    entityTypeCounts: [{ typeName: "PERSON", count: 42 }],
-    relationTypeCounts: [
-      { typeName: "employs", count: 18 },
-      { typeName: "RELATED_TO", count: 7 },
-      { typeName: "manages", count: 3 },
-    ],
-    coverageRows: [],
-    documentColumns: [{ id: "doc1", name: "case-file.pdf", truncatedName: "case-file..." }],
-    totalChunks: 60,
-    totalEntities: 312,
-    totalRelationships: 88,
-    cost: { inputTokens: 9000, outputTokens: 2400, totalCostUsd: 0.0123, model: "gpt-4.1-mini" },
-    processingTimeMs: 28400,
-    documentsCompleted: 6,
-    documentsTotal: 6,
-  };
-
-  it("RELATED_TO row in relationTypeCounts receives amber-highlight marker (data-testid)", () => {
-    const annotated = annotateRelationRows(mockResult.relationTypeCounts!);
-    const relatedToRow = annotated.find((r) => r.typeName === "RELATED_TO");
-    expect(relatedToRow).toBeDefined();
-    expect(relatedToRow!.isRelatedTo).toBe(true);
-    expect(relatedToRow!.testId).toBe("related-to-fallback-row");
-  });
-
-  it("non-RELATED_TO rows have no testId and isRelatedTo=false", () => {
-    const annotated = annotateRelationRows(mockResult.relationTypeCounts!);
-    const employs = annotated.find((r) => r.typeName === "employs");
-    expect(employs!.isRelatedTo).toBe(false);
-    expect(employs!.testId).toBeUndefined();
-  });
-
-  it("annotates all three rows correctly", () => {
-    const annotated = annotateRelationRows(mockResult.relationTypeCounts!);
-    expect(annotated).toHaveLength(3);
-    const relatedToCount = annotated.filter((r) => r.isRelatedTo).length;
-    expect(relatedToCount).toBe(1);
-  });
-});
-
-// ============================================================================
-// getRelationRowHighlightClass — amber CSS classes
-// ============================================================================
-
-describe("getRelationRowHighlightClass — amber tint for RELATED_TO", () => {
-  it("RELATED_TO row gets amber background class", () => {
+describe("getRelationRowHighlightClass — amber highlight for RELATED_TO", () => {
+  it("RELATED_TO row gets amber background classes (light + dark)", () => {
     const cls = getRelationRowHighlightClass("RELATED_TO");
     expect(cls).toContain("bg-amber-50");
+    expect(cls).toContain("dark:bg-amber-950/20");
   });
 
-  it("RELATED_TO row gets amber border class", () => {
+  it("RELATED_TO row gets amber border classes (light + dark)", () => {
     const cls = getRelationRowHighlightClass("RELATED_TO");
     expect(cls).toContain("border-amber-300");
+    expect(cls).toContain("dark:border-amber-700");
   });
 
   it("normal relation row gets empty class string", () => {
-    const cls = getRelationRowHighlightClass("employs");
-    expect(cls).toBe("");
+    expect(getRelationRowHighlightClass("employs")).toBe("");
   });
 });
 
 // ============================================================================
-// isPreviewLoading — Skeleton placeholders while result is pending
+// isPreviewLoading — Skeleton placeholders while result is in-flight
+// (server statuses: requested | processing | none | completed | failed)
 // ============================================================================
+
+/** Minimal in-flight poll body — the server sends NO aggregate fields. */
+function pollBody(status: PreviewResult["status"]): PreviewResult {
+  return { status, namespace: "my-ns" };
+}
 
 describe("isPreviewLoading — Skeleton shown while loading", () => {
   it("returns true when isPreviewing=true (active poll running)", () => {
@@ -216,39 +109,15 @@ describe("isPreviewLoading — Skeleton shown while loading", () => {
   });
 
   it("returns true when result status is 'requested'", () => {
-    const pendingResult: PreviewResult = {
-      status: "requested",
-      entityTypeCounts: [],
-      relationTypeCounts: [],
-      coverageRows: [],
-      documentColumns: [],
-      totalChunks: 0,
-      totalEntities: 0,
-      totalRelationships: 0,
-      cost: { inputTokens: 0, outputTokens: 0, totalCostUsd: 0, model: "gpt-4" },
-      processingTimeMs: 0,
-      documentsCompleted: 0,
-      documentsTotal: 0,
-    };
-    expect(isPreviewLoading(false, pendingResult)).toBe(true);
+    expect(isPreviewLoading(false, pollBody("requested"))).toBe(true);
   });
 
   it("returns true when result status is 'processing'", () => {
-    const runningResult: PreviewResult = {
-      status: "processing",
-      entityTypeCounts: [],
-      relationTypeCounts: [],
-      coverageRows: [],
-      documentColumns: [],
-      totalChunks: 0,
-      totalEntities: 0,
-      totalRelationships: 0,
-      cost: { inputTokens: 0, outputTokens: 0, totalCostUsd: 0, model: "gpt-4" },
-      processingTimeMs: 0,
-      documentsCompleted: 0,
-      documentsTotal: 0,
-    };
-    expect(isPreviewLoading(false, runningResult)).toBe(true);
+    expect(isPreviewLoading(false, pollBody("processing"))).toBe(true);
+  });
+
+  it("returns true when result status is 'none' (request not yet recorded)", () => {
+    expect(isPreviewLoading(false, pollBody("none"))).toBe(true);
   });
 
   it("returns false when result is completed", () => {
@@ -267,6 +136,12 @@ describe("isPreviewLoading — Skeleton shown while loading", () => {
       documentsTotal: 6,
     };
     expect(isPreviewLoading(false, completedResult)).toBe(false);
+  });
+
+  it("returns false when result is failed (terminal)", () => {
+    expect(
+      isPreviewLoading(false, { status: "failed", error: "boom" }),
+    ).toBe(false);
   });
 
   it("returns false when result is null and not previewing (not started)", () => {
@@ -289,9 +164,7 @@ describe("preview tabs render aggregate fields (not per-row data)", () => {
       { typeName: "employs", count: 18 },
       { typeName: "RELATED_TO", count: 7 },
     ],
-    coverageRows: [
-      { entityType: "PERSON", counts: [3, 0, 5] },
-    ],
+    coverageRows: [{ entityType: "PERSON", counts: [3, 0, 5] }],
     documentColumns: [
       { id: "doc1", name: "case-file.pdf", truncatedName: "case-file..." },
       { id: "doc2", name: "report.pdf", truncatedName: "report.pdf" },
@@ -313,18 +186,21 @@ describe("preview tabs render aggregate fields (not per-row data)", () => {
     expect(entityTypeCounts[0].count).toBe(42);
   });
 
-  it("Relations tab: relationTypeCounts has RELATED_TO row", () => {
+  it("Relations tab: relationTypeCounts has RELATED_TO row, annotated via real helpers", () => {
     const relationTypeCounts = mockCompletedResult.relationTypeCounts!;
-    const hasRelatedTo = relationTypeCounts.some(
-      (r) => r.typeName === "RELATED_TO",
+    const relatedTo = relationTypeCounts.find((r) => isRelatedToRow(r.typeName));
+    expect(relatedTo).toBeDefined();
+    expect(getRelationRowTestId(relatedTo!.typeName)).toBe(
+      "related-to-fallback-row",
     );
-    expect(hasRelatedTo).toBe(true);
+    expect(getRelationRowHighlightClass(relatedTo!.typeName)).not.toBe("");
+    // The non-fallback row gets neither testid nor highlight
+    expect(getRelationRowTestId("employs")).toBeUndefined();
   });
 
   it("Chunks tab: documentColumns provides the document list for chunk counts", () => {
-    const { documentColumns, totalChunks } = mockCompletedResult;
-    expect(documentColumns).toHaveLength(3);
-    expect(totalChunks).toBe(60);
+    expect(mockCompletedResult.documentColumns).toHaveLength(3);
+    expect(mockCompletedResult.totalChunks).toBe(60);
   });
 
   it("totalEntities is present for summary line", () => {

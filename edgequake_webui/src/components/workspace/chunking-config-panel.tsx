@@ -41,10 +41,11 @@ import { toast } from 'sonner';
 
 // ============================================================================
 // Validation helpers (mirroring server-side validate_pipeline_config_update)
+// Exported so tests exercise the REAL production logic (WR-06).
 // ============================================================================
 
 /** Returns true when target_tokens is within the 64–2048 range. */
-function targetInRange(v: number): boolean {
+export function targetInRange(v: number): boolean {
   return v >= 64 && v <= 2048;
 }
 
@@ -54,7 +55,7 @@ function targetInRange(v: number): boolean {
  * - overlap < target  (strictly less than)
  * - overlap / target <= 0.5  (at most 50%)
  */
-function isOverlapValid(target: number, overlap: number): boolean {
+export function isOverlapValid(target: number, overlap: number): boolean {
   if (overlap < 0) return false;
   if (overlap >= target) return false;
   if (target > 0 && overlap / target > 0.5) return false;
@@ -65,7 +66,7 @@ function isOverlapValid(target: number, overlap: number): boolean {
  * Returns the overlap-to-target ratio as a percentage string with one decimal.
  * e.g. 38 / 256 → "14.8"
  */
-function overlapPercent(target: number, overlap: number): string {
+export function overlapPercent(target: number, overlap: number): string {
   if (target <= 0) return '0.0';
   return ((overlap / target) * 100).toFixed(1);
 }
@@ -74,12 +75,18 @@ function overlapPercent(target: number, overlap: number): string {
 // Phase 22 defaults (D-07) — applied when toggle turns ON from OFF
 // ============================================================================
 
-const PHASE22_DEFAULTS = {
+export const PHASE22_DEFAULTS = {
   chunking_strategy: 'heading_boundary',
   target_tokens: 256,
   overlap_tokens: 38,
   prepend_header_path: true,
 } as const;
+
+/**
+ * Disabled-state classes for the sub-fields container when the master toggle
+ * is OFF (D-06: fields stay in the DOM, visibility-only disable).
+ */
+export const DISABLED_SUBFIELDS_CLASSES = 'opacity-50 pointer-events-none';
 
 // ============================================================================
 // Component
@@ -172,7 +179,7 @@ export function ChunkingConfigPanel({ namespace, onDirty }: ChunkingConfigPanelP
   };
 
   // ---- sub-fields disabled class (D-06: visible-but-disabled, NOT hidden) ----
-  const subFieldsClass = chunkingEnabled ? '' : 'opacity-50 pointer-events-none';
+  const subFieldsClass = chunkingEnabled ? '' : DISABLED_SUBFIELDS_CLASSES;
 
   return (
     <Card>

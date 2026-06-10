@@ -83,6 +83,24 @@ export function isRelatedToRow(typeName: string): boolean {
 }
 
 /**
+ * Returns the data-testid for a relation count row.
+ * RELATED_TO rows get "related-to-fallback-row"; others get undefined.
+ */
+export function getRelationRowTestId(typeName: string): string | undefined {
+  return isRelatedToRow(typeName) ? "related-to-fallback-row" : undefined;
+}
+
+/**
+ * Returns the amber highlight classes for a RELATED_TO relation row.
+ * Matches the UI-SPEC Color contract (amber tint background + border).
+ */
+export function getRelationRowHighlightClass(typeName: string): string {
+  return isRelatedToRow(typeName)
+    ? "bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700"
+    : "";
+}
+
+/**
  * Returns true when the preview is still loading (no terminal result yet).
  * In-flight server statuses are "requested" and "processing"; "none" means
  * no request is recorded yet (treated as still loading while a poll is
@@ -387,13 +405,10 @@ export function PreviewStep({ namespace, onNext, onBack }: PreviewStepProps) {
                             key={row.typeName}
                             // Amber highlight for RELATED_TO fallback rows (D-16 / UI-SPEC Color)
                             className={
-                              isRT
-                                ? "bg-amber-50 dark:bg-amber-950/20"
-                                : undefined
+                              getRelationRowHighlightClass(row.typeName) ||
+                              undefined
                             }
-                            data-testid={
-                              isRT ? "related-to-fallback-row" : undefined
-                            }
+                            data-testid={getRelationRowTestId(row.typeName)}
                           >
                             <TableCell className="text-xs font-mono">
                               <div className="flex items-center gap-1.5">
