@@ -57,7 +57,7 @@ pub struct PipelineConfigResponse {
 }
 
 /// Request for updating pipeline configuration (all fields optional for partial update).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct UpdatePipelineConfigRequest {
     /// LLM provider name.
     pub llm_provider: Option<String>,
@@ -69,7 +69,7 @@ pub struct UpdatePipelineConfigRequest {
     pub embedding_model: Option<String>,
     /// Embedding vector dimension.
     pub embedding_dimension: Option<usize>,
-    /// Chunking strategy.
+    /// Chunking strategy: "token" or "heading_boundary" (D-07).
     pub chunking_strategy: Option<String>,
     /// Maximum chunk size in tokens.
     pub chunk_size: Option<usize>,
@@ -81,4 +81,20 @@ pub struct UpdatePipelineConfigRequest {
     pub entity_types: Option<Vec<String>>,
     /// Allowed relation types for extraction.
     pub relation_types: Option<Vec<String>>,
+    // Phase 23 D-03/D-04: Snapshot config
+    /// Snapshot export destination URI (s3://... or absolute local path).
+    pub snapshot_uri: Option<String>,
+    /// Set to true to explicitly clear the snapshot URI (sets it back to None).
+    pub snapshot_uri_clear: Option<bool>,
+    /// Snapshot mode: "write-and-store" or "snapshot-only".
+    pub snapshot_mode: Option<String>,
+    // Phase 23 D-05/D-06: Hierarchical chunking config
+    /// Enable hierarchical header-aware chunking.
+    pub chunking_enabled: Option<bool>,
+    /// Target tokens per chunk (64..=2048).
+    pub target_tokens: Option<usize>,
+    /// Overlap tokens (< target_tokens and <= 50% of target).
+    pub overlap_tokens: Option<usize>,
+    /// Prepend header path breadcrumb to embedded text.
+    pub prepend_header_path: Option<bool>,
 }

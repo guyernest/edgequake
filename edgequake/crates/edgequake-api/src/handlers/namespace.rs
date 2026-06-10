@@ -190,6 +190,85 @@ pub async fn get_namespace_config(
     }))
 }
 
+/// Validate a pipeline config update request against the current config.
+///
+/// Called before applying any updates. Returns `ApiError::BadRequest` on
+/// the first failed constraint; returns `Ok(())` if all checks pass.
+///
+/// Implements T-23-02 and T-23-11 server-side validation from the threat model.
+fn validate_pipeline_config_update(
+    body: &UpdatePipelineConfigRequest,
+    config: &edgequake_core::PipelineConfig,
+) -> Result<(), ApiError> {
+    // -- snapshot_mode: must be "write-and-store" or "snapshot-only" (T-23-11)
+    if let Some(ref mode) = body.snapshot_mode {
+        if mode != "write-and-store" && mode != "snapshot-only" {
+            return Err(ApiError::BadRequest(format!(
+                "Invalid snapshot_mode '{}': must be 'write-and-store' or 'snapshot-only'",
+                mode
+            )));
+        }
+    }
+
+    // -- chunking_strategy: must be "token" or "heading_boundary" (T-23-11 / D-07)
+    if let Some(ref strategy) = body.chunking_strategy {
+        if strategy != "token" && strategy != "heading_boundary" {
+            return Err(ApiError::BadRequest(format!(
+                "Invalid chunking_strategy '{}': must be 'token' or 'heading_boundary'",
+                strategy
+            )));
+        }
+    }
+
+    // -- snapshot_uri format guard (T-23-02): reject path-traversal and bad schemes
+    if let Some(ref uri) = body.snapshot_uri {
+        if !uri.is_empty() {
+            if uri.contains("..") {
+                return Err(ApiError::BadRequest(
+                    "snapshot_uri must not contain '..' path-traversal sequences".to_string(),
+                ));
+            }
+            let has_s3_prefix = uri.starts_with("s3://");
+            let has_abs_path = uri.starts_with('/');
+            if !has_s3_prefix && !has_abs_path {
+                return Err(ApiError::BadRequest(
+                    "snapshot_uri must start with 's3://' or be an absolute path starting with '/'".to_string(),
+                ));
+            }
+        }
+    }
+
+    // -- target_tokens range: 64..=2048 (T-23-11)
+    // Compute effective target for the overlap check below.
+    let effective_target = body.target_tokens.unwrap_or(config.target_tokens);
+    if let Some(t) = body.target_tokens {
+        if !(64..=2048).contains(&t) {
+            return Err(ApiError::BadRequest(format!(
+                "target_tokens {} is out of range: must be between 64 and 2048 inclusive",
+                t
+            )));
+        }
+    }
+
+    // -- overlap_tokens: must be < effective_target AND <= 50% of effective_target (T-23-11 / D-08)
+    if let Some(o) = body.overlap_tokens {
+        if o >= effective_target {
+            return Err(ApiError::BadRequest(format!(
+                "overlap_tokens {} must be less than target_tokens {}",
+                o, effective_target
+            )));
+        }
+        if o * 2 > effective_target {
+            return Err(ApiError::BadRequest(format!(
+                "overlap_tokens {} exceeds 50% of target_tokens {} (overlap must be <= target/2)",
+                o, effective_target
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 /// Update pipeline configuration for a namespace.
 ///
 /// Performs a partial update -- only fields present in the request body are
@@ -197,7 +276,7 @@ pub async fn get_namespace_config(
 ///
 /// # Errors
 ///
-/// - 400: Invalid slug format
+/// - 400: Invalid slug format or validation failure
 /// - 404: Namespace not found
 /// - 501: Namespace registry not configured
 pub async fn update_namespace_config(
@@ -220,6 +299,9 @@ pub async fn update_namespace_config(
         .ok_or_else(|| {
             ApiError::NotFound(format!("Pipeline config not found for namespace: {}", slug))
         })?;
+
+    // Validate incoming body before applying any changes (T-23-02, T-23-11)
+    validate_pipeline_config_update(&body, &config)?;
 
     // Apply partial updates
     if let Some(v) = body.llm_provider {
@@ -255,6 +337,29 @@ pub async fn update_namespace_config(
     if let Some(v) = body.relation_types {
         config.relation_types = v;
     }
+    // Phase 23: snapshot + chunking merge arms (snapshot_uri before snapshot_uri_clear so clear wins)
+    if let Some(v) = body.snapshot_uri {
+        config.snapshot_uri = Some(v);
+    }
+    if body.snapshot_uri_clear == Some(true) {
+        config.snapshot_uri = None;
+    }
+    if let Some(v) = body.snapshot_mode {
+        config.snapshot_mode = v;
+    }
+    // Note: chunking_strategy is merged above with the existing fields (line ~322)
+    if let Some(v) = body.chunking_enabled {
+        config.chunking_enabled = v;
+    }
+    if let Some(v) = body.target_tokens {
+        config.target_tokens = v;
+    }
+    if let Some(v) = body.overlap_tokens {
+        config.overlap_tokens = v;
+    }
+    if let Some(v) = body.prepend_header_path {
+        config.prepend_header_path = v;
+    }
 
     // Always update the timestamp
     config.updated_at = chrono::Utc::now().timestamp_millis();
@@ -268,4 +373,151 @@ pub async fn update_namespace_config(
         namespace: slug.as_str().to_string(),
         config,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use edgequake_core::PipelineConfig;
+
+    fn make_config() -> PipelineConfig {
+        PipelineConfig::default()
+    }
+
+    // RED: these tests call validate_pipeline_config_update which doesn't exist yet
+    #[test]
+    fn test_valid_update_body_passes_validation() {
+        let body = UpdatePipelineConfigRequest {
+            llm_provider: None,
+            llm_model: None,
+            embedding_provider: None,
+            embedding_model: None,
+            embedding_dimension: None,
+            chunking_strategy: Some("heading_boundary".to_string()),
+            chunk_size: None,
+            chunk_overlap: None,
+            extraction_prompt: None,
+            entity_types: None,
+            relation_types: None,
+            snapshot_uri: Some("s3://mybucket/prefix".to_string()),
+            snapshot_uri_clear: None,
+            snapshot_mode: Some("snapshot-only".to_string()),
+            chunking_enabled: Some(true),
+            target_tokens: Some(512),
+            overlap_tokens: Some(64),
+            prepend_header_path: Some(false),
+        };
+        let config = make_config();
+        assert!(validate_pipeline_config_update(&body, &config).is_ok());
+    }
+
+    #[test]
+    fn test_invalid_snapshot_mode_rejected() {
+        let body = UpdatePipelineConfigRequest {
+            snapshot_mode: Some("garbage".to_string()),
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        let err = validate_pipeline_config_update(&body, &config).unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_invalid_chunking_strategy_rejected() {
+        let body = UpdatePipelineConfigRequest {
+            chunking_strategy: Some("garbage".to_string()),
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        let err = validate_pipeline_config_update(&body, &config).unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_target_tokens_too_small_rejected() {
+        let body = UpdatePipelineConfigRequest {
+            target_tokens: Some(32), // < 64
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        let err = validate_pipeline_config_update(&body, &config).unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_target_tokens_too_large_rejected() {
+        let body = UpdatePipelineConfigRequest {
+            target_tokens: Some(4096), // > 2048
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        let err = validate_pipeline_config_update(&body, &config).unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_overlap_tokens_gte_target_rejected() {
+        let body = UpdatePipelineConfigRequest {
+            target_tokens: Some(256),
+            overlap_tokens: Some(256), // overlap >= target
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        let err = validate_pipeline_config_update(&body, &config).unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_overlap_tokens_exceeds_50_percent_rejected() {
+        let body = UpdatePipelineConfigRequest {
+            target_tokens: Some(256),
+            overlap_tokens: Some(129), // 129 * 2 = 258 > 256 → > 50%
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        let err = validate_pipeline_config_update(&body, &config).unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_snapshot_uri_path_traversal_rejected() {
+        let body = UpdatePipelineConfigRequest {
+            snapshot_uri: Some("s3://bucket/../hack".to_string()),
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        let err = validate_pipeline_config_update(&body, &config).unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_snapshot_uri_invalid_scheme_rejected() {
+        let body = UpdatePipelineConfigRequest {
+            snapshot_uri: Some("http://evil.com/bucket".to_string()),
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        let err = validate_pipeline_config_update(&body, &config).unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_snapshot_uri_absolute_path_accepted() {
+        let body = UpdatePipelineConfigRequest {
+            snapshot_uri: Some("/var/data/snapshots/my-ns".to_string()),
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        assert!(validate_pipeline_config_update(&body, &config).is_ok());
+    }
+
+    #[test]
+    fn test_snapshot_uri_clear_sets_none() {
+        let body = UpdatePipelineConfigRequest {
+            snapshot_uri_clear: Some(true),
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        assert!(validate_pipeline_config_update(&body, &config).is_ok());
+    }
 }

@@ -833,6 +833,7 @@ mod tests {
                 llm_provider: None,
                 llm_model: None,
                 retrieval_mode: None,
+                extract_keywords: false,
             };
 
             let result = execute_query(State(state.clone()), tenant_ctx, Json(request)).await;
