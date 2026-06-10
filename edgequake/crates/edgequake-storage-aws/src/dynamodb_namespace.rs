@@ -757,6 +757,17 @@ impl DynamoNamespaceRegistry {
             .await?
             .ok_or_else(|| AwsStorageError::SchemaNotFound(slug.as_str().to_string()))?;
 
+        // WR-03: the in-process suggest flow stores a pending marker with
+        // status=Proposed + domain_hint="__pending__" and EMPTY type lists
+        // (see edgequake-api handlers/schema.rs PENDING_SENTINEL). Approving
+        // it would mark an empty schema Approved and clobber PipelineConfig
+        // entity/relation types with empty vectors.
+        if proposal.domain_hint.as_deref() == Some("__pending__") {
+            return Err(AwsStorageError::InvalidSchemaState(
+                "Cannot approve schema: a schema suggestion is still in progress".to_string(),
+            ));
+        }
+
         if proposal.status != SchemaStatus::Proposed {
             return Err(AwsStorageError::InvalidSchemaState(format!(
                 "Cannot approve schema in state {:?}",
