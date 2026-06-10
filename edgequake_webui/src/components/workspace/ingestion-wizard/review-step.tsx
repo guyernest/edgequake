@@ -71,6 +71,13 @@ import { toast } from "sonner";
 /** The sentinel name for the system-fallback relation type (never sent to server). */
 const RELATED_TO = "RELATED_TO";
 
+/**
+ * Sentinel Select value representing "no constraint" (CR-04).
+ * Radix UI throws when a <Select.Item> has an empty-string value, so the
+ * "none" option uses this sentinel and maps to `undefined` on save.
+ */
+const NONE_TYPE_SENTINEL = "__any__";
+
 // ============================================================================
 // Pure helpers (logic tested in __tests__/review-step.test.tsx)
 // ============================================================================
@@ -264,9 +271,12 @@ function RelationRow({
               {t("wizard.review.sourceTypeLabel")}
             </Label>
             <Select
-              value={item.source_type ?? ""}
+              value={item.source_type ?? NONE_TYPE_SENTINEL}
               onValueChange={(v) =>
-                onUpdate({ ...item, source_type: v || undefined })
+                onUpdate({
+                  ...item,
+                  source_type: v === NONE_TYPE_SENTINEL ? undefined : v,
+                })
               }
             >
               <SelectTrigger className="h-7 text-xs">
@@ -275,7 +285,9 @@ function RelationRow({
                 />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">{t("common.none")}</SelectItem>
+                <SelectItem value={NONE_TYPE_SENTINEL}>
+                  {t("common.none")}
+                </SelectItem>
                 {entityTypeNames.map((name) => (
                   <SelectItem key={name} value={name}>
                     {name}
@@ -289,9 +301,12 @@ function RelationRow({
               {t("wizard.review.targetTypeLabel")}
             </Label>
             <Select
-              value={item.target_type ?? ""}
+              value={item.target_type ?? NONE_TYPE_SENTINEL}
               onValueChange={(v) =>
-                onUpdate({ ...item, target_type: v || undefined })
+                onUpdate({
+                  ...item,
+                  target_type: v === NONE_TYPE_SENTINEL ? undefined : v,
+                })
               }
             >
               <SelectTrigger className="h-7 text-xs">
@@ -300,7 +315,9 @@ function RelationRow({
                 />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">{t("common.none")}</SelectItem>
+                <SelectItem value={NONE_TYPE_SENTINEL}>
+                  {t("common.none")}
+                </SelectItem>
                 {entityTypeNames.map((name) => (
                   <SelectItem key={name} value={name}>
                     {name}
