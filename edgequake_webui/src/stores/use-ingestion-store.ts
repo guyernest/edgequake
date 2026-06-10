@@ -43,6 +43,7 @@ import type {
     WebSocketProgressMessage,
 } from "@/types/ingestion";
 import { STORE_VERSIONS, ZUSTAND_STORAGE_KEYS } from "@/lib/storage-keys";
+import { useTenantStore } from "@/stores/use-tenant-store";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
@@ -628,6 +629,10 @@ export const useIngestionStore = create<IngestionStore>()(
                 state,
                 message as IngestionCompletedEvent,
               );
+              // WR-07: stamp the active workspace onto the persisted job so
+              // Recent Runs can filter per-workspace (OODA-37 isolation).
+              completedJob.workspace_id =
+                useTenantStore.getState().selectedWorkspaceId ?? undefined;
               return {
                 tracks,
                 completedJobs: [
@@ -729,8 +734,16 @@ export const useIngestionStore = create<IngestionStore>()(
 
       // Completed jobs
       addCompletedJob: (result) => {
+        // WR-07: stamp the active workspace if the caller didn't provide one
+        const stamped: IngestionResult = {
+          ...result,
+          workspace_id:
+            result.workspace_id ??
+            useTenantStore.getState().selectedWorkspaceId ??
+            undefined,
+        };
         set((state) => ({
-          completedJobs: [...state.completedJobs.slice(-19), result],
+          completedJobs: [...state.completedJobs.slice(-19), stamped],
         }));
       },
 

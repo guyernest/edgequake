@@ -181,6 +181,13 @@ export interface IngestionResult {
   relationships: number;
   duration_ms: number;
   /**
+   * Workspace the run belonged to (WR-07 — OODA-37 workspace isolation).
+   * Stamped from the active tenant-store workspace when the
+   * ingestion_completed event is handled; optional because legacy persisted
+   * jobs predate the field. Recent Runs filters on it.
+   */
+  workspace_id?: string;
+  /**
    * Snapshot export result (D-11 — Phase 23).
    * Present only when a snapshot_uri was configured and the export completed.
    * Plan 05 (run report) reads this field to render the SnapshotSection.

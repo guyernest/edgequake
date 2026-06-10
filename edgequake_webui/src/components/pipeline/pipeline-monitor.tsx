@@ -894,11 +894,21 @@ function TaskQueueCard() {
 function CompletedRunsCard() {
   const { t } = useTranslation();
   const completedJobs = useIngestionStore((s) => s.completedJobs);
+  const selectedWorkspaceId = useTenantStore((s) => s.selectedWorkspaceId);
 
-  // Show most recent first, cap at last 5 for the monitor view
+  // WR-07 (OODA-37 workspace isolation): only show runs stamped with the
+  // active workspace. Legacy persisted jobs without a workspace_id are
+  // hidden when a workspace is selected — they cannot be attributed safely.
   const recentJobs = useMemo(
-    () => [...completedJobs].reverse().slice(0, 5),
-    [completedJobs],
+    () =>
+      [...completedJobs]
+        .filter(
+          (job) =>
+            !selectedWorkspaceId || job.workspace_id === selectedWorkspaceId,
+        )
+        .reverse()
+        .slice(0, 5),
+    [completedJobs, selectedWorkspaceId],
   );
 
   if (recentJobs.length === 0) return null;
