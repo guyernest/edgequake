@@ -17,6 +17,7 @@
 'use client';
 
 import { StatusBadge, getDocumentDisplayStatus, isProcessingStatus, normalizeStatus } from '@/components/documents/status-badge';
+import { SnapshotSection } from '@/components/pipeline/snapshot-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,7 @@ import {
 } from '@/lib/api/edgequake';
 import { useTenantStore } from '@/stores/use-tenant-store';
 import type { PipelineMessage, QueueMetrics, TaskResponse } from '@/types';
+import { useIngestionStore } from '@/stores/use-ingestion-store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -884,10 +886,62 @@ function TaskQueueCard() {
 }
 
 /**
+ * Completed Runs Card — shows recent ingestion run results including snapshot export (D-09/D-10).
+ *
+ * @implements D-09/D-10 — SnapshotSection rendered per completed job when snapshot present
+ * @implements Phase 23 Plan 05 — run report with all 6 SnapshotCounts + URI + exported-at
+ */
+function CompletedRunsCard() {
+  const { t } = useTranslation();
+  const completedJobs = useIngestionStore((s) => s.completedJobs);
+
+  // Show most recent first, cap at last 5 for the monitor view
+  const recentJobs = useMemo(
+    () => [...completedJobs].reverse().slice(0, 5),
+    [completedJobs],
+  );
+
+  if (recentJobs.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <CheckCircle className="h-5 w-5 text-green-500" />
+          {t('documents.history.title', 'Recent Runs')}
+        </CardTitle>
+        <CardDescription>
+          {t('documents.history.succeeded', 'Recently completed ingestion runs')}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {recentJobs.map((job) => (
+          <div key={job.track_id} className="space-y-2 border rounded-lg p-3">
+            {/* Run summary header */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-muted-foreground font-mono truncate max-w-48 text-xs">
+                {job.document_id}
+              </span>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span>{job.chunks} chunks</span>
+                <span>{job.entities} entities</span>
+                <span>{job.relationships} rels</span>
+              </div>
+            </div>
+            {/* Snapshot section (D-09: only renders when snapshot present) */}
+            <SnapshotSection snapshot={job.snapshot} />
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * Main Pipeline Monitor Component
- * 
+ *
  * @implements OODA-37 - Workspace isolation for tenant data protection
- * 
+ *
  * WHY: The Pipeline Monitor provides context for all child components
  * to ensure they query data only for the current workspace. This prevents
  * data leakage between tenants.
@@ -978,6 +1032,11 @@ export function PipelineMonitor() {
             {/* Processing Documents - ACTIVE WORK */}
             <div className="mt-4 sm:mt-6">
               <ProcessingDocumentsCard />
+            </div>
+
+            {/* Completed Runs — run report with SnapshotSection (D-09/D-10 Phase 23) */}
+            <div className="mt-4 sm:mt-6">
+              <CompletedRunsCard />
             </div>
 
             {/* Secondary Info Grid - RESPONSIVE LAYOUT */}
