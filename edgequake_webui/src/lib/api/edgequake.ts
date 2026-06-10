@@ -1621,6 +1621,213 @@ export async function getQueueMetrics(
 }
 
 // ============================================================================
+// Namespace Config (D-02 — Phase 23 Plan 01)
+// ============================================================================
+
+/**
+ * Server-side pipeline configuration for a namespace.
+ * Mirrors Rust PipelineConfig in edgequake-core/src/namespace.rs.
+ */
+export interface PipelineConfig {
+  /** LLM model used for extraction. */
+  llm_model?: string;
+  /** LLM provider identifier. */
+  llm_provider?: string;
+  /** Entity types for extraction. */
+  entity_types?: string[];
+  /** Relation types for extraction. */
+  relation_types?: string[];
+  /** Destination URI for snapshot export (s3://… or /local/path). None = no snapshot. */
+  snapshot_uri?: string;
+  /** Snapshot output mode: "write-and-store" | "snapshot-only". Default: "write-and-store". */
+  snapshot_mode: string;
+  /** Whether hierarchical header-aware chunking is enabled. Default: false. */
+  chunking_enabled: boolean;
+  /** Chunking strategy: "token" | "heading_boundary". */
+  chunking_strategy?: string;
+  /** Target tokens per chunk (64–2048). Default: 256. */
+  target_tokens: number;
+  /** Overlap tokens between adjacent chunks. Default: 38. */
+  overlap_tokens: number;
+  /** Prepend header breadcrumb path to embedded chunk text. Default: true. */
+  prepend_header_path: boolean;
+  /** Last updated timestamp. */
+  updated_at?: string;
+}
+
+/**
+ * Partial update request for namespace pipeline configuration.
+ * Mirrors Rust UpdatePipelineConfigRequest in namespace_types.rs.
+ * All fields are optional — only provided fields are updated (merge-patch semantics).
+ */
+export interface UpdatePipelineConfigRequest {
+  /** New snapshot destination URI. */
+  snapshot_uri?: string;
+  /** When true, clears (removes) the snapshot URI. */
+  snapshot_uri_clear?: boolean;
+  /** New snapshot mode ("write-and-store" | "snapshot-only"). */
+  snapshot_mode?: string;
+  /** Enable/disable hierarchical chunking. */
+  chunking_enabled?: boolean;
+  /**
+   * Chunking strategy ("token" | "heading_boundary").
+   * NOTE: Field name is `chunking_strategy` (NOT `strategy`).
+   * Mirrors PipelineConfig.chunking_strategy (D-07 — uses existing server field name).
+   */
+  chunking_strategy?: string;
+  /** Target tokens per chunk (64–2048). */
+  target_tokens?: number;
+  /** Overlap tokens (must be < target and <= 50% of target). */
+  overlap_tokens?: number;
+  /** Prepend header breadcrumb path to chunk text. */
+  prepend_header_path?: boolean;
+}
+
+/**
+ * Get namespace pipeline configuration.
+ * Calls GET /api/v1/namespaces/{namespace}/config
+ *
+ * @param namespace - Namespace slug (from resolveNamespaceSlug).
+ */
+export async function getNamespaceConfig(
+  namespace: string,
+): Promise<PipelineConfig> {
+  return api.get<PipelineConfig>(`/namespaces/${namespace}/config`);
+}
+
+/**
+ * Update namespace pipeline configuration.
+ * Calls PUT /api/v1/namespaces/{namespace}/config
+ *
+ * @param namespace - Namespace slug.
+ * @param data - Partial update (only provided fields are changed).
+ */
+export async function updateNamespaceConfig(
+  namespace: string,
+  data: Partial<UpdatePipelineConfigRequest>,
+): Promise<PipelineConfig> {
+  return api.put<PipelineConfig>(`/namespaces/${namespace}/config`, data);
+}
+
+// ============================================================================
+// Namespace Schema Lifecycle (D-14 — Phase 23 Plan 02)
+// ============================================================================
+
+/**
+ * Propose a new extraction schema for a namespace.
+ * Calls POST /api/v1/namespaces/{namespace}/schema
+ * Returns 202 Accepted immediately; poll GET /schema until status != "proposing".
+ *
+ * @param namespace - Namespace slug.
+ */
+export async function proposeNamespaceSchema(
+  namespace: string,
+): Promise<import("@/types/ingestion").SchemaProposal> {
+  return api.post<import("@/types/ingestion").SchemaProposal>(
+    `/namespaces/${namespace}/schema`,
+  );
+}
+
+/**
+ * Get the current schema for a namespace.
+ * Calls GET /api/v1/namespaces/{namespace}/schema
+ * Returns null / { status: "none" } when no schema has been proposed.
+ * Returns { status: "proposing" } while LLM suggestion is in-progress.
+ *
+ * @param namespace - Namespace slug.
+ */
+export async function getNamespaceSchema(
+  namespace: string,
+): Promise<import("@/types/ingestion").SchemaProposal | null> {
+  return api.get<import("@/types/ingestion").SchemaProposal | null>(
+    `/namespaces/${namespace}/schema`,
+  );
+}
+
+/**
+ * Merge-patch update the namespace schema.
+ * Calls PATCH /api/v1/namespaces/{namespace}/schema
+ * Only fields present in `data` are updated; RELATED_TO is always stripped server-side.
+ *
+ * @param namespace - Namespace slug.
+ * @param data - Partial schema update.
+ */
+export async function updateNamespaceSchema(
+  namespace: string,
+  data: Partial<import("@/types/ingestion").SchemaProposal>,
+): Promise<import("@/types/ingestion").SchemaProposal> {
+  return api.patch<import("@/types/ingestion").SchemaProposal>(
+    `/namespaces/${namespace}/schema`,
+    data,
+  );
+}
+
+/**
+ * Approve the proposed namespace schema.
+ * Calls POST /api/v1/namespaces/{namespace}/schema/approve
+ *
+ * @param namespace - Namespace slug.
+ */
+export async function approveNamespaceSchema(
+  namespace: string,
+): Promise<import("@/types/ingestion").SchemaProposal> {
+  return api.post<import("@/types/ingestion").SchemaProposal>(
+    `/namespaces/${namespace}/schema/approve`,
+  );
+}
+
+/**
+ * Reject the proposed namespace schema.
+ * Calls POST /api/v1/namespaces/{namespace}/schema/reject
+ *
+ * @param namespace - Namespace slug.
+ */
+export async function rejectNamespaceSchema(
+  namespace: string,
+): Promise<import("@/types/ingestion").SchemaProposal> {
+  return api.post<import("@/types/ingestion").SchemaProposal>(
+    `/namespaces/${namespace}/schema/reject`,
+  );
+}
+
+// ============================================================================
+// Extraction Preview (D-16 — Phase 23 Plan 02) — Request/Poll, NOT streaming
+// ============================================================================
+
+/**
+ * Trigger an extraction preview run for a namespace.
+ * Calls POST /api/v1/namespaces/{namespace}/preview
+ * Returns 202 Accepted immediately; poll getPreviewResult() until status = "completed".
+ * Budget: DEFAULT_PREVIEW_BUDGET=6 documents, MAX_PREVIEW_CHUNKS=60.
+ *
+ * @param namespace - Namespace slug.
+ */
+export async function triggerExtractionPreview(
+  namespace: string,
+): Promise<{ status: string }> {
+  return api.post<{ status: string }>(`/namespaces/${namespace}/preview`);
+}
+
+/**
+ * Get the preview result for a namespace.
+ * Calls GET /api/v1/namespaces/{namespace}/preview
+ *
+ * Returns the REAL AGGREGATE shape (entityTypeCounts, relationTypeCounts,
+ * coverageRows, documentColumns, totals, cost) — there are NO per-row chunk-text,
+ * individual-entity-row, or individual-relation-row arrays in the response.
+ * See 23-02-SUMMARY.md PREVIEW_RESULT Aggregate Field Contract for the full shape.
+ *
+ * @param namespace - Namespace slug.
+ */
+export async function getPreviewResult(
+  namespace: string,
+): Promise<import("@/types/ingestion").PreviewResult> {
+  return api.get<import("@/types/ingestion").PreviewResult>(
+    `/namespaces/${namespace}/preview`,
+  );
+}
+
+// ============================================================================
 // Export default API object
 // ============================================================================
 

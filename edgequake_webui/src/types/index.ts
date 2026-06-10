@@ -535,6 +535,13 @@ export interface Workspace {
   name: string;
   /** URL-friendly slug. */
   slug?: string;
+  /**
+   * Namespace slug for calling /namespaces/{slug}/* routes.
+   * Populated by server WorkspaceResponse (Plan 01 Task 3).
+   * Equals workspace.slug (the same URL-safe slug value used by NamespaceSlug::parse).
+   * Wave-0 gate CASE A: read directly, no runtime probe needed.
+   */
+  namespace_slug?: string;
   /** Optional description. */
   description?: string;
   /** Whether the workspace is active. */
