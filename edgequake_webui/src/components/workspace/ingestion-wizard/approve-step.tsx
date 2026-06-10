@@ -60,8 +60,14 @@ export function ApproveStep({ namespace, workspaceId, onBack }: ApproveStepProps
   // ── Approve + run mutation ────────────────────────────────────────────────
   const approveMutation = useMutation({
     mutationFn: async () => {
-      // Step 1: approve the schema (sets status = "approved" server-side)
-      await approveNamespaceSchema(namespace);
+      // Step 1: approve the schema (sets status = "approved" server-side).
+      // WR-09: when the wizard was re-entered with an ALREADY-approved schema
+      // (and no edits transitioned it back to "proposed"), the server rejects
+      // re-approval with InvalidSchemaState — treat already-approved as
+      // success and go straight to the run.
+      if (schema?.status !== "approved") {
+        await approveNamespaceSchema(namespace);
+      }
       // Step 2: trigger a full ingestion run — rebuildKnowledgeGraph clears the
       // graph and forces re-extraction with the newly-approved schema.
       // reprocessAllDocuments is re-embedding-only and is WRONG after a schema change.
