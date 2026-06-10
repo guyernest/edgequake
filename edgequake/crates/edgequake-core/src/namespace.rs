@@ -51,10 +51,14 @@ impl NamespaceSlug {
             ));
         }
         if s.len() > 63 {
+            // Char-boundary-safe preview: byte-slicing `&s[..32]` panics when
+            // byte 32 falls inside a multi-byte UTF-8 character (WR-04) —
+            // reachable from every /namespaces/{ns} path parameter.
+            let preview: String = s.chars().take(32).collect();
             return Err(crate::Error::Validation(format!(
-                "Namespace slug too long ({} chars, max 63): '{}'",
+                "Namespace slug too long ({} bytes, max 63): '{}'",
                 s.len(),
-                &s[..32]
+                preview
             )));
         }
         if s.starts_with('-') {
@@ -452,6 +456,15 @@ mod tests {
     fn test_invalid_too_long() {
         let long = "a".repeat(64);
         assert!(NamespaceSlug::parse(&long).is_err());
+    }
+
+    #[test]
+    fn test_invalid_too_long_multibyte_does_not_panic() {
+        // WR-04: a >63-byte slug containing multi-byte UTF-8 characters must
+        // return a validation error, not panic on a non-char-boundary slice.
+        let long = "é".repeat(70); // 140 bytes; byte index 32 is mid-character
+        let err = NamespaceSlug::parse(&long);
+        assert!(err.is_err());
     }
 
     #[test]
