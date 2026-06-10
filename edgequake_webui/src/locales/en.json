@@ -386,7 +386,56 @@
     "progress": "Progress",
     "messages": "Messages",
     "cancel": "Cancel Pipeline",
-    "processed": "{{current}} of {{total}} documents processed"
+    "processed": "{{current}} of {{total}} documents processed",
+    "snapshot": {
+      "title": "Snapshot Export",
+      "description": "Export a portable snapshot bundle after ingestion runs.",
+      "uriLabel": "Snapshot destination",
+      "uriPlaceholder": "s3://bucket/prefix  or  /local/absolute/path",
+      "uriHint": "Accepts an S3 URI (s3://…) or an absolute local directory path.",
+      "uriErrorEmpty": "Enter an S3 URI or absolute path to enable snapshot export.",
+      "uriErrorBadFormat": "Must start with s3:// or /. Example: s3://my-bucket/snapshots",
+      "modeLabel": "Export mode",
+      "modeWriteAndStore": "Write to graph stores AND export snapshot",
+      "modeSnapshotOnly": "Export snapshot only (skip Neptune and vector stores)",
+      "disabledHint": "Enter a snapshot destination above to configure the export mode.",
+      "saved": "Snapshot configuration saved",
+      "counts": {
+        "documents": "Documents",
+        "chunks": "Chunks",
+        "entities": "Entities",
+        "relationships": "Relationships",
+        "vectors": "Vectors",
+        "bm25": "BM25 index entries"
+      },
+      "sectionHeader": "Snapshot",
+      "destinationLabel": "Destination",
+      "exportedAtLabel": "Exported at",
+      "countsTableHeader": "Exported counts"
+    },
+    "chunking": {
+      "title": "Hierarchical Chunking",
+      "description": "Split documents by heading structure instead of fixed byte windows.",
+      "enableLabel": "Enable header-aware chunking",
+      "enableDescription": "Off by default. When off, the pipeline uses the legacy byte-window chunker.",
+      "strategyLabel": "Chunking strategy",
+      "strategyToken": "Token window",
+      "strategyHeadingBoundary": "Heading boundary",
+      "targetTokensLabel": "Target tokens per chunk",
+      "targetTokensHelper": "Recommended: 256. Range: 64–2048.",
+      "targetTokensError": "Must be between 64 and 2048.",
+      "overlapLabel": "Overlap tokens",
+      "overlapHint": "{{n}} tokens — {{pct}}% of target. Max 50% of target.",
+      "overlapError": "Overlap must be less than target tokens and at most 50% of target.",
+      "breadcrumbLabel": "Prepend header path to chunk text",
+      "breadcrumbDescription": "Includes the document heading breadcrumb in each chunk’s embedded text.",
+      "saved": "Chunking configuration saved"
+    },
+    "stages": {
+      "snapshotExport": "Snapshot Export",
+      "storingSkipped": "Storing (skipped)",
+      "storingSkippedTooltip": "Skipped — snapshot-only mode bypasses Neptune and vector stores."
+    }
   },
   "settings": {
     "title": "Settings",
@@ -555,5 +604,70 @@
     "deleteFailed": "Delete failed: {{error}}",
     "queryFailed": "Query failed: {{error}}",
     "connectionFailed": "Connection failed"
+  },
+  "wizard": {
+    "title": "Ingestion Setup",
+    "subtitle": "Configure your entity and relation schema, preview extraction, then start a full run.",
+    "entryButton": "Set up ingestion",
+    "entryButtonTooltip": "Define entity and relation types, preview extraction, then start a full ingestion run.",
+    "steps": {
+      "propose": "Propose schema",
+      "review": "Review schema",
+      "preview": "Preview extraction",
+      "approve": "Approve & run"
+    },
+    "propose": {
+      "heading": "Propose Schema",
+      "description": "EdgeQuake will sample your documents and suggest entity and relation types.",
+      "cta": "Propose schema",
+      "loading": "Analysing documents…",
+      "pollNote": "This may take a minute. The page will update automatically.",
+      "errorHeading": "Schema proposal failed",
+      "errorBody": "Could not generate a schema from your documents. Check that documents have been ingested, then try again."
+    },
+    "review": {
+      "heading": "Review Schema",
+      "description": "Edit entity and relation types to match your domain. Changes here guide extraction in Step 3.",
+      "entityTypesTitle": "Entity types",
+      "relationTypesTitle": "Relation types",
+      "addEntityType": "Add entity type",
+      "addRelationType": "Add relation type",
+      "relatedToDescription": "System fallback — used for any relationship that doesn't match a defined type. Cannot be removed.",
+      "deleteAriaLabel": "Remove {{name}}",
+      "deleteConfirmTitle": "Remove relation type?",
+      "deleteConfirmBody": "\"{{name}}\" will be removed from the schema. Existing relationships of this type will fall back to RELATED_TO after re-extraction.",
+      "deleteConfirmCta": "Remove type",
+      "cta": "Run extraction preview",
+      "namePlaceholderEntity": "UPPER_SNAKE_CASE",
+      "namePlaceholderRelation": "lower_snake_case",
+      "sourceTypeLabel": "Source type (optional)",
+      "targetTypeLabel": "Target type (optional)"
+    },
+    "preview": {
+      "heading": "Preview Extraction",
+      "description": "Sample extraction on up to 6 documents (60 chunks). Review the results before running the full pipeline.",
+      "budget": "Sampling up to 6 documents and 60 chunks.",
+      "loading": "Running {{step}}…",
+      "relatedToFallback": "RELATED_TO fallback",
+      "relatedToTooltip": "This relationship didn't match any defined relation type and fell back to RELATED_TO. Consider adding a specific type in Step 2.",
+      "emptyChunks": "No chunks returned. Check that documents are ingested and the chunking config is valid.",
+      "emptyEntities": "No entities found in the sample. Consider broadening your entity type definitions.",
+      "emptyRelations": "No relations found in the sample. Consider broadening your relation type definitions or reviewing the entity types.",
+      "cta": "Looks good — approve schema",
+      "tabs": {
+        "chunks": "Chunks",
+        "entities": "Entities",
+        "relations": "Relations"
+      }
+    },
+    "approve": {
+      "heading": "Approve & Run",
+      "description": "Approving the schema saves it and starts a full ingestion run.",
+      "schemaLabel": "Schema to be approved",
+      "cta": "Approve schema & start run",
+      "successToast": "Schema approved. Full ingestion run started.",
+      "errorHeading": "Approval failed",
+      "errorBody": "Could not approve the schema. Please try again."
+    }
   }
 }
