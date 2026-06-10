@@ -93,14 +93,46 @@ pub const PENDING_SENTINEL: &str = "__pending__";
 /// GET handler can surface a `Failed { error }` body (CR-02).
 pub const FAILED_SENTINEL_PREFIX: &str = "__failed__:";
 
+/// Staleness cutoff for the pending sentinel (WR-02).
+///
+/// If the API process dies mid-suggest (or storing the failure marker fails),
+/// the `__pending__` marker would otherwise persist forever, deadlocking the
+/// schema lifecycle: GET reports "proposing" indefinitely and the dedup guard
+/// refuses to spawn a new task. A pending marker older than this window is
+/// treated as expired — GET surfaces it as Failed (retryable), and POST
+/// /schema spawns a fresh task instead of dedup-blocking.
+pub const PENDING_STALENESS_MS: i64 = 15 * 60 * 1000;
+
+/// Error message surfaced when a pending sentinel exceeds the staleness window.
+const PENDING_STALE_ERROR: &str =
+    "Schema suggestion timed out (the suggest task did not complete). Retry the suggestion.";
+
+/// Returns true when the proposal carries a pending sentinel older than
+/// [`PENDING_STALENESS_MS`] (measured against `now_ms`).
+fn is_pending_stale(proposal: &SchemaProposal, now_ms: i64) -> bool {
+    proposal.domain_hint.as_deref() == Some(PENDING_SENTINEL)
+        && now_ms.saturating_sub(proposal.proposed_at) > PENDING_STALENESS_MS
+}
+
 /// Convert a stored SchemaProposal into a SchemaResponseBody.
-fn schema_proposal_to_body(proposal: SchemaProposal) -> SchemaResponseBody {
+///
+/// `now_ms` is the current epoch-millis timestamp, used to expire stale
+/// pending sentinels (WR-02).
+fn schema_proposal_to_body(proposal: SchemaProposal, now_ms: i64) -> SchemaResponseBody {
     match proposal.status {
         SchemaStatus::None => {
             // Stored None carries either the pending sentinel (proposing),
             // a failure marker (failed), or nothing (no schema).
             match proposal.domain_hint.as_deref() {
-                Some(PENDING_SENTINEL) => SchemaResponseBody::Proposing,
+                Some(PENDING_SENTINEL) => {
+                    if is_pending_stale(&proposal, now_ms) {
+                        SchemaResponseBody::Failed {
+                            error: PENDING_STALE_ERROR.to_string(),
+                        }
+                    } else {
+                        SchemaResponseBody::Proposing
+                    }
+                }
                 Some(h) if h.starts_with(FAILED_SENTINEL_PREFIX) => {
                     SchemaResponseBody::Failed {
                         error: h
@@ -116,7 +148,13 @@ fn schema_proposal_to_body(proposal: SchemaProposal) -> SchemaResponseBody {
         SchemaStatus::Proposed => {
             // Check for the pending sentinel
             if proposal.domain_hint.as_deref() == Some(PENDING_SENTINEL) {
-                SchemaResponseBody::Proposing
+                if is_pending_stale(&proposal, now_ms) {
+                    SchemaResponseBody::Failed {
+                        error: PENDING_STALE_ERROR.to_string(),
+                    }
+                } else {
+                    SchemaResponseBody::Proposing
+                }
             } else {
                 SchemaResponseBody::Proposed {
                     entity_types: proposal.entity_types,
@@ -246,7 +284,7 @@ pub async fn get_namespace_schema(
 
     let body = match proposal {
         None => SchemaResponseBody::None,
-        Some(p) => schema_proposal_to_body(p),
+        Some(p) => schema_proposal_to_body(p, chrono::Utc::now().timestamp_millis()),
     };
 
     Ok(Json(SchemaResponse {
@@ -281,18 +319,51 @@ pub async fn suggest_namespace_schema(
 
     debug!(namespace = slug.as_str(), "Triggering schema suggestion");
 
+    // --- Reject reserved sentinel values in user input (WR-02) ---
+    // domain_hint / domain_description flow into the stored proposal; a value
+    // starting with "__" could forge the pending/failed sentinels and
+    // deadlock or spoof the lifecycle.
+    for (field, value) in [
+        ("domain_description", &body.domain_description),
+        ("domain_hint", &body.domain_hint),
+    ] {
+        if let Some(v) = value {
+            if v.starts_with("__") {
+                return Err(ApiError::BadRequest(format!(
+                    "{} must not start with '__' (reserved for internal sentinels)",
+                    field
+                )));
+            }
+        }
+    }
+
     // --- Deduplication: if already proposing, don't spawn a second task ---
-    if let Ok(Some(existing)) = registry.get_schema(&slug).await {
+    // Registry errors are propagated (not swallowed); a pending marker older
+    // than PENDING_STALENESS_MS is treated as expired and a fresh task is
+    // spawned instead of dedup-blocking forever (WR-02).
+    let existing = registry
+        .get_schema(&slug)
+        .await
+        .map_err(map_registry_error)?;
+    if let Some(existing) = existing {
         if existing.domain_hint.as_deref() == Some(PENDING_SENTINEL) {
-            info!(namespace = slug.as_str(), "Schema suggestion already in progress");
-            return Ok((
-                StatusCode::ACCEPTED,
-                Json(serde_json::json!({
-                    "namespace": slug.as_str(),
-                    "status": "proposing",
-                    "message": "Schema suggestion already in progress"
-                })),
-            ));
+            let now_ms = chrono::Utc::now().timestamp_millis();
+            if !is_pending_stale(&existing, now_ms) {
+                info!(namespace = slug.as_str(), "Schema suggestion already in progress");
+                return Ok((
+                    StatusCode::ACCEPTED,
+                    Json(serde_json::json!({
+                        "namespace": slug.as_str(),
+                        "status": "proposing",
+                        "message": "Schema suggestion already in progress"
+                    })),
+                ));
+            }
+            warn!(
+                namespace = slug.as_str(),
+                "Stale pending suggestion marker found (older than {}ms); spawning a fresh task",
+                PENDING_STALENESS_MS
+            );
         }
     }
 
@@ -420,7 +491,18 @@ pub async fn suggest_namespace_schema(
                     reviewed_at: None,
                     sampling_metadata: None,
                 };
-                let _ = registry_arc.store_schema(&slug_clone, &failed_marker).await;
+                // If storing the failure marker itself fails, the pending
+                // sentinel stays behind — log loudly; the staleness window
+                // (PENDING_STALENESS_MS) is the recovery path (WR-02).
+                if let Err(store_err) =
+                    registry_arc.store_schema(&slug_clone, &failed_marker).await
+                {
+                    error!(
+                        namespace = slug_clone.as_str(),
+                        error = %store_err,
+                        "Failed to store schema failure marker; pending sentinel will expire via staleness window"
+                    );
+                }
             }
         }
     });
@@ -487,7 +569,7 @@ pub async fn update_namespace_schema(
         .await
         .map_err(map_registry_error)?;
 
-    let body = schema_proposal_to_body(proposal);
+    let body = schema_proposal_to_body(proposal, chrono::Utc::now().timestamp_millis());
     Ok(Json(SchemaResponse {
         namespace: slug.as_str().to_string(),
         schema: body,
@@ -580,14 +662,20 @@ mod tests {
         }
     }
 
+    /// Fixed "now" used by tests: 1 second after the proposals' proposed_at.
+    const TEST_NOW_MS: i64 = 1700000001000;
+
     #[test]
     fn test_none_proposal_returns_none_body() {
         // Behavior: GET with no proposal returns "none" status variant
-        let body = schema_proposal_to_body(SchemaProposal {
-            status: SchemaStatus::None,
-            domain_hint: None,
-            ..make_proposal(SchemaStatus::None)
-        });
+        let body = schema_proposal_to_body(
+            SchemaProposal {
+                status: SchemaStatus::None,
+                domain_hint: None,
+                ..make_proposal(SchemaStatus::None)
+            },
+            TEST_NOW_MS,
+        );
         assert!(matches!(body, SchemaResponseBody::None));
     }
 
@@ -601,7 +689,34 @@ mod tests {
             relation_types: vec![],
             ..make_proposal(SchemaStatus::Proposed)
         };
-        let body = schema_proposal_to_body(proposal);
+        let body = schema_proposal_to_body(proposal, TEST_NOW_MS);
+        assert!(matches!(body, SchemaResponseBody::Proposing));
+    }
+
+    #[test]
+    fn test_stale_pending_sentinel_returns_failed_body() {
+        // WR-02: a pending marker older than PENDING_STALENESS_MS is expired —
+        // GET surfaces Failed (retryable) instead of "proposing" forever.
+        let proposal = SchemaProposal {
+            status: SchemaStatus::Proposed,
+            domain_hint: Some(PENDING_SENTINEL.to_string()),
+            ..make_proposal(SchemaStatus::Proposed)
+        };
+        let stale_now = proposal.proposed_at + PENDING_STALENESS_MS + 1;
+        let body = schema_proposal_to_body(proposal, stale_now);
+        assert!(matches!(body, SchemaResponseBody::Failed { .. }));
+    }
+
+    #[test]
+    fn test_fresh_pending_sentinel_within_window_is_proposing() {
+        // WR-02 boundary: exactly at the staleness window is still proposing.
+        let proposal = SchemaProposal {
+            status: SchemaStatus::Proposed,
+            domain_hint: Some(PENDING_SENTINEL.to_string()),
+            ..make_proposal(SchemaStatus::Proposed)
+        };
+        let at_window = proposal.proposed_at + PENDING_STALENESS_MS;
+        let body = schema_proposal_to_body(proposal, at_window);
         assert!(matches!(body, SchemaResponseBody::Proposing));
     }
 
@@ -620,7 +735,7 @@ mod tests {
             relation_types: vec![],
             ..make_proposal(SchemaStatus::Proposed)
         };
-        let body = schema_proposal_to_body(proposal);
+        let body = schema_proposal_to_body(proposal, TEST_NOW_MS);
         match body {
             SchemaResponseBody::Proposed { entity_types, domain_hint, .. } => {
                 assert_eq!(entity_types.len(), 1);
@@ -747,7 +862,7 @@ mod tests {
             domain_hint: Some(format!("{} LLM call timed out", FAILED_SENTINEL_PREFIX)),
             ..make_proposal(SchemaStatus::None)
         };
-        let body = schema_proposal_to_body(proposal);
+        let body = schema_proposal_to_body(proposal, TEST_NOW_MS);
         match body {
             SchemaResponseBody::Failed { error } => {
                 assert_eq!(error, "LLM call timed out");
