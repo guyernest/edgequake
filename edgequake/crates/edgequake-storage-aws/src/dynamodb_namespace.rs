@@ -835,11 +835,27 @@ impl DynamoNamespaceRegistry {
 
     /// Write a PREVIEW_REQUEST item with status="requested".
     ///
+    /// Deletes any stale PREVIEW_RESULT from a previous run first, so the
+    /// GET /preview poll cannot return the previous run's completed result
+    /// for the new request (CR-03: stale-result early-advance bug).
+    ///
     /// Exact item shape (matches handle_preview_command reader):
     ///   PK = "NS#{slug}", SK = "PREVIEW_REQUEST",
     ///   data = JSON { namespace, status:"requested", documents_completed:0, documents_total:0 }
     pub async fn put_preview_request(&self, slug: &NamespaceSlug) -> Result<()> {
         let pk = format!("NS#{}", slug.as_str());
+
+        // Remove any stale result from a previous run BEFORE recording the
+        // new request. DeleteItem is idempotent (no error when absent).
+        self.client
+            .delete_item()
+            .table_name(&self.config.table_name)
+            .key("PK", AttributeValue::S(pk.clone()))
+            .key("SK", AttributeValue::S("PREVIEW_RESULT".to_string()))
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
         let data = serde_json::json!({
             "namespace": slug.as_str(),
             "status": "requested",
@@ -857,7 +873,10 @@ impl DynamoNamespaceRegistry {
             .await
             .map_err(dynamo_err)?;
 
-        debug!(namespace = slug.as_str(), "Wrote PREVIEW_REQUEST with status=requested");
+        debug!(
+            namespace = slug.as_str(),
+            "Cleared stale PREVIEW_RESULT and wrote PREVIEW_REQUEST with status=requested"
+        );
         Ok(())
     }
 
