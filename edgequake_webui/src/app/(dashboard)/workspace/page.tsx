@@ -21,8 +21,11 @@ import { EmbeddingModelSelector, type EmbeddingSelection } from '@/components/wo
 import { LLMModelSelector, type LLMSelection } from '@/components/workspace/llm-model-selector';
 import { RebuildEmbeddingsButton } from '@/components/workspace/rebuild-embeddings-button';
 import { RebuildKnowledgeGraphButton } from '@/components/workspace/rebuild-knowledge-graph-button';
+import { ChunkingConfigPanel } from '@/components/workspace/chunking-config-panel';
+import { SnapshotConfigPanel } from '@/components/workspace/snapshot-config-panel';
 import { useWorkspaceTenantValidator } from '@/hooks/use-workspace-tenant-validator';
 import { checkHealth, getWorkspace, getWorkspaceStats, updateWorkspace } from '@/lib/api/edgequake';
+import { resolveNamespaceSlug, NamespaceSlugError } from '@/lib/namespace-resolve';
 import { fetchProvidersHealth } from '@/lib/api/models';
 import { useTenantStore } from '@/stores/use-tenant-store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -299,6 +302,19 @@ export default function WorkspacePage() {
     embeddings: boolean;
     extraction: boolean;
   } | null>(null);
+
+  // Resolve namespace slug for the config panels (D-01 home — Plan 03 Wave-0 CASE A).
+  // Guards against calling /namespaces/undefined/config (Pitfall 6 / T-23-07).
+  let resolvedNamespace: string | null = null;
+  if (workspace) {
+    try {
+      resolvedNamespace = resolveNamespaceSlug(workspace);
+    } catch (e) {
+      if (!(e instanceof NamespaceSlugError)) throw e;
+      // NamespaceSlugError: workspace lacks namespace_slug — render nothing for config panels.
+      resolvedNamespace = null;
+    }
+  }
 
   if (!selectedTenantId || !selectedWorkspaceId) {
     return (
@@ -626,6 +642,32 @@ export default function WorkspacePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Pipeline Config Panels (D-01 home) — mounted after LLM/embedding cards.
+          Guards against /namespaces/undefined/config (Pitfall 6 / T-23-07):
+          only rendered when the namespace slug is successfully resolved. */}
+      {resolvedNamespace && (
+        <>
+          <SnapshotConfigPanel
+            namespace={resolvedNamespace}
+            onDirty={() =>
+              setPendingRebuild((prev) => ({
+                embeddings: prev?.embeddings ?? false,
+                extraction: true,
+              }))
+            }
+          />
+          <ChunkingConfigPanel
+            namespace={resolvedNamespace}
+            onDirty={() =>
+              setPendingRebuild((prev) => ({
+                embeddings: prev?.embeddings ?? false,
+                extraction: true,
+              }))
+            }
+          />
+        </>
+      )}
 
       {/* Provider Health Status - SPEC-032: OODA 201-210 */}
       <Card>
