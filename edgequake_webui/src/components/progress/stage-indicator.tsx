@@ -54,6 +54,8 @@ const STAGE_LABELS: Record<IngestionStage, string> = {
   summarizing: 'Summarizing',
   embedding: 'Embedding',
   storing: 'Storing',
+  // Phase 23 D-12 — snapshot export stage
+  snapshot_export: 'Snapshot Export',
   completed: 'Completed',
   failed: 'Failed',
   // Legacy aliases

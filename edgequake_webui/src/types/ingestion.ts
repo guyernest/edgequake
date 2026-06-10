@@ -53,6 +53,7 @@ export type IngestionStage =
   | "summarizing" // Description summarization
   | "embedding" // Vector generation
   | "storing" // Persist to storage
+  | "snapshot_export" // Export portable snapshot bundle (D-12 — Phase 23)
   | "completed" // Successfully finished
   | "failed" // Error state
   // Legacy aliases for backward compatibility
@@ -179,6 +180,23 @@ export interface IngestionResult {
   entities: number;
   relationships: number;
   duration_ms: number;
+  /**
+   * Snapshot export result (D-11 — Phase 23).
+   * Present only when a snapshot_uri was configured and the export completed.
+   * Plan 05 (run report) reads this field to render the SnapshotSection.
+   */
+  snapshot?: {
+    uri: string;
+    created_at: string;
+    counts: {
+      documents: number;
+      chunks: number;
+      entities: number;
+      relationships: number;
+      vectors: number;
+      bm25: number;
+    };
+  };
 }
 
 // ============================================================================
@@ -235,6 +253,26 @@ export interface IngestionCompletedEvent {
     entities: number;
     relationships: number;
     total_cost_usd: number;
+  };
+  /**
+   * Snapshot export result (D-10 / D-11 — Phase 23).
+   * Present only when a snapshot_uri was configured and the export completed.
+   * All 6 SnapshotCounts are included.
+   */
+  snapshot?: {
+    /** Export destination URI (s3://… or /local/path). */
+    uri: string;
+    /** ISO 8601 timestamp of when the snapshot was written. */
+    created_at: string;
+    /** Counts of exported objects. */
+    counts: {
+      documents: number;
+      chunks: number;
+      entities: number;
+      relationships: number;
+      vectors: number;
+      bm25: number;
+    };
   };
 }
 
@@ -432,4 +470,166 @@ export interface TrackProgressResponse {
   started_at: string;
   updated_at: string;
   completed_at?: string;
+}
+
+// ============================================================================
+// Schema Lifecycle Types (D-14 / D-15 — Phase 23 Plan 02)
+// Mirrors Rust types in edgequake-schema crate.
+// ============================================================================
+
+/**
+ * A single entity type in a proposed schema.
+ * Mirrors Rust EntityTypeProposal in edgequake-schema.
+ */
+export interface EntityTypeProposal {
+  /** Entity type name (UPPER_SNAKE_CASE by convention). */
+  name: string;
+  /** Human-readable description for LLM extraction guidance. */
+  description: string;
+  /** How many times this type appeared in the sample documents. */
+  frequency: number;
+  /** Whether this type is part of the baseline/default schema. */
+  is_baseline: boolean;
+}
+
+/**
+ * A single relation type in a proposed schema.
+ * Mirrors Rust RelationTypeProposal in edgequake-schema.
+ * Note: RELATED_TO is always present at runtime as a server-enforced fallback;
+ * it is stripped from relation_types arrays sent to PUT/PATCH endpoints.
+ */
+export interface RelationTypeProposal {
+  /** Relation type name (lower_snake_case by convention). */
+  name: string;
+  /** Human-readable description. */
+  description: string;
+  /** Source entity type constraint (optional). */
+  source_type?: string;
+  /** Target entity type constraint (optional). */
+  target_type?: string;
+  /** How many times this relation type appeared in the sample documents. */
+  frequency: number;
+}
+
+/**
+ * A schema proposal for a namespace.
+ * Mirrors Rust SchemaProposal in edgequake-schema.
+ *
+ * Status values:
+ *   - "none"      — no schema proposed yet
+ *   - "proposing" — LLM suggestion in-progress (server sentinel: domain_hint="__pending__")
+ *   - "proposed"  — schema suggested, awaiting review/approval
+ *   - "approved"  — schema approved; full ingestion runs use this schema
+ *   - "rejected"  — schema rejected; re-propose to try again
+ *   - "failed"    — schema proposal failed (server sets domain_hint="__failed__: <msg>")
+ */
+export interface SchemaProposal {
+  /** Current lifecycle status. */
+  status: "none" | "proposing" | "proposed" | "approved" | "rejected" | "failed";
+  /** Proposed entity types (empty while status is "proposing" or "none"). */
+  entity_types: EntityTypeProposal[];
+  /** Proposed relation types (excludes RELATED_TO server fallback). */
+  relation_types: RelationTypeProposal[];
+  /** Number of documents sampled to generate the proposal. */
+  sample_size?: number;
+  /** Total documents in the namespace at proposal time. */
+  total_documents?: number;
+  /** ISO 8601 timestamp when this proposal was generated. */
+  proposed_at?: string;
+  /** ISO 8601 timestamp when this proposal was approved or rejected. */
+  reviewed_at?: string;
+  /** Domain context hint used during suggestion. */
+  domain_hint?: string;
+  /** Error message when status is "failed". */
+  error?: string;
+}
+
+// ============================================================================
+// Extraction Preview Types (D-16 — Phase 23 Plan 02)
+// REAL AGGREGATE SHAPE — matches PREVIEW_RESULT JSON written by batch worker.
+// See 23-02-SUMMARY.md "PREVIEW_RESULT Aggregate Field Contract".
+//
+// IMPORTANT: There are NO per-row chunk-text, individual-entity-row, or
+// individual-relation-row arrays. The backend produces aggregate type-count
+// and coverage data only. Plan 07 preview tabs render this aggregate data.
+// ============================================================================
+
+/**
+ * Aggregate count of entities or relations by type in the preview sample.
+ */
+export interface TypeCount {
+  typeName: string;
+  count: number;
+}
+
+/**
+ * Per-entity-type coverage row: how many of that entity type appeared in each
+ * sampled document. Used to render the coverage matrix in the preview.
+ */
+export interface CoverageRow {
+  entityType: string;
+  /** One count per document column (indexes match documentColumns array). */
+  counts: number[];
+}
+
+/**
+ * A sampled document column in the coverage matrix.
+ */
+export interface DocumentColumn {
+  id: string;
+  name: string;
+  truncatedName: string;
+}
+
+/**
+ * LLM cost summary for the preview run.
+ */
+export interface PreviewCost {
+  inputTokens: number;
+  outputTokens: number;
+  totalCostUsd: number;
+  model: string;
+}
+
+/**
+ * Aggregate extraction preview result.
+ * Exact field names match the camelCase JSON written to SK="PREVIEW_RESULT" by
+ * the batch worker (handle_preview_command, edgequake-batch/src/main.rs).
+ *
+ * Status values:
+ *   - "pending"   — PREVIEW_REQUEST recorded; batch worker has not started
+ *   - "running"   — batch worker is extracting sample documents
+ *   - "completed" — extraction finished; all aggregate fields are populated
+ *   - "failed"    — extraction failed; check error field
+ */
+export interface PreviewResult {
+  /** Current preview lifecycle status. */
+  status: "pending" | "running" | "completed" | "failed";
+  /** Aggregate entity type counts across all sampled documents. */
+  entityTypeCounts: TypeCount[];
+  /** Aggregate relation type counts across all sampled documents. */
+  relationTypeCounts: TypeCount[];
+  /**
+   * Coverage matrix: one row per entity type, one count per document.
+   * Row indices match the entityTypeCounts order; column indices match documentColumns.
+   */
+  coverageRows: CoverageRow[];
+  /** Ordered list of sampled document column headers for the coverage matrix. */
+  documentColumns: DocumentColumn[];
+  /** Total number of chunks processed in the sample. */
+  totalChunks: number;
+  /** Total number of entities extracted in the sample. */
+  totalEntities: number;
+  /** Total number of relationships extracted in the sample. */
+  totalRelationships: number;
+  /** LLM cost for the preview run. */
+  cost: PreviewCost;
+  /** Total processing time in milliseconds. */
+  processingTimeMs: number;
+  /** Number of documents fully processed. */
+  documentsCompleted: number;
+  /** Total documents in the preview budget (up to DEFAULT_PREVIEW_BUDGET=6). */
+  documentsTotal: number;
+  /** Error message when status is "failed". */
+  error?: string;
 }
