@@ -156,6 +156,11 @@ fn api_v1_routes() -> Router<AppState> {
             "/namespaces/{namespace}/schema/reject",
             post(handlers::reject_namespace_schema),
         )
+        // Extraction preview routes (Phase 23 Plan 02)
+        .route(
+            "/namespaces/{namespace}/preview",
+            post(handlers::run_extraction_preview).get(handlers::get_extraction_preview),
+        )
         // Namespace-scoped data routes (Plan 01-03)
         // All data operations scoped to a specific namespace
         .nest("/ns/{namespace}", namespace_scoped_routes())

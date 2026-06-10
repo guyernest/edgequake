@@ -362,6 +362,46 @@ pub trait NamespaceRegistry: Send + Sync {
         &self,
         slug: &NamespaceSlug,
     ) -> Result<SchemaProposal, NamespaceRegistryError>;
+
+    // -----------------------------------------------------------------------
+    // Preview request / result methods (Phase 23 Plan 02)
+    // -----------------------------------------------------------------------
+
+    /// Write a PREVIEW_REQUEST item so the batch worker picks it up.
+    ///
+    /// Writes PK="NS#{slug}", SK="PREVIEW_REQUEST",
+    /// data = JSON { namespace, status:"requested", documents_completed:0, documents_total:0 }.
+    ///
+    /// This is the exact shape `handle_preview_command` reads to verify
+    /// status="requested" before starting.
+    async fn put_preview_request(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<(), NamespaceRegistryError>;
+
+    /// Read the PREVIEW_REQUEST status string.
+    ///
+    /// Returns the `status` field of the PREVIEW_REQUEST data JSON
+    /// ("requested", "processing", "completed") or `None` if no request exists.
+    async fn get_preview_status(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<Option<String>, NamespaceRegistryError>;
+
+    /// Read the PREVIEW_RESULT item.
+    ///
+    /// Returns the parsed `data` JSON value of the PREVIEW_RESULT record
+    /// (PK="NS#{slug}", SK="PREVIEW_RESULT") or `None` if the batch worker
+    /// has not yet written the result.
+    ///
+    /// The returned Value contains the EXACT field set written by the batch
+    /// worker: entityTypeCounts, relationTypeCounts, coverageRows,
+    /// documentColumns, totalChunks, totalEntities, totalRelationships,
+    /// cost, processingTimeMs, documentsCompleted, documentsTotal.
+    async fn get_preview_result(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> Result<Option<serde_json::Value>, NamespaceRegistryError>;
 }
 
 /// Type alias for a shared namespace registry.

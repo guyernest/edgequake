@@ -829,6 +829,122 @@ impl DynamoNamespaceRegistry {
         Ok(proposal)
     }
 
+    // -----------------------------------------------------------------------
+    // Preview request / result methods (Phase 23 Plan 02)
+    // -----------------------------------------------------------------------
+
+    /// Write a PREVIEW_REQUEST item with status="requested".
+    ///
+    /// Exact item shape (matches handle_preview_command reader):
+    ///   PK = "NS#{slug}", SK = "PREVIEW_REQUEST",
+    ///   data = JSON { namespace, status:"requested", documents_completed:0, documents_total:0 }
+    pub async fn put_preview_request(&self, slug: &NamespaceSlug) -> Result<()> {
+        let pk = format!("NS#{}", slug.as_str());
+        let data = serde_json::json!({
+            "namespace": slug.as_str(),
+            "status": "requested",
+            "documents_completed": 0,
+            "documents_total": 0,
+        });
+
+        self.client
+            .put_item()
+            .table_name(&self.config.table_name)
+            .item("PK", AttributeValue::S(pk))
+            .item("SK", AttributeValue::S("PREVIEW_REQUEST".to_string()))
+            .item("data", AttributeValue::S(data.to_string()))
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
+        debug!(namespace = slug.as_str(), "Wrote PREVIEW_REQUEST with status=requested");
+        Ok(())
+    }
+
+    /// Read the PREVIEW_REQUEST status string.
+    ///
+    /// Returns the `status` field of the PREVIEW_REQUEST `data` JSON,
+    /// or `None` if the item does not exist.
+    pub async fn get_preview_status(&self, slug: &NamespaceSlug) -> Result<Option<String>> {
+        let pk = format!("NS#{}", slug.as_str());
+
+        let result = self
+            .client
+            .get_item()
+            .table_name(&self.config.table_name)
+            .key("PK", AttributeValue::S(pk))
+            .key("SK", AttributeValue::S("PREVIEW_REQUEST".to_string()))
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
+        match result.item {
+            Some(item) => {
+                let data_str = item
+                    .get("data")
+                    .ok_or_else(|| {
+                        AwsStorageError::DynamoDbError(
+                            "Missing 'data' attribute on PREVIEW_REQUEST record".into(),
+                        )
+                    })?
+                    .as_s()
+                    .map_err(|_| {
+                        AwsStorageError::DynamoDbError(
+                            "'data' attribute is not a string".into(),
+                        )
+                    })?;
+
+                let parsed: serde_json::Value = serde_json::from_str(data_str)
+                    .map_err(|e| AwsStorageError::DynamoDbError(format!("JSON parse error: {}", e)))?;
+
+                Ok(parsed["status"].as_str().map(|s| s.to_string()))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Read the PREVIEW_RESULT item.
+    ///
+    /// Returns the parsed `data` JSON of the PREVIEW_RESULT record, or `None`
+    /// if the batch worker has not yet written the result.
+    pub async fn get_preview_result(&self, slug: &NamespaceSlug) -> Result<Option<serde_json::Value>> {
+        let pk = format!("NS#{}", slug.as_str());
+
+        let result = self
+            .client
+            .get_item()
+            .table_name(&self.config.table_name)
+            .key("PK", AttributeValue::S(pk))
+            .key("SK", AttributeValue::S("PREVIEW_RESULT".to_string()))
+            .send()
+            .await
+            .map_err(dynamo_err)?;
+
+        match result.item {
+            Some(item) => {
+                let data_str = item
+                    .get("data")
+                    .ok_or_else(|| {
+                        AwsStorageError::DynamoDbError(
+                            "Missing 'data' attribute on PREVIEW_RESULT record".into(),
+                        )
+                    })?
+                    .as_s()
+                    .map_err(|_| {
+                        AwsStorageError::DynamoDbError(
+                            "'data' attribute is not a string".into(),
+                        )
+                    })?;
+
+                let parsed: serde_json::Value = serde_json::from_str(data_str)
+                    .map_err(|e| AwsStorageError::DynamoDbError(format!("JSON parse error: {}", e)))?;
+
+                Ok(Some(parsed))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Internal: store schema without clearing PipelineConfig types.
     ///
     /// Used by approve/reject to update the schema without triggering
@@ -967,6 +1083,33 @@ impl NamespaceRegistry for DynamoNamespaceRegistry {
         slug: &NamespaceSlug,
     ) -> std::result::Result<SchemaProposal, NamespaceRegistryError> {
         self.reject_schema(slug)
+            .await
+            .map_err(to_registry_error)
+    }
+
+    async fn put_preview_request(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> std::result::Result<(), NamespaceRegistryError> {
+        self.put_preview_request(slug)
+            .await
+            .map_err(to_registry_error)
+    }
+
+    async fn get_preview_status(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> std::result::Result<Option<String>, NamespaceRegistryError> {
+        self.get_preview_status(slug)
+            .await
+            .map_err(to_registry_error)
+    }
+
+    async fn get_preview_result(
+        &self,
+        slug: &NamespaceSlug,
+    ) -> std::result::Result<Option<serde_json::Value>, NamespaceRegistryError> {
+        self.get_preview_result(slug)
             .await
             .map_err(to_registry_error)
     }
