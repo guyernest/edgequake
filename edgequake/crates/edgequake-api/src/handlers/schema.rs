@@ -551,7 +551,20 @@ pub async fn update_namespace_schema(
             ApiError::NotFound(format!("No schema proposal found for namespace: {}", slug))
         })?;
 
+    // WR-10: never merge into the in-flight pending sentinel — it would race
+    // the spawned suggest task (last-writer-wins on SK=SCHEMA) and preserve
+    // the sentinel domain_hint, leaving the record permanently "proposing"
+    // with user data inside.
+    if proposal.domain_hint.as_deref() == Some(PENDING_SENTINEL) {
+        return Err(ApiError::Conflict(
+            "A schema suggestion is in progress for this namespace; \
+             wait for it to complete before editing the schema"
+                .to_string(),
+        ));
+    }
+
     // Apply only the fields present in the PATCH body
+    let types_changed = body.entity_types.is_some() || body.relation_types.is_some();
     if let Some(entity_types) = body.entity_types {
         proposal.entity_types = entity_types;
     }
@@ -561,6 +574,19 @@ pub async fn update_namespace_schema(
             .into_iter()
             .filter(|r| r.name != "RELATED_TO")
             .collect();
+    }
+
+    // WR-10: editing an Approved schema invalidates the approval —
+    // store_schema clears the live PipelineConfig entity/relation types, so
+    // surface that re-approval is required by transitioning the proposal
+    // back to Proposed (the response status tells the client explicitly).
+    if types_changed && proposal.status == SchemaStatus::Approved {
+        proposal.status = SchemaStatus::Proposed;
+        proposal.reviewed_at = None;
+        info!(
+            namespace = slug.as_str(),
+            "Approved schema edited via PATCH; status reset to Proposed (re-approval required)"
+        );
     }
 
     // Store merged proposal
