@@ -159,8 +159,52 @@ pub struct PipelineConfig {
     pub entity_types: Vec<String>,
     /// Allowed relation types for extraction (empty = all types).
     pub relation_types: Vec<String>,
+
+    // D-03/D-04: Snapshot config (Phase 23 — backward-compat with #[serde(default)])
+    /// Destination URI for snapshot export (s3://bucket/prefix or local path).
+    /// None = no snapshot export configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot_uri: Option<String>,
+
+    /// Snapshot output mode: "write-and-store" or "snapshot-only".
+    /// Default: "write-and-store" (matches SnapshotMode::WriteAndStore::as_str()).
+    #[serde(default = "default_snapshot_mode")]
+    pub snapshot_mode: String,
+
+    // D-05/D-06: Hierarchical chunking config (Phase 23 — additive, OFF by default)
+    /// Whether hierarchical header-aware chunking is enabled.
+    /// Default: false (byte-identical legacy behavior when OFF).
+    #[serde(default)]
+    pub chunking_enabled: bool,
+
+    /// Target chunk size in tokens (default 256, Phase 22 D-07 locked value).
+    /// Distinct from chunk_size (legacy token-window field) to avoid conflicts.
+    #[serde(default = "default_target_tokens")]
+    pub target_tokens: usize,
+
+    /// Overlap tokens (default 38, ~15% of 256, Phase 22 D-07 locked value).
+    #[serde(default = "default_overlap_tokens")]
+    pub overlap_tokens: usize,
+
+    /// Prepend header breadcrumb to embedded text (default true when enabled).
+    #[serde(default = "default_true")]
+    pub prepend_header_path: bool,
+
     /// Last update timestamp (epoch milliseconds).
     pub updated_at: i64,
+}
+
+fn default_snapshot_mode() -> String {
+    "write-and-store".to_string()
+}
+fn default_target_tokens() -> usize {
+    256
+}
+fn default_overlap_tokens() -> usize {
+    38
+}
+fn default_true() -> bool {
+    true
 }
 
 impl Default for PipelineConfig {
@@ -177,6 +221,12 @@ impl Default for PipelineConfig {
             extraction_prompt: None,
             entity_types: vec![],
             relation_types: vec![],
+            snapshot_uri: None,
+            snapshot_mode: default_snapshot_mode(),
+            chunking_enabled: false,
+            target_tokens: default_target_tokens(),
+            overlap_tokens: default_overlap_tokens(),
+            prepend_header_path: default_true(),
             updated_at: 0,
         }
     }
@@ -431,6 +481,40 @@ mod tests {
         assert!(config.entity_types.is_empty());
         assert!(config.relation_types.is_empty());
         assert_eq!(config.updated_at, 0);
+        // Phase 23: new snapshot + chunking fields with defaults
+        assert!(config.snapshot_uri.is_none());
+        assert_eq!(config.snapshot_mode, "write-and-store");
+        assert!(!config.chunking_enabled);
+        assert_eq!(config.target_tokens, 256);
+        assert_eq!(config.overlap_tokens, 38);
+        assert!(config.prepend_header_path);
+    }
+
+    #[test]
+    fn test_pipeline_config_new_fields_serde_default() {
+        // Old record without new fields should deserialize cleanly with Phase 22 defaults
+        let json = r#"{
+            "llm_provider": "openai",
+            "llm_model": "gpt-4o-mini",
+            "embedding_provider": "openai",
+            "embedding_model": "text-embedding-3-small",
+            "embedding_dimension": 1536,
+            "chunking_strategy": "token",
+            "chunk_size": 1200,
+            "chunk_overlap": 100,
+            "entity_types": [],
+            "relation_types": [],
+            "updated_at": 0
+        }"#;
+        let config: PipelineConfig = serde_json::from_str(json).expect("deserialize old record");
+        assert!(config.snapshot_uri.is_none());
+        assert_eq!(config.snapshot_mode, "write-and-store");
+        assert!(!config.chunking_enabled);
+        assert_eq!(config.target_tokens, 256);
+        assert_eq!(config.overlap_tokens, 38);
+        assert!(config.prepend_header_path);
+        // Existing strategy field unchanged
+        assert_eq!(config.chunking_strategy, "token");
     }
 
     #[test]

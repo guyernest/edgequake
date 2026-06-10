@@ -66,10 +66,15 @@ pub struct PipelineSection {
     pub embedding_dimension: Option<u32>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// Chunking configuration.
 #[derive(Debug, Deserialize)]
 pub struct ChunkingSection {
     /// Chunking strategy (e.g., "token", "heading_boundary").
+    /// D-07: maps to PipelineConfig.chunking_strategy (existing field).
     pub strategy: Option<String>,
 
     /// Maximum chunk size in tokens.
@@ -77,6 +82,24 @@ pub struct ChunkingSection {
 
     /// Token overlap between consecutive chunks.
     pub chunk_overlap: Option<usize>,
+
+    // Phase 23 D-05/D-06: Hierarchical chunking knobs (additive, OFF by default)
+    /// Whether hierarchical header-aware chunking is enabled.
+    /// Default false = OFF (byte-identical legacy behavior, Phase 22 D-08).
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Target chunk size in tokens when hierarchical chunking is active.
+    /// Distinct from chunk_size to avoid overwriting legacy token-window config.
+    pub target_tokens: Option<usize>,
+
+    /// Overlap in tokens when hierarchical chunking is active.
+    pub overlap_tokens: Option<usize>,
+
+    /// Prepend header breadcrumb to embedded text.
+    /// Default: true when enabled (Phase 22 decision).
+    #[serde(default = "default_true")]
+    pub prepend_header_path: bool,
 }
 
 /// Schema definition section -- equivalent to an approved schema in DynamoDB.
@@ -159,9 +182,13 @@ embedding_model = "text-embedding-3-small"
 embedding_dimension = 1536
 
 [chunking]
-strategy = "token"
+strategy = "heading_boundary"
 chunk_size = 1200
 chunk_overlap = 100
+enabled = true
+target_tokens = 256
+overlap_tokens = 38
+prepend_header_path = true
 
 [schema]
 entity_types = [
@@ -175,6 +202,13 @@ relation_types = [
         let config: PipelineConfigFile = toml::from_str(toml_str).unwrap();
         assert_eq!(config.pipeline.llm_model.as_deref(), Some("gpt-4o-mini"));
         assert_eq!(config.pipeline.embedding_dimension, Some(1536));
+
+        let chunking = config.chunking.as_ref().unwrap();
+        assert_eq!(chunking.strategy.as_deref(), Some("heading_boundary"));
+        assert!(chunking.enabled);
+        assert_eq!(chunking.target_tokens, Some(256));
+        assert_eq!(chunking.overlap_tokens, Some(38));
+        assert!(chunking.prepend_header_path);
 
         let schema = config.schema.unwrap();
         assert_eq!(schema.entity_types.len(), 2);
@@ -197,5 +231,27 @@ llm_model = "gpt-4o"
         assert!(config.pipeline.embedding_model.is_none());
         assert!(config.chunking.is_none());
         assert!(config.schema.is_none());
+    }
+
+    #[test]
+    fn test_parse_legacy_chunking_defaults() {
+        // A [chunking] block with only legacy fields parses with new fields at defaults
+        let toml_str = r#"
+[pipeline]
+llm_model = "gpt-4o"
+
+[chunking]
+strategy = "token"
+chunk_size = 1200
+chunk_overlap = 100
+"#;
+        let config: PipelineConfigFile = toml::from_str(toml_str).unwrap();
+        let chunking = config.chunking.as_ref().unwrap();
+        assert_eq!(chunking.strategy.as_deref(), Some("token"));
+        // New fields default: enabled = false, prepend_header_path = true
+        assert!(!chunking.enabled);
+        assert!(chunking.prepend_header_path);
+        assert!(chunking.target_tokens.is_none());
+        assert!(chunking.overlap_tokens.is_none());
     }
 }
