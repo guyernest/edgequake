@@ -327,12 +327,21 @@ export function createDefaultStages(
     'gleaning',
     'merging',
     'summarizing',
+    // WR-08: the unified stage flow emits 'embedding' and 'storing' as
+    // current stages — both must resolve to a list position or every stage
+    // renders as pending mid-run.
+    'embedding',
     'indexing',
     // D-12: append snapshot_export stage when snapshot_uri is configured
     ...(includeSnapshot ? ['snapshot_export' as IngestionStage] : []),
   ];
 
-  const currentIndex = currentStage ? allStages.indexOf(currentStage) : -1;
+  // Normalize the legacy alias pair: the displayed stage is 'indexing' but
+  // the backend emits 'storing' (WR-08).
+  const normalized: IngestionStage | undefined =
+    currentStage === 'storing' ? 'indexing' : currentStage;
+
+  const currentIndex = normalized ? allStages.indexOf(normalized) : -1;
 
   return allStages.map((id, index) => ({
     id,

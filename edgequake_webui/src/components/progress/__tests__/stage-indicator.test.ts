@@ -69,6 +69,37 @@ describe("STAGE_LABELS — snapshot_export", () => {
 });
 
 // ============================================================================
+// WR-08: embedding/storing stages resolve to list positions
+// ============================================================================
+
+describe("createDefaultStages — embedding/storing stage resolution (WR-08)", () => {
+  it("includes embedding in the stage list", () => {
+    const stages = createDefaultStages();
+    expect(stages.map((s) => s.id)).toContain("embedding");
+  });
+
+  it("currentStage='embedding' marks prior stages completed, embedding running", () => {
+    const stages = createDefaultStages("embedding", true);
+    const embedding = stages.find((s) => s.id === "embedding");
+    const summarizing = stages.find((s) => s.id === "summarizing");
+    const indexing = stages.find((s) => s.id === "indexing");
+    expect(embedding?.status).toBe("running");
+    expect(summarizing?.status).toBe("completed");
+    expect(indexing?.status).toBe("pending");
+  });
+
+  it("currentStage='storing' normalizes to the displayed 'indexing' stage", () => {
+    const stages = createDefaultStages("storing", true);
+    const indexing = stages.find((s) => s.id === "indexing");
+    const embedding = stages.find((s) => s.id === "embedding");
+    const snapshot = stages.find((s) => s.id === "snapshot_export");
+    expect(indexing?.status).toBe("running");
+    expect(embedding?.status).toBe("completed");
+    expect(snapshot?.status).toBe("pending");
+  });
+});
+
+// ============================================================================
 // skipped status — Stage contract
 // ============================================================================
 
