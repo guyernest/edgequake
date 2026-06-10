@@ -32,6 +32,7 @@
     "description": "Description",
     "saving": "Saving…",
     "saveFailed": "Failed to save. Please try again.",
+    "count": "Count",
     "failed": "Failed",
     "platform": "Graph-RAG Platform",
     "navigation": "Navigation",
