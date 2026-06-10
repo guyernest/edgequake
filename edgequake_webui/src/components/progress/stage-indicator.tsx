@@ -19,12 +19,12 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { IngestionStage } from '@/types/ingestion';
-import { AlertCircle, Check, Circle, Loader2 } from 'lucide-react';
+import { AlertCircle, Check, Circle, Loader2, MinusCircle } from 'lucide-react';
 
 export interface Stage {
   id: IngestionStage;
   label: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
   progress?: number; // 0-100 for running stage
   duration?: number; // ms
   message?: string;
@@ -66,7 +66,7 @@ const STAGE_LABELS: Record<IngestionStage, string> = {
 // Stage icons
 function StageIcon({ status }: { status: Stage['status'] }) {
   const baseClass = 'h-5 w-5';
-  
+
   switch (status) {
     case 'completed':
       return <Check className={cn(baseClass, 'text-green-500')} />;
@@ -74,6 +74,9 @@ function StageIcon({ status }: { status: Stage['status'] }) {
       return <Loader2 className={cn(baseClass, 'text-blue-500 animate-spin')} />;
     case 'failed':
       return <AlertCircle className={cn(baseClass, 'text-red-500')} />;
+    // D-12: skipped status (snapshot-only mode — storing stage is skipped)
+    case 'skipped':
+      return <MinusCircle className={cn(baseClass, 'text-muted-foreground')} />;
     case 'pending':
     default:
       return <Circle className={cn(baseClass, 'text-muted-foreground/50')} />;
@@ -144,6 +147,8 @@ function HorizontalStage({
     completed: 'border-green-500 bg-green-50 dark:bg-green-950/30',
     running: 'border-blue-500 bg-blue-50 dark:bg-blue-950/30',
     failed: 'border-red-500 bg-red-50 dark:bg-red-950/30',
+    // D-12: skipped — muted, same visual as pending (snapshot-only mode storing stage)
+    skipped: 'border-muted-foreground/30 bg-muted/30',
     pending: 'border-muted-foreground/30 bg-muted/30',
   };
 
@@ -151,6 +156,7 @@ function HorizontalStage({
     completed: 'bg-green-500',
     running: 'bg-blue-500',
     failed: 'bg-red-500',
+    skipped: 'bg-muted-foreground/30',
     pending: 'bg-muted-foreground/30',
   };
 
@@ -231,6 +237,8 @@ function VerticalStage({
     completed: 'border-l-green-500',
     running: 'border-l-blue-500',
     failed: 'border-l-red-500',
+    // D-12: skipped — muted, same visual as pending
+    skipped: 'border-l-muted-foreground/30',
     pending: 'border-l-muted-foreground/30',
   };
 
@@ -238,6 +246,7 @@ function VerticalStage({
     completed: 'bg-green-50 dark:bg-green-950/20',
     running: 'bg-blue-50 dark:bg-blue-950/20',
     failed: 'bg-red-50 dark:bg-red-950/20',
+    skipped: 'bg-muted/20',
     pending: 'bg-muted/20',
   };
 
@@ -303,8 +312,14 @@ function VerticalStage({
 
 /**
  * Creates default stages array from ingestion stages.
+ *
+ * @param currentStage - The current active stage (determines completed/running/pending)
+ * @param includeSnapshot - When true, appends 'snapshot_export' after 'indexing' (D-12 Phase 23)
  */
-export function createDefaultStages(currentStage?: IngestionStage): Stage[] {
+export function createDefaultStages(
+  currentStage?: IngestionStage,
+  includeSnapshot?: boolean,
+): Stage[] {
   const allStages: IngestionStage[] = [
     'preprocessing',
     'chunking',
@@ -313,6 +328,8 @@ export function createDefaultStages(currentStage?: IngestionStage): Stage[] {
     'merging',
     'summarizing',
     'indexing',
+    // D-12: append snapshot_export stage when snapshot_uri is configured
+    ...(includeSnapshot ? ['snapshot_export' as IngestionStage] : []),
   ];
 
   const currentIndex = currentStage ? allStages.indexOf(currentStage) : -1;

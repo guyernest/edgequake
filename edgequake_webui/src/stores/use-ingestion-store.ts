@@ -42,8 +42,9 @@ import type {
     StageStartedEvent,
     WebSocketProgressMessage,
 } from "@/types/ingestion";
+import { STORE_VERSIONS, ZUSTAND_STORAGE_KEYS } from "@/lib/storage-keys";
 import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { devtools, persist } from "zustand/middleware";
 
 // ============================================================================
 // Store Types
@@ -305,6 +306,8 @@ function handleIngestionCompleted(
     entities: event.summary.entities,
     relationships: event.summary.relationships,
     duration_ms: event.total_duration_ms,
+    // D-11: capture snapshot block from the completed event (Phase 23 Plan 05)
+    snapshot: event.snapshot,
   };
 
   return { tracks, completedJob };
@@ -540,11 +543,31 @@ function handleChunkFailure(
 }
 
 // ============================================================================
+// Persistence Helpers (exported for testability — D-11 Phase 23)
+// ============================================================================
+
+/**
+ * Partialize function for the persist middleware.
+ * Only `completedJobs` is persisted — the snapshot block rides this slice (D-11).
+ * `tracks` and `failedJobs` are Maps and must NOT be persisted (Maps do not
+ * round-trip through the default JSON storage).
+ *
+ * Exported so tests can assert the partialize contract directly, since Zustand 5
+ * does not expose `.persist` on the React hook store.
+ */
+export function partializeIngestionState(
+  state: IngestionStore,
+): Pick<IngestionStore, "completedJobs"> {
+  return { completedJobs: state.completedJobs };
+}
+
+// ============================================================================
 // Store Definition
 // ============================================================================
 
 export const useIngestionStore = create<IngestionStore>()(
   devtools(
+    persist(
     (set, get) => ({
       // Initial state
       tracks: new Map(),
@@ -745,6 +768,15 @@ export const useIngestionStore = create<IngestionStore>()(
         return Array.from(get().tracks.values());
       },
     }),
+    {
+      // D-11 persistence: persist completedJobs (with snapshot) so run-report
+      // data survives page reloads. Maps (tracks, failedJobs) are excluded
+      // because they do not round-trip through JSON storage.
+      name: ZUSTAND_STORAGE_KEYS.INGESTION_STORE,
+      version: STORE_VERSIONS[ZUSTAND_STORAGE_KEYS.INGESTION_STORE],
+      partialize: partializeIngestionState,
+    },
+  ),
     { name: "ingestion-store" },
   ),
 );

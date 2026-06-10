@@ -39,6 +39,9 @@ export const ZUSTAND_STORAGE_KEYS = {
 
   /** UI preferences (panel states, view modes, widths) */
   UI_PREFERENCES: "edgequake-ui-preferences",
+
+  /** Ingestion completed-job history (snapshot-bearing run records — D-11 Phase 23) */
+  INGESTION_STORE: "edgequake-ingestion",
 } as const;
 
 /**
@@ -137,6 +140,7 @@ export const STORE_VERSIONS = {
   [ZUSTAND_STORAGE_KEYS.QUERY_UI_STORE]: 1,
   [ZUSTAND_STORAGE_KEYS.CONVERSATION_STORE]: 1,
   [ZUSTAND_STORAGE_KEYS.COST_STORE]: 1,
+  [ZUSTAND_STORAGE_KEYS.INGESTION_STORE]: 1,
 } as const;
 
 /**
