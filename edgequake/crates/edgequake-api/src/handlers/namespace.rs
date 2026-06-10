@@ -250,18 +250,24 @@ fn validate_pipeline_config_update(
         }
     }
 
-    // -- overlap_tokens: must be < effective_target AND <= 50% of effective_target (T-23-11 / D-08)
-    if let Some(o) = body.overlap_tokens {
-        if o >= effective_target {
+    // -- overlap_tokens vs target_tokens (T-23-11 / D-08):
+    // Validate the EFFECTIVE merged pair whenever EITHER field changes, so
+    // lowering target_tokens alone cannot persist a stored overlap that
+    // violates the overlap <= target/2 invariant (WR-01).
+    if body.target_tokens.is_some() || body.overlap_tokens.is_some() {
+        let effective_overlap = body.overlap_tokens.unwrap_or(config.overlap_tokens);
+        if effective_overlap >= effective_target {
             return Err(ApiError::BadRequest(format!(
-                "overlap_tokens {} must be less than target_tokens {}",
-                o, effective_target
+                "effective overlap_tokens {} must be less than effective target_tokens {} \
+                 (after merging this update with the stored config)",
+                effective_overlap, effective_target
             )));
         }
-        if o * 2 > effective_target {
+        if effective_overlap * 2 > effective_target {
             return Err(ApiError::BadRequest(format!(
-                "overlap_tokens {} exceeds 50% of target_tokens {} (overlap must be <= target/2)",
-                o, effective_target
+                "effective overlap_tokens {} exceeds 50% of effective target_tokens {} \
+                 (overlap must be <= target/2 after merging this update with the stored config)",
+                effective_overlap, effective_target
             )));
         }
     }
@@ -477,6 +483,33 @@ mod tests {
         let config = make_config();
         let err = validate_pipeline_config_update(&body, &config).unwrap_err();
         assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_target_only_update_validates_effective_overlap() {
+        // WR-01: lowering target_tokens alone must be checked against the
+        // STORED overlap. Default config: target=256, overlap=38.
+        // target=64 with stored overlap 38 → 38*2=76 > 64 → reject.
+        let body = UpdatePipelineConfigRequest {
+            target_tokens: Some(64),
+            overlap_tokens: None,
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        let err = validate_pipeline_config_update(&body, &config).unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_target_only_update_passes_when_effective_pair_valid() {
+        // WR-01: target=128 with stored overlap 38 → 38*2=76 <= 128 → OK.
+        let body = UpdatePipelineConfigRequest {
+            target_tokens: Some(128),
+            overlap_tokens: None,
+            ..UpdatePipelineConfigRequest::default()
+        };
+        let config = make_config();
+        assert!(validate_pipeline_config_update(&body, &config).is_ok());
     }
 
     #[test]
