@@ -732,6 +732,8 @@ mod tests {
             embedding_full_id: "openai/text-embedding-3-small".to_string(),
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
+            // Phase 23: namespace_slug = workspace slug
+            namespace_slug: "test".to_string(),
         };
 
         let json = serde_json::to_string(&response).unwrap();
