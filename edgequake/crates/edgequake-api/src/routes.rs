@@ -141,6 +141,21 @@ fn api_v1_routes() -> Router<AppState> {
             "/namespaces/{namespace}/config",
             get(handlers::get_namespace_config).put(handlers::update_namespace_config),
         )
+        // Schema lifecycle routes (Phase 23 Plan 02)
+        .route(
+            "/namespaces/{namespace}/schema",
+            get(handlers::get_namespace_schema)
+                .post(handlers::suggest_namespace_schema)
+                .patch(handlers::update_namespace_schema),
+        )
+        .route(
+            "/namespaces/{namespace}/schema/approve",
+            post(handlers::approve_namespace_schema),
+        )
+        .route(
+            "/namespaces/{namespace}/schema/reject",
+            post(handlers::reject_namespace_schema),
+        )
         // Namespace-scoped data routes (Plan 01-03)
         // All data operations scoped to a specific namespace
         .nest("/ns/{namespace}", namespace_scoped_routes())

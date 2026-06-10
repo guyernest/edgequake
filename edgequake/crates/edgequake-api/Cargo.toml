@@ -15,6 +15,7 @@ vision = ["edgequake-pdf/vision"]
 
 [dependencies]
 edgequake-core = { path = "../edgequake-core", features = ["pipeline"] }
+edgequake-schema = { path = "../edgequake-schema" }
 edgequake-storage = { path = "../edgequake-storage" }
 edgequake-llm = { path = "../edgequake-llm" }
 edgequake-pipeline = { path = "../edgequake-pipeline" }
