@@ -1903,7 +1903,14 @@ pub async fn rebuild_knowledge_graph(
     }
 
     // 9. Queue all documents for reprocessing (SPEC-032 REQ-24)
-    let (documents_queued, chunks_to_process) = if stats.document_count > 0 {
+    //
+    // Do NOT gate this on stats.document_count: the in-memory
+    // WorkspaceService::get_workspace_stats is a stub that returns zeros,
+    // which made this branch skip queueing entirely AFTER the graph was
+    // already cleared above (graph wiped, nothing re-extracted — found in
+    // Phase-24 live UAT). The enumeration below is self-limiting: it scans
+    // KV document metadata and only queues docs belonging to this workspace.
+    let (documents_queued, chunks_to_process) = {
         use edgequake_tasks::{Task, TaskType, TextInsertData};
 
         // Get all document metadata for this workspace
@@ -2019,14 +2026,13 @@ pub async fn rebuild_knowledge_graph(
         );
 
         (documents_queued, total_chunks)
-    } else {
-        (0, 0)
     };
 
     // 10. Build response
-    let estimated_time = if stats.document_count > 0 {
-        // Estimate: ~2 seconds per document (extraction + embedding)
-        Some(stats.document_count as u64 * 2)
+    let estimated_time = if documents_queued > 0 {
+        // Estimate: ~2 seconds per document (extraction + embedding).
+        // Based on the ACTUAL queued count, not the stats stub (see step 9).
+        Some(documents_queued as u64 * 2)
     } else {
         None
     };
