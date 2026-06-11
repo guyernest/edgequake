@@ -218,9 +218,35 @@ export function PreviewStep({ namespace, onNext, onBack }: PreviewStepProps) {
   });
 
   // ── Auto-trigger on mount if no result yet ─────────────────────────────────
+  // IMPORTANT: triggering a new preview DELETES any existing PREVIEW_RESULT
+  // server-side (put_preview_request clears stale results). The out-of-band
+  // worker (edgequake-batch preview) may have just produced a result, so check
+  // the server FIRST and only trigger when there is neither a completed result
+  // nor a pending request to poll.
   useEffect(() => {
     if (!previewResult && !isPreviewing && !triggerMutation.isPending) {
-      triggerMutation.mutate();
+      (async () => {
+        try {
+          const existing = await getPreviewResult(namespace);
+          if (existing.status === "completed") {
+            setPreviewResult(existing);
+            return;
+          }
+          if (
+            existing.status === "requested" ||
+            existing.status === "processing"
+          ) {
+            // A request is already pending — poll for the worker's result
+            // instead of re-triggering (which would reset its progress).
+            setIsPreviewing(true);
+            startPolling();
+            return;
+          }
+        } catch {
+          // Server unreachable or malformed — fall through to a fresh trigger.
+        }
+        triggerMutation.mutate();
+      })();
     }
     return () => stopPolling();
     // eslint-disable-next-line react-hooks/exhaustive-deps
