@@ -14,6 +14,7 @@
 
 import { IngestionWizard } from "@/components/workspace/ingestion-wizard/ingestion-wizard";
 import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { NamespaceSlugError, resolveNamespaceSlug } from "@/lib/namespace-resolve";
 import { useTenantStore } from "@/stores/use-tenant-store";
 import { getWorkspace } from "@/lib/api/edgequake";
@@ -102,11 +103,16 @@ export default function WizardPage() {
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <IngestionWizard
-        namespace={resolvedNamespace}
-        workspaceId={selectedWorkspaceId}
-      />
-    </div>
+    // The dashboard layout's <main> is overflow-hidden — each page owns its
+    // scrolling. Same ScrollArea pattern as workspace/page.tsx; without it the
+    // wizard's Review step is clipped with no way to reach the bottom buttons.
+    <ScrollArea className="h-[calc(100vh-theme(spacing.20))]">
+      <div className="container mx-auto p-6">
+        <IngestionWizard
+          namespace={resolvedNamespace}
+          workspaceId={selectedWorkspaceId}
+        />
+      </div>
+    </ScrollArea>
   );
 }
