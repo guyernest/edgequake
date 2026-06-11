@@ -107,9 +107,16 @@ export function ProposeStep({ namespace, onNext }: ProposeStepProps) {
   } = useQuery({
     queryKey: ["namespaceSchema", namespace],
     queryFn: () => getNamespaceSchema(namespace),
-    enabled: proposeMutation.isSuccess || proposeMutation.isPending,
+    // WR-09 resume: always run a one-shot check on mount so wizard re-entry
+    // advances on an existing proposed/approved schema instead of forcing a
+    // re-propose (which would clobber a reviewed/approved schema with a fresh
+    // LLM proposal). Continuous polling remains gated on an in-flight propose.
+    enabled: true,
     // Poll every 3 seconds while status is not terminal, capped at MAX_POLLS.
     refetchInterval: (query) => {
+      // Only poll while a propose is in flight — the mount check is one-shot
+      // (a namespace with no proposal yet must not background-poll forever).
+      if (!proposeMutation.isSuccess && !proposeMutation.isPending) return false;
       const status = query.state.data?.status;
       if (!status || isTerminal(status)) return false;
       pollCountRef.current += 1;

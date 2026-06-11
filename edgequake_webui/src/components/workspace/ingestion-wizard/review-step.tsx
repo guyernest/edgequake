@@ -401,6 +401,19 @@ export function ReviewStep({ namespace, onNext, onBack }: ReviewStepProps) {
     mutationFn: async () => {
       // T-23-04: filter RELATED_TO before sending to server (defense-in-depth)
       const filteredRelationTypes = filterRelatedTo(relationTypes);
+      // Pass-through without edits must NOT re-PATCH: a PATCH resets an
+      // APPROVED schema back to "proposed", which breaks the out-of-band
+      // preview/ingestion worker (it requires an approved schema). Only
+      // write when the editable rows actually differ from the loaded schema.
+      if (
+        baseSchema &&
+        JSON.stringify(entityTypes) ===
+          JSON.stringify(baseSchema.entity_types ?? []) &&
+        JSON.stringify(filteredRelationTypes) ===
+          JSON.stringify(filterRelatedTo(baseSchema.relation_types ?? []))
+      ) {
+        return null; // unchanged — skip the PATCH, keep server status intact
+      }
       const updated = await updateNamespaceSchema(namespace, {
         entity_types: entityTypes,
         relation_types: filteredRelationTypes,
@@ -412,11 +425,21 @@ export function ReviewStep({ namespace, onNext, onBack }: ReviewStepProps) {
       // `updated` is the UNWRAPPED proposal (the API client strips the
       // { namespace, schema } envelope) — build the store schema from it
       // alone; never spread the raw response (CR-01).
-      setSchema({
-        ...updated,
-        entity_types: updated.entity_types ?? [],
-        relation_types: filterRelatedTo(updated.relation_types ?? []),
-      });
+      // `updated === null` ⇔ unchanged pass-through: carry the loaded schema
+      // (preserving its server status, e.g. "approved") into the store.
+      if (updated) {
+        setSchema({
+          ...updated,
+          entity_types: updated.entity_types ?? [],
+          relation_types: filterRelatedTo(updated.relation_types ?? []),
+        });
+      } else if (baseSchema) {
+        setSchema({
+          ...baseSchema,
+          entity_types: baseSchema.entity_types ?? [],
+          relation_types: filterRelatedTo(baseSchema.relation_types ?? []),
+        });
+      }
       onNext();
     },
     onError: (error) => {
