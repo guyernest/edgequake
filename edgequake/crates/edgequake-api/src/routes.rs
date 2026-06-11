@@ -236,6 +236,11 @@ fn api_v1_routes() -> Router<AppState> {
             "/workspaces/{workspace_id}/reprocess-documents",
             post(handlers::reprocess_all_documents),
         )
+        // Phase 24 D-05: Manual snapshot export to the namespace snapshot_uri
+        .route(
+            "/workspaces/{workspace_id}/export-snapshot",
+            post(handlers::export_workspace_snapshot),
+        )
         // Documents
         .route("/documents", post(handlers::upload_document))
         .route("/documents", get(handlers::list_documents))

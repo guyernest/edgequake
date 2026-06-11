@@ -2071,6 +2071,126 @@ pub async fn rebuild_knowledge_graph(
     Ok(Json(response))
 }
 
+// ============================================================================
+// Snapshot Export Endpoint (Phase 24 D-05)
+// ============================================================================
+
+/// Export a workspace snapshot to the namespace's configured snapshot_uri.
+///
+/// Runs the same export as the automatic rebuild-track trigger, on demand.
+/// The workspace's slug is the namespace slug; the namespace PipelineConfig
+/// must have `snapshot_uri` set (an absolute local directory path).
+///
+/// Returns the snapshot manifest JSON on success.
+#[utoipa::path(
+    post,
+    path = "/api/v1/workspaces/{workspace_id}/export-snapshot",
+    params(
+        ("workspace_id" = Uuid, Path, description = "Workspace ID")
+    ),
+    responses(
+        (status = 200, description = "Snapshot exported; returns the manifest JSON"),
+        (status = 400, description = "snapshot_uri not configured or invalid"),
+        (status = 404, description = "Workspace or pipeline config not found"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["workspaces"]
+)]
+pub async fn export_workspace_snapshot(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<Uuid>,
+) -> Result<Json<edgequake_core::snapshot::SnapshotManifest>, ApiError> {
+    use crate::snapshot_export::{self, SnapshotExportSources};
+    use edgequake_storage::traits::WorkspaceVectorConfig;
+
+    // 1. Resolve the workspace
+    let workspace = state
+        .workspace_service
+        .get_workspace(workspace_id)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?
+        .ok_or_else(|| ApiError::NotFound(format!("Workspace {} not found", workspace_id)))?;
+
+    // 2. Resolve the namespace PipelineConfig (workspace.slug == namespace slug)
+    let registry = state
+        .namespace_registry
+        .as_ref()
+        .ok_or_else(|| ApiError::NotImplemented {
+            feature: "Namespace registry not configured (requires AWS DynamoDB)".to_string(),
+        })?;
+    let slug = NamespaceSlug::parse(&workspace.slug).map_err(|e| {
+        ApiError::BadRequest(format!(
+            "Workspace slug '{}' is not a valid namespace slug: {}",
+            workspace.slug, e
+        ))
+    })?;
+    let config = registry
+        .get_config(&slug)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load pipeline config: {}", e)))?
+        .ok_or_else(|| {
+            ApiError::NotFound(format!("Pipeline config not found for namespace: {}", slug))
+        })?;
+    let snapshot_uri = config.snapshot_uri.clone().ok_or_else(|| {
+        ApiError::BadRequest(format!(
+            "Cannot export snapshot for namespace '{}': snapshot_uri is not configured. \
+             Set snapshot_uri in the pipeline config first.",
+            slug
+        ))
+    })?;
+
+    // 3. Resolve workspace-scoped vector storage (per-workspace dimensions)
+    let vector_storage = match state.vector_registry.get(&workspace_id).await {
+        Some(storage) => storage,
+        None => state
+            .vector_registry
+            .get_or_create(WorkspaceVectorConfig::new(
+                workspace_id,
+                workspace.embedding_dimension,
+            ))
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!(
+                    "Failed to resolve workspace vector storage: {}",
+                    e
+                ))
+            })?,
+    };
+
+    // 4. Resolve the workspace embedding provider (same path as the document
+    //    task processor) for export-time entity-embedding backfill.
+    let embedding_provider = edgequake_llm::ProviderFactory::create_safe_embedding_provider(
+        &workspace.embedding_provider,
+        &workspace.embedding_model,
+        workspace.embedding_dimension,
+    )
+    .map_err(|e| {
+        ApiError::Internal(format!(
+            "Failed to create embedding provider '{}' with model '{}': {}",
+            workspace.embedding_provider, workspace.embedding_model, e
+        ))
+    })?;
+
+    // 5. Run the export
+    let sources = SnapshotExportSources {
+        kv_storage: Arc::clone(&state.kv_storage),
+        graph_storage: Arc::clone(&state.graph_storage),
+        vector_storage,
+        embedding_provider,
+    };
+    let manifest = snapshot_export::export_workspace_snapshot(
+        &sources,
+        &workspace,
+        slug.as_str(),
+        &snapshot_uri,
+        &config.snapshot_mode,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Snapshot export failed: {}", e)))?;
+
+    Ok(Json(manifest))
+}
+
 // SPEC-032: Reprocess All Documents Endpoint
 // Focus Area 5 - Trigger document reprocessing after rebuild
 
