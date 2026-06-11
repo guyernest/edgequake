@@ -251,6 +251,102 @@ fn get_registry(state: &AppState) -> Result<&dyn edgequake_core::NamespaceRegist
         })
 }
 
+/// Find the workspace whose slug equals the namespace slug.
+///
+/// Phase 23 established workspace.slug == namespace slug (see
+/// `workspace_to_response` in workspaces.rs). Workspaces live under tenants,
+/// so this scans tenants and probes each by slug.
+async fn find_workspace_by_slug(
+    state: &AppState,
+    slug: &str,
+) -> Option<edgequake_core::types::Workspace> {
+    let tenants = match state.workspace_service.list_tenants(1000, 0).await {
+        Ok(tenants) => tenants,
+        Err(e) => {
+            warn!(slug = slug, error = %e, "Failed to list tenants for workspace lookup");
+            return None;
+        }
+    };
+    for tenant in tenants {
+        if let Ok(Some(workspace)) = state
+            .workspace_service
+            .get_workspace_by_slug(tenant.tenant_id, slug)
+            .await
+        {
+            return Some(workspace);
+        }
+    }
+    None
+}
+
+/// Stage the namespace's workspace documents into a fresh tempdir for the
+/// schema sampler (D-05).
+///
+/// The sampler (`edgequake_schema::sampler`) walks a directory of raw
+/// .md/.txt files. The namespace's `snapshot_uri` points at the snapshot
+/// OUTPUT directory — it usually does not exist before the first export and
+/// never contains raw sources — so suggestion must sample the workspace's
+/// uploaded documents instead.
+///
+/// Returns `None` when no workspace matches the slug or the workspace has no
+/// documents (the caller falls back to the legacy snapshot_uri behavior).
+/// The returned `TempDir` guard must be kept alive until sampling finishes.
+pub(crate) async fn stage_workspace_sampling_dir(
+    state: &AppState,
+    slug: &NamespaceSlug,
+) -> Option<(String, tempfile::TempDir, usize)> {
+    let workspace = find_workspace_by_slug(state, slug.as_str()).await?;
+
+    let documents = match crate::snapshot_export::collect_workspace_documents(
+        &state.kv_storage,
+        &workspace.workspace_id.to_string(),
+    )
+    .await
+    {
+        Ok(docs) => docs,
+        Err(e) => {
+            warn!(
+                namespace = slug.as_str(),
+                error = %e,
+                "Failed to collect workspace documents for schema sampling; \
+                 falling back to snapshot_uri"
+            );
+            return None;
+        }
+    };
+    if documents.is_empty() {
+        return None;
+    }
+
+    let dir = match tempfile::tempdir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            warn!(
+                namespace = slug.as_str(),
+                error = %e,
+                "Failed to create sampling tempdir; falling back to snapshot_uri"
+            );
+            return None;
+        }
+    };
+    for (index, doc) in documents.iter().enumerate() {
+        let path = dir.path().join(format!("doc-{:04}.md", index));
+        if let Err(e) = std::fs::write(&path, &doc.content) {
+            warn!(
+                namespace = slug.as_str(),
+                error = %e,
+                "Failed to stage workspace document for sampling; \
+                 falling back to snapshot_uri"
+            );
+            return None;
+        }
+    }
+
+    let location = dir.path().display().to_string();
+    let count = documents.len();
+    Some((location, dir, count))
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -367,35 +463,54 @@ pub async fn suggest_namespace_schema(
         }
     }
 
-    // --- Resolve data location ---
-    // The namespace's pipeline config contains snapshot_uri. If absent, we
-    // cannot determine a data location and must return an error (per plan:
-    // "do NOT silently no-op").
-    let config = registry
-        .get_config(&slug)
-        .await
-        .map_err(map_registry_error)?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("Pipeline config not found for namespace: {}", slug))
-        })?;
+    // --- Resolve data location (D-05) ---
+    // Prefer sampling the workspace's UPLOADED documents: snapshot_uri points
+    // at the snapshot OUTPUT directory, which typically does not exist before
+    // the first export and never contains the raw .md/.txt sources the
+    // sampler expects. Falls back to the legacy snapshot_uri-directory
+    // behavior when no workspace/documents are found (back-compat).
+    let (location, sample_dir) = match stage_workspace_sampling_dir(&state, &slug).await {
+        Some((location, dir, document_count)) => {
+            info!(
+                namespace = slug.as_str(),
+                documents = document_count,
+                "Sampling schema suggestion from workspace documents"
+            );
+            (location, Some(dir))
+        }
+        None => {
+            // The namespace's pipeline config contains snapshot_uri. If
+            // absent, we cannot determine a data location and must return an
+            // error (per plan: "do NOT silently no-op").
+            let config = registry
+                .get_config(&slug)
+                .await
+                .map_err(map_registry_error)?
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!(
+                        "Pipeline config not found for namespace: {}",
+                        slug
+                    ))
+                })?;
 
-    let location = config
-        .snapshot_uri
-        .clone()
-        .ok_or_else(|| {
-            ApiError::BadRequest(format!(
-                "Cannot suggest schema for namespace '{}': snapshot_uri is not configured. \
-                 Set snapshot_uri in the pipeline config first.",
-                slug
-            ))
-        })?;
+            let location = config.snapshot_uri.clone().ok_or_else(|| {
+                ApiError::BadRequest(format!(
+                    "Cannot suggest schema for namespace '{}': no workspace documents \
+                     found and snapshot_uri is not configured. Upload documents or set \
+                     snapshot_uri in the pipeline config first.",
+                    slug
+                ))
+            })?;
 
-    // Validate location has no path traversal
-    if location.contains("..") {
-        return Err(ApiError::BadRequest(
-            "snapshot_uri must not contain '..' path-traversal sequences".to_string(),
-        ));
-    }
+            // Validate location has no path traversal
+            if location.contains("..") {
+                return Err(ApiError::BadRequest(
+                    "snapshot_uri must not contain '..' path-traversal sequences".to_string(),
+                ));
+            }
+            (location, None)
+        }
+    };
 
     // --- Write pending marker immediately ---
     let pending = SchemaProposal {
@@ -442,6 +557,9 @@ pub async fn suggest_namespace_schema(
     let location_clone = location.clone();
 
     // --- Spawn the task (do NOT await on request path) ---
+    // `sample_dir` (the staged workspace-documents tempdir, when used) is
+    // moved into the task and dropped after sampling finishes, which removes
+    // the directory from disk.
     tokio::spawn(async move {
         info!(
             namespace = slug_clone.as_str(),
@@ -449,9 +567,14 @@ pub async fn suggest_namespace_schema(
             "Schema suggestion task started"
         );
 
-        match edgequake_schema::suggest_schema(&location_clone, &suggest_input, &openai_config)
-            .await
-        {
+        let suggest_result =
+            edgequake_schema::suggest_schema(&location_clone, &suggest_input, &openai_config)
+                .await;
+
+        // Clean up the staged sampling tempdir now that sampling is done.
+        drop(sample_dir);
+
+        match suggest_result {
             Ok(proposal) => {
                 match registry_arc.store_schema(&slug_clone, &proposal).await {
                     Ok(()) => {
@@ -895,6 +1018,81 @@ mod tests {
             }
             _ => panic!("Expected Failed, got {:?}", body),
         }
+    }
+
+    #[tokio::test]
+    async fn test_stage_workspace_sampling_prefers_workspace_documents() {
+        // D-05: when the namespace's workspace has uploaded documents, the
+        // suggest handler samples THOSE (staged into a tempdir of .md files),
+        // not the snapshot_uri output directory.
+        use edgequake_core::types::{CreateWorkspaceRequest, Tenant};
+
+        let state = crate::state::AppState::test_state();
+        let tenant = state
+            .workspace_service
+            .create_tenant(Tenant::new("T", "t-slug"))
+            .await
+            .unwrap();
+        let workspace = state
+            .workspace_service
+            .create_workspace(
+                tenant.tenant_id,
+                CreateWorkspaceRequest {
+                    name: "Sample WS".to_string(),
+                    slug: Some("sample-ws".to_string()),
+                    description: None,
+                    max_documents: None,
+                    llm_model: None,
+                    llm_provider: None,
+                    embedding_model: None,
+                    embedding_provider: None,
+                    embedding_dimension: None,
+                },
+            )
+            .await
+            .unwrap();
+        state
+            .kv_storage
+            .upsert(&[
+                (
+                    "d1-metadata".to_string(),
+                    serde_json::json!({
+                        "id": "d1",
+                        "title": "notes.md",
+                        "workspace_id": workspace.workspace_id.to_string(),
+                    }),
+                ),
+                (
+                    "d1-content".to_string(),
+                    serde_json::json!({ "content": "Workspace document body" }),
+                ),
+            ])
+            .await
+            .unwrap();
+
+        let slug = edgequake_core::NamespaceSlug::parse("sample-ws").unwrap();
+        let staged = stage_workspace_sampling_dir(&state, &slug).await;
+        let (location, dir, count) = staged.expect("workspace documents must be preferred");
+        assert_eq!(count, 1);
+
+        // The staged dir contains the document as a .md file the sampler can read
+        let staged_file = std::path::Path::new(&location).join("doc-0000.md");
+        let content = std::fs::read_to_string(&staged_file).expect("staged file readable");
+        assert_eq!(content, "Workspace document body");
+
+        // Dropping the guard cleans up the tempdir
+        let dir_path = dir.path().to_path_buf();
+        drop(dir);
+        assert!(!dir_path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_stage_workspace_sampling_falls_back_without_documents() {
+        // D-05 back-compat: no workspace matching the slug → None, so the
+        // handler falls back to the snapshot_uri-directory behavior.
+        let state = crate::state::AppState::test_state();
+        let slug = edgequake_core::NamespaceSlug::parse("no-such-ws").unwrap();
+        assert!(stage_workspace_sampling_dir(&state, &slug).await.is_none());
     }
 
     #[test]
