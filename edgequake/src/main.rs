@@ -539,6 +539,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("📄 PDF storage attached to task processor");
     }
 
+    // Phase 24 D-05: Attach namespace registry so rebuild_kg_* track
+    // completion triggers an automatic snapshot export (fail-open).
+    if let Some(ref namespace_registry) = state.namespace_registry {
+        processor = processor.with_namespace_registry(Arc::clone(namespace_registry));
+        info!("Namespace registry attached to task processor (snapshot auto-export enabled)");
+    }
+
     let processor = Arc::new(processor);
 
     // Configure worker pool

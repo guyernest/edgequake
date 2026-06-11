@@ -149,6 +149,10 @@ pub struct DocumentTaskProcessor {
     /// OODA-223: Strict workspace mode - when true, fail if workspace not found.
     /// When false (memory/test mode), allow fallback to default storage.
     strict_workspace_mode: bool,
+    /// Namespace registry for snapshot-export config lookup (Phase 24 D-05).
+    /// When set, completion of a `rebuild_kg_*` track triggers a snapshot
+    /// export to the namespace's configured snapshot_uri (fail-open).
+    namespace_registry: Option<edgequake_core::SharedNamespaceRegistry>,
 }
 
 impl DocumentTaskProcessor {
@@ -177,6 +181,7 @@ impl DocumentTaskProcessor {
             workspace_service: None,
             models_config: None,
             strict_workspace_mode: false, // OODA-223: Legacy mode allows fallback
+            namespace_registry: None,
         }
     }
 
@@ -214,6 +219,7 @@ impl DocumentTaskProcessor {
             workspace_service: Some(workspace_service),
             models_config: Some(models_config),
             strict_workspace_mode: false, // OODA-223: Legacy mode allows fallback
+            namespace_registry: None,
         }
     }
 
@@ -248,6 +254,7 @@ impl DocumentTaskProcessor {
             workspace_service: Some(workspace_service),
             models_config: Some(models_config),
             strict_workspace_mode: true, // OODA-223: Production mode - fail on workspace errors
+            namespace_registry: None,
         }
     }
 
@@ -270,6 +277,19 @@ impl DocumentTaskProcessor {
     /// WebSocket clients in real-time.
     pub fn with_progress_broadcaster(mut self, broadcaster: ProgressBroadcaster) -> Self {
         self.progress_broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Phase 24 D-05: Attach the namespace registry to enable automatic
+    /// snapshot export when a `rebuild_kg_*` track completes.
+    ///
+    /// Without a registry the auto-export trigger is a no-op (the namespace
+    /// PipelineConfig holding snapshot_uri cannot be resolved).
+    pub fn with_namespace_registry(
+        mut self,
+        registry: edgequake_core::SharedNamespaceRegistry,
+    ) -> Self {
+        self.namespace_registry = Some(registry);
         self
     }
 
@@ -775,6 +795,146 @@ impl DocumentTaskProcessor {
                 embedding_dimension: ws.embedding_dimension,
             },
             _ => default_lineage,
+        }
+    }
+
+    /// Phase 24 D-05: Export a workspace snapshot when the LAST document of a
+    /// `rebuild_kg_*` track reaches a terminal status.
+    ///
+    /// FAIL-OPEN: every error path is error-logged and swallowed — a snapshot
+    /// export failure must never fail the document task that triggered it.
+    ///
+    /// NOTE: with concurrent workers, two documents finishing near-
+    /// simultaneously can both observe the track as terminal and export
+    /// twice; the export replaces the target directory, so this is benign.
+    async fn maybe_export_rebuild_snapshot(&self, task: &Task) {
+        use crate::snapshot_export::{self, SnapshotExportSources};
+
+        if !task.track_id.starts_with("rebuild_kg_") {
+            return;
+        }
+        let Some(registry) = &self.namespace_registry else {
+            return;
+        };
+        let Some(workspace_service) = &self.workspace_service else {
+            return;
+        };
+        let track_id = task.track_id.as_str();
+
+        // Only export once ALL documents on the track are terminal.
+        match snapshot_export::rebuild_track_is_terminal(&self.kv_storage, track_id).await {
+            Ok(true) => {}
+            Ok(false) => return,
+            Err(e) => {
+                error!(track_id, error = %e, "Snapshot export: track status check failed");
+                return;
+            }
+        }
+
+        let workspace = match workspace_service.get_workspace(task.workspace_id).await {
+            Ok(Some(ws)) => ws,
+            Ok(None) => {
+                error!(track_id, workspace_id = %task.workspace_id,
+                    "Snapshot export: workspace not found");
+                return;
+            }
+            Err(e) => {
+                error!(track_id, workspace_id = %task.workspace_id, error = %e,
+                    "Snapshot export: workspace lookup failed");
+                return;
+            }
+        };
+
+        // workspace.slug IS the namespace slug (Phase 23)
+        let slug = match edgequake_core::NamespaceSlug::parse(&workspace.slug) {
+            Ok(slug) => slug,
+            Err(e) => {
+                info!(track_id, slug = %workspace.slug, error = %e,
+                    "Snapshot export skipped: workspace slug is not a namespace slug");
+                return;
+            }
+        };
+
+        let config = match registry.get_config(&slug).await {
+            Ok(Some(config)) => config,
+            Ok(None) => {
+                info!(track_id, namespace = slug.as_str(),
+                    "Snapshot export skipped: no pipeline config for namespace");
+                return;
+            }
+            Err(e) => {
+                error!(track_id, namespace = slug.as_str(), error = %e,
+                    "Snapshot export: pipeline config lookup failed");
+                return;
+            }
+        };
+        let Some(snapshot_uri) = config.snapshot_uri.clone() else {
+            info!(track_id, namespace = slug.as_str(),
+                "Snapshot export skipped: snapshot_uri not configured");
+            return;
+        };
+
+        let vector_storage = match self
+            .get_workspace_vector_storage_strict(&workspace.workspace_id.to_string())
+            .await
+        {
+            Ok(storage) => storage,
+            Err(e) => {
+                error!(track_id, namespace = slug.as_str(), error = %e,
+                    "Snapshot export: failed to resolve workspace vector storage");
+                return;
+            }
+        };
+
+        // Resolve the workspace embedding provider exactly like the pipeline
+        // does (for export-time entity-embedding backfill).
+        let embedding_provider =
+            match edgequake_llm::ProviderFactory::create_safe_embedding_provider(
+                &workspace.embedding_provider,
+                &workspace.embedding_model,
+                workspace.embedding_dimension,
+            ) {
+                Ok(provider) => provider,
+                Err(e) => {
+                    error!(track_id, namespace = slug.as_str(), error = %e,
+                        "Snapshot export: failed to create embedding provider");
+                    return;
+                }
+            };
+
+        let sources = SnapshotExportSources {
+            kv_storage: Arc::clone(&self.kv_storage),
+            graph_storage: Arc::clone(&self.graph_storage),
+            vector_storage,
+            embedding_provider,
+        };
+        match snapshot_export::export_workspace_snapshot(
+            &sources,
+            &workspace,
+            slug.as_str(),
+            &snapshot_uri,
+            &config.snapshot_mode,
+        )
+        .await
+        {
+            Ok(manifest) => {
+                info!(
+                    track_id,
+                    namespace = slug.as_str(),
+                    snapshot_uri = %snapshot_uri,
+                    documents = manifest.counts.documents,
+                    chunks = manifest.counts.chunks,
+                    entities = manifest.counts.entities,
+                    relationships = manifest.counts.relationships,
+                    vectors = manifest.counts.vectors,
+                    bm25 = manifest.counts.bm25,
+                    "Snapshot exported after rebuild track completion"
+                );
+            }
+            Err(e) => {
+                error!(track_id, namespace = slug.as_str(), error = %e,
+                    "Snapshot export failed after rebuild track completion (fail-open)");
+            }
         }
     }
 
@@ -2207,7 +2367,12 @@ impl TaskProcessor for DocumentTaskProcessor {
                         ))
                     })?;
 
-                self.process_text_insert(task, data).await
+                let result = self.process_text_insert(task, data).await;
+                // Phase 24 D-05: when the LAST document of a rebuild_kg_*
+                // track reaches a terminal status (success OR failure),
+                // export the namespace snapshot (fail-open).
+                self.maybe_export_rebuild_snapshot(task).await;
+                result
             }
             TaskType::Upload => {
                 // For file uploads, we need to read the file content first
@@ -2220,7 +2385,9 @@ impl TaskProcessor for DocumentTaskProcessor {
                         ))
                     })?;
 
-                self.process_text_insert(task, data).await
+                let result = self.process_text_insert(task, data).await;
+                self.maybe_export_rebuild_snapshot(task).await;
+                result
             }
             TaskType::Scan => {
                 // Directory scanning not yet implemented
