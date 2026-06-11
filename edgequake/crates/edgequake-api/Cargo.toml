@@ -49,6 +49,8 @@ uuid.workspace = true
 futures.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 async-trait.workspace = true
+anyhow.workspace = true
+tempfile = "3"
 sqlx = { workspace = true, optional = true }
 url = "2.5"
 lazy_static = "1.5"
