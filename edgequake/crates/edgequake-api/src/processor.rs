@@ -158,6 +158,25 @@ pub struct DocumentTaskProcessor {
     namespace_registry: Option<edgequake_core::SharedNamespaceRegistry>,
 }
 
+/// Resolve the `rebuild_kg_*` track id a document task belongs to.
+///
+/// Phase 24-04 (live UAT inline fix, D-05): a knowledge-graph rebuild enqueues
+/// one `TaskType::Insert` task per document; `Task::new` auto-generates a
+/// per-document `insert-<uuid>` `track_id`, so `task.track_id` NEVER starts with
+/// `rebuild_kg_`. The owning rebuild track id is carried in
+/// `task_data.metadata.track_id` (set by the rebuild-knowledge-graph handler,
+/// alongside `is_kg_rebuild: true`). Returns `Some(rebuild_kg_…)` only for a
+/// rebuild document task; `None` for any other task (so the snapshot-export /
+/// `ingestion_completed` hook is a no-op for non-rebuild work).
+fn rebuild_track_id_from_task(task: &Task) -> Option<String> {
+    task.task_data
+        .get("metadata")
+        .and_then(|m| m.get("track_id"))
+        .and_then(|v| v.as_str())
+        .filter(|t| t.starts_with("rebuild_kg_"))
+        .map(|t| t.to_string())
+}
+
 impl DocumentTaskProcessor {
     /// Create a new document task processor (legacy, without workspace support).
     /// OODA-223: Uses non-strict mode (allows fallback) for backward compatibility.
@@ -820,11 +839,18 @@ impl DocumentTaskProcessor {
     async fn maybe_export_rebuild_snapshot(&self, task: &Task) {
         use crate::snapshot_export::{self, SnapshotExportSources};
 
-        if !task.track_id.starts_with("rebuild_kg_") {
+        // Phase 24-04 (live UAT inline fix, D-05): the rebuild_kg_* track id is
+        // carried in the task's embedded task_data.metadata (set by the
+        // rebuild-knowledge-graph handler), NOT in task.track_id — Task::new
+        // auto-generates a per-document `insert-<uuid>` track id. Gating on
+        // task.track_id meant this hook NEVER fired live (no snapshot export, no
+        // ingestion_completed emit) — exactly the "auto-export hook did not fire"
+        // gap recorded in 24-SESSION-RECORD. Resolve the rebuild track id from
+        // the metadata; bail out for any task that is not a rebuild_kg_ document.
+        let Some(rebuild_track_id) = rebuild_track_id_from_task(task) else {
             return;
-        }
-
-        let track_id = task.track_id.as_str();
+        };
+        let track_id = rebuild_track_id.as_str();
 
         // Phase 24-02: log hook entry for EVERY rebuild_kg_* document
         // completion so 24-04 can grep server logs to confirm the hook fires.
@@ -2518,6 +2544,56 @@ mod tests {
     use edgequake_storage::{
         MemoryGraphStorage, MemoryKVStorage, MemoryVectorStorage, MemoryWorkspaceVectorRegistry,
     };
+
+    // Phase 24-04 (D-05) regression: the snapshot-export / ingestion_completed
+    // hook must resolve the rebuild_kg_* track id from task_data.metadata, NOT
+    // from task.track_id (which is the per-document insert-<uuid>). Gating on
+    // task.track_id meant the hook never fired live.
+    fn make_rebuild_doc_task(meta_track_id: Option<&str>) -> Task {
+        let metadata = match meta_track_id {
+            Some(t) => json!({ "document_id": "doc1", "title": "doc1",
+                "track_id": t, "is_kg_rebuild": true }),
+            None => json!({ "document_id": "doc1", "title": "doc1" }),
+        };
+        let data = edgequake_tasks::TextInsertData {
+            text: "x".to_string(),
+            file_source: "doc1".to_string(),
+            workspace_id: uuid::Uuid::new_v4().to_string(),
+            metadata: Some(metadata),
+        };
+        Task::new(
+            uuid::Uuid::new_v4(),
+            uuid::Uuid::new_v4(),
+            edgequake_tasks::TaskType::Insert,
+            serde_json::to_value(&data).unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_rebuild_track_id_resolved_from_metadata_not_task_track_id() {
+        // A rebuild document task: its own track_id is insert-<uuid>, but the
+        // owning rebuild_kg_ id lives in task_data.metadata.track_id.
+        let task = make_rebuild_doc_task(Some("rebuild_kg_20260612_999999_abcdef01"));
+        assert!(
+            task.track_id.starts_with("insert-"),
+            "Task::new generates a per-document insert-<uuid> track id, got {}",
+            task.track_id
+        );
+        assert_eq!(
+            rebuild_track_id_from_task(&task).as_deref(),
+            Some("rebuild_kg_20260612_999999_abcdef01"),
+            "hook must resolve the rebuild_kg_ track id from task_data.metadata"
+        );
+    }
+
+    #[test]
+    fn test_rebuild_track_id_none_for_non_rebuild_task() {
+        // No metadata track_id → not a rebuild document → hook is a no-op.
+        assert_eq!(rebuild_track_id_from_task(&make_rebuild_doc_task(None)), None);
+        // A non-rebuild_kg track id in metadata is also ignored.
+        let other = make_rebuild_doc_task(Some("insert-deadbeef"));
+        assert_eq!(rebuild_track_id_from_task(&other), None);
+    }
 
     /// Create a test pipeline instance using default configuration
     fn create_test_pipeline() -> Arc<Pipeline> {
