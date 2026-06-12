@@ -5,6 +5,7 @@
 
 use serde::Serialize;
 use tokio::sync::broadcast;
+use tracing::warn;
 
 // ============================================================================
 // Progress Event Types
@@ -123,6 +124,78 @@ pub enum ProgressEvent {
 }
 
 // ============================================================================
+// Ingestion Completed Event (flat snake_case, Option B parallel channel)
+// ============================================================================
+
+/// Summary counts from ingestion processing.
+#[derive(Debug, Clone, Serialize)]
+pub struct IngestionSummary {
+    pub chunks: u64,
+    pub entities: u64,
+    pub relationships: u64,
+    pub total_cost_usd: f64,
+}
+
+/// Per-dimension counts from a snapshot export.
+#[derive(Debug, Clone, Serialize)]
+pub struct IngestionCounts {
+    pub documents: u64,
+    pub chunks: u64,
+    pub entities: u64,
+    pub relationships: u64,
+    pub vectors: u64,
+    pub bm25: u64,
+}
+
+/// Snapshot enrichment block, present only when export succeeded.
+#[derive(Debug, Clone, Serialize)]
+pub struct IngestionSnapshot {
+    pub uri: String,
+    pub created_at: String,
+    pub counts: IngestionCounts,
+}
+
+/// Flat snake_case ingestion_completed event emitted over the raw-String
+/// broadcast channel. The `"type"` discriminator is emitted as the string
+/// literal `"ingestion_completed"` with NO outer `data` envelope — matching
+/// the webui's `IngestionCompletedEvent` wire shape exactly.
+#[derive(Debug, Clone, Serialize)]
+pub struct IngestionCompletedEvent {
+    #[serde(rename = "type")]
+    pub event_type: String, // always "ingestion_completed"
+    pub track_id: String,
+    pub document_id: String,
+    pub completed_at: String,
+    pub total_duration_ms: u64,
+    pub summary: IngestionSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<IngestionSnapshot>,
+}
+
+impl IngestionCompletedEvent {
+    /// Construct the event. The `event_type` field is hardcoded to the
+    /// `"ingestion_completed"` literal so callers cannot emit a wrong type.
+    pub fn new(
+        track_id: String,
+        document_id: String,
+        completed_at: String,
+        total_duration_ms: u64,
+        summary: IngestionSummary,
+        snapshot: Option<IngestionSnapshot>,
+    ) -> Self {
+        Self {
+            event_type: "ingestion_completed".to_string(),
+            track_id,
+            document_id,
+            completed_at,
+            total_duration_ms,
+            summary,
+            snapshot,
+        }
+    }
+}
+
+// ============================================================================
 // Progress Broadcaster
 // ============================================================================
 
@@ -130,9 +203,16 @@ pub enum ProgressEvent {
 ///
 /// This struct manages the broadcast channel that distributes progress events
 /// to all connected WebSocket clients.
+///
+/// Two parallel channels:
+/// - `sender`: typed `ProgressEvent` channel (PascalCase `{type,data}` envelope)
+/// - `raw_sender`: raw pre-serialized `String` channel for flat snake_case events
+///   (e.g. `ingestion_completed`). Only accessible via `broadcast_ingestion_completed`
+///   or through the crate-internal `subscribe_raw`/`broadcast_raw` helpers.
 #[derive(Clone)]
 pub struct ProgressBroadcaster {
     sender: broadcast::Sender<ProgressEvent>,
+    raw_sender: broadcast::Sender<String>,
 }
 
 impl Default for ProgressBroadcaster {
@@ -145,12 +225,40 @@ impl ProgressBroadcaster {
     /// Create a new progress broadcaster with specified channel capacity.
     pub fn new(capacity: usize) -> Self {
         let (sender, _) = broadcast::channel(capacity);
-        Self { sender }
+        let (raw_sender, _) = broadcast::channel(capacity);
+        Self { sender, raw_sender }
     }
 
-    /// Subscribe to progress events.
+    /// Subscribe to typed progress events.
     pub fn subscribe(&self) -> broadcast::Receiver<ProgressEvent> {
         self.sender.subscribe()
+    }
+
+    /// Subscribe to the raw pre-serialized string channel.
+    ///
+    /// `pub(crate)` — only `websocket.rs` (same crate) drains this channel.
+    /// External callers use `broadcast_ingestion_completed` as the only typed entry.
+    pub(crate) fn subscribe_raw(&self) -> broadcast::Receiver<String> {
+        self.raw_sender.subscribe()
+    }
+
+    /// Send a pre-serialized JSON string over the raw channel (fail-open).
+    ///
+    /// `pub(crate)` — not part of the public API. Use `broadcast_ingestion_completed`
+    /// for typed ingestion events so the caller cannot bypass event construction.
+    pub(crate) fn broadcast_raw(&self, json: String) {
+        let _ = self.raw_sender.send(json);
+    }
+
+    /// Serialize `event` to a flat snake_case JSON string and broadcast it over
+    /// the raw channel. The only public entry point for the raw channel.
+    ///
+    /// Fail-open: serialize errors are logged and the event is silently dropped.
+    pub fn broadcast_ingestion_completed(&self, event: IngestionCompletedEvent) {
+        match serde_json::to_string(&event) {
+            Ok(s) => self.broadcast_raw(s),
+            Err(e) => warn!(error = %e, "ingestion_completed serialize failed; dropping"),
+        }
     }
 
     /// Broadcast a progress event to all subscribers.
@@ -475,5 +583,130 @@ mod tests {
         assert!(json.contains("PdfPageProgress"));
         assert!(json.contains("\"success\":false"));
         assert!(json.contains("Failed to decode font"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests for IngestionCompletedEvent (Option B parallel raw-String channel)
+    // -------------------------------------------------------------------------
+
+    /// Serializes an IngestionCompletedEvent WITH a snapshot block and asserts
+    /// the flat snake_case wire shape (no top-level "data" envelope, no PascalCase).
+    #[test]
+    fn test_ingestion_completed_with_snapshot_serialization() {
+        let event = IngestionCompletedEvent::new(
+            "rebuild_kg_abc123".to_string(),
+            "workspace-uuid-1".to_string(),
+            "2024-06-11T12:00:00Z".to_string(),
+            42_000,
+            IngestionSummary {
+                chunks: 50,
+                entities: 120,
+                relationships: 80,
+                total_cost_usd: 0.0,
+            },
+            Some(IngestionSnapshot {
+                uri: "/snapshots/my-ns".to_string(),
+                created_at: "2024-06-11T12:00:05Z".to_string(),
+                counts: IngestionCounts {
+                    documents: 10,
+                    chunks: 50,
+                    entities: 120,
+                    relationships: 80,
+                    vectors: 170,
+                    bm25: 50,
+                },
+            }),
+        );
+
+        let json = serde_json::to_string(&event).unwrap();
+
+        // Flat type discriminator must be present at top level.
+        assert!(json.contains("\"type\":\"ingestion_completed\""), "missing flat type field: {json}");
+        assert!(json.contains("\"track_id\""), "missing track_id: {json}");
+        assert!(json.contains("\"total_duration_ms\""), "missing total_duration_ms: {json}");
+        assert!(json.contains("\"summary\""), "missing summary: {json}");
+        assert!(json.contains("\"snapshot\""), "missing snapshot block: {json}");
+        assert!(json.contains("\"counts\""), "missing counts in snapshot: {json}");
+
+        // Must NOT have a top-level "data" envelope (PascalCase ProgressEvent pattern).
+        assert!(!json.contains("\"data\":"), "unexpected PascalCase data envelope: {json}");
+
+        // Must NOT contain secret/token/key/password (T-24-02-01 threat check).
+        assert!(!json.to_lowercase().contains("secret"), "payload contains 'secret': {json}");
+        assert!(!json.to_lowercase().contains("password"), "payload contains 'password': {json}");
+    }
+
+    /// Serializes an IngestionCompletedEvent WITHOUT a snapshot block (no-snapshot
+    /// completion, scenario 5 / scratch workspace).  The "snapshot" key must be
+    /// absent from the JSON thanks to `skip_serializing_if = "Option::is_none"`.
+    #[test]
+    fn test_ingestion_completed_without_snapshot_serialization() {
+        let event = IngestionCompletedEvent::new(
+            "rebuild_kg_xyz".to_string(),
+            "workspace-uuid-2".to_string(),
+            "2024-06-11T13:00:00Z".to_string(),
+            5_000,
+            IngestionSummary {
+                chunks: 0,
+                entities: 0,
+                relationships: 0,
+                total_cost_usd: 0.0,
+            },
+            None, // no snapshot
+        );
+
+        let json = serde_json::to_string(&event).unwrap();
+
+        // The type field must still be present.
+        assert!(json.contains("\"type\":\"ingestion_completed\""), "missing type: {json}");
+
+        // The "snapshot" key must be entirely absent.
+        assert!(!json.contains("\"snapshot\""), "snapshot should be absent when None: {json}");
+
+        // No data envelope.
+        assert!(!json.contains("\"data\":"), "unexpected data envelope: {json}");
+    }
+
+    /// End-to-end test: subscribe_raw → broadcast_ingestion_completed → recv.
+    /// Proves the parallel raw-String channel delivers the flat payload verbatim.
+    #[tokio::test]
+    async fn test_broadcast_ingestion_completed_via_raw_channel() {
+        let broadcaster = ProgressBroadcaster::new(100);
+        let mut raw_rx = broadcaster.subscribe_raw();
+
+        broadcaster.broadcast_ingestion_completed(IngestionCompletedEvent::new(
+            "rebuild_kg_test".to_string(),
+            "ws-id".to_string(),
+            "2024-06-11T14:00:00Z".to_string(),
+            1_000,
+            IngestionSummary {
+                chunks: 1,
+                entities: 2,
+                relationships: 1,
+                total_cost_usd: 0.0,
+            },
+            None,
+        ));
+
+        let received = raw_rx.recv().await.expect("raw channel must deliver the event");
+        assert!(
+            received.contains("ingestion_completed"),
+            "raw channel payload must contain 'ingestion_completed': {received}"
+        );
+    }
+
+    /// Regression test: the existing typed ProgressEvent::JobStarted still
+    /// serializes with PascalCase type + "data" envelope (no regression to
+    /// the typed channel).
+    #[test]
+    fn test_progress_event_job_started_still_pascal_case() {
+        let event = ProgressEvent::JobStarted {
+            job_name: "regression-check".to_string(),
+            total_documents: 5,
+            total_batches: 1,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"JobStarted\""), "typed channel must keep PascalCase type: {json}");
+        assert!(json.contains("\"data\""), "typed channel must keep 'data' envelope: {json}");
     }
 }

@@ -124,6 +124,8 @@ async fn handle_pipeline_socket(socket: WebSocket, state: AppState) {
 
     // Subscribe to progress broadcast channel
     let mut progress_rx = state.progress_broadcaster.subscribe();
+    // Subscribe to the raw flat-JSON channel (e.g. ingestion_completed events).
+    let mut raw_rx = state.progress_broadcaster.subscribe_raw();
 
     // Create heartbeat interval
     let mut heartbeat_interval = tokio::time::interval(HEARTBEAT_INTERVAL);
@@ -171,7 +173,7 @@ async fn handle_pipeline_socket(socket: WebSocket, state: AppState) {
                 }
             }
 
-            // Handle broadcast progress events
+            // Handle broadcast progress events (typed PascalCase channel)
             result = progress_rx.recv() => {
                 match result {
                     Ok(event) => {
@@ -186,6 +188,26 @@ async fn handle_pipeline_socket(socket: WebSocket, state: AppState) {
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         warn!("Progress broadcast channel closed");
+                        break;
+                    }
+                }
+            }
+
+            // Handle raw flat-JSON events (e.g. ingestion_completed).
+            // The string is already serialized — send verbatim as Message::Text,
+            // do NOT call send_event (that would double-serialize).
+            result = raw_rx.recv() => {
+                match result {
+                    Ok(json) => {
+                        if let Err(e) = sender.send(Message::Text(json.into())).await {
+                            error!("Failed to send raw event: {}", e);
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        warn!("WebSocket client lagged behind {} raw events", n);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
                         break;
                     }
                 }
