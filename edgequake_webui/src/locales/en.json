@@ -670,7 +670,9 @@
       "description": "Approving the schema saves it and starts a full ingestion run.",
       "schemaLabel": "Schema to be approved",
       "cta": "Approve schema & start run",
+      "triggering": "Triggering…",
       "successToast": "Schema approved. Full ingestion run started.",
+      "notTrackedWarning": "Run started but could not be tracked. Check Recent Runs for status.",
       "errorHeading": "Approval failed",
       "errorBody": "Could not approve the schema. Please try again."
     }
