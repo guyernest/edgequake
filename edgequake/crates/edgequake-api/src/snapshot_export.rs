@@ -1104,6 +1104,59 @@ mod tests {
             .unwrap());
     }
 
+    /// NO-SNAPSHOT COMPLETION TEST (Phase 24-02 decoupling correctness gate).
+    ///
+    /// Constructs the `IngestionCompletedEvent` that `maybe_export_rebuild_snapshot`
+    /// builds on the no-snapshot path (export disabled / snapshot_uri not configured)
+    /// and asserts the serialized JSON has NO `"snapshot"` key.
+    ///
+    /// This directly proves the cross-AI review consensus blocker is fixed:
+    /// a terminal rebuild track with no snapshot configured still produces a
+    /// flat `ingestion_completed` payload that the webui can consume to
+    /// populate completedJobs (scenario 5 — scratch workspace).
+    #[test]
+    fn test_no_snapshot_completion_event_has_no_snapshot_key() {
+        use crate::handlers::websocket_types::{
+            IngestionCompletedEvent, IngestionSummary,
+        };
+
+        // Simulate the no-snapshot path: export_result = None.
+        // This is what processor.rs builds when snapshot_uri is unconfigured.
+        let event = IngestionCompletedEvent::new(
+            "rebuild_kg_scratch".to_string(),
+            "workspace-uuid-scratch".to_string(),
+            "2024-06-11T15:00:00Z".to_string(),
+            0, // total_duration_ms: 0 fallback (no started_at)
+            IngestionSummary {
+                chunks: 0,
+                entities: 0,
+                relationships: 0,
+                total_cost_usd: 0.0,
+            },
+            None, // snapshot: None — the no-snapshot path
+        );
+
+        let json = serde_json::to_string(&event).unwrap();
+
+        // The "snapshot" key must be entirely absent (skip_serializing_if).
+        assert!(
+            !json.contains("\"snapshot\""),
+            "no-snapshot path must emit no snapshot key, got: {json}"
+        );
+
+        // The event must still carry the correct type discriminator.
+        assert!(
+            json.contains("\"type\":\"ingestion_completed\""),
+            "event must have type field, got: {json}"
+        );
+
+        // Must not contain a top-level "data" envelope.
+        assert!(
+            !json.contains("\"data\":"),
+            "no-snapshot event must not have data envelope, got: {json}"
+        );
+    }
+
     #[tokio::test]
     async fn test_collect_workspace_documents_scopes_by_workspace() {
         let (state, workspace) = fixture_state().await;

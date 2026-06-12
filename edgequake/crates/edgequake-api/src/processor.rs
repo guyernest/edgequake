@@ -77,7 +77,10 @@
 
 use std::sync::Arc;
 
-use crate::handlers::websocket_types::ProgressBroadcaster;
+use crate::handlers::websocket_types::{
+    IngestionCompletedEvent, IngestionCounts, IngestionSnapshot, IngestionSummary,
+    ProgressBroadcaster,
+};
 #[cfg(feature = "postgres")]
 use crate::pipeline_progress_callback::PipelineProgressCallback;
 use crate::state::SharedWorkspaceService;
@@ -807,21 +810,34 @@ impl DocumentTaskProcessor {
     /// NOTE: with concurrent workers, two documents finishing near-
     /// simultaneously can both observe the track as terminal and export
     /// twice; the export replaces the target directory, so this is benign.
+    ///
+    /// Phase 24-02 (cross-AI review decouple): an `ingestion_completed`
+    /// WebSocket event is emitted UNCONDITIONALLY at the rebuild-track
+    /// terminal-state site, regardless of whether snapshot export is
+    /// configured, succeeds, or fails. The `snapshot` block inside the event
+    /// is `Some(...)` only when export returned `Ok(manifest)`; it is `None`
+    /// on every other path.
     async fn maybe_export_rebuild_snapshot(&self, task: &Task) {
         use crate::snapshot_export::{self, SnapshotExportSources};
 
         if !task.track_id.starts_with("rebuild_kg_") {
             return;
         }
+
+        let track_id = task.track_id.as_str();
+
+        // Phase 24-02: log hook entry for EVERY rebuild_kg_* document
+        // completion so 24-04 can grep server logs to confirm the hook fires.
+        info!(track_id, "rebuild-track terminal-export hook entered");
+
         let Some(registry) = &self.namespace_registry else {
             return;
         };
         let Some(workspace_service) = &self.workspace_service else {
             return;
         };
-        let track_id = task.track_id.as_str();
 
-        // Only export once ALL documents on the track are terminal.
+        // Only proceed once ALL documents on the track are terminal.
         match snapshot_export::rebuild_track_is_terminal(&self.kv_storage, track_id).await {
             Ok(true) => {}
             Ok(false) => return,
@@ -831,110 +847,189 @@ impl DocumentTaskProcessor {
             }
         }
 
-        let workspace = match workspace_service.get_workspace(task.workspace_id).await {
-            Ok(Some(ws)) => ws,
-            Ok(None) => {
-                error!(track_id, workspace_id = %task.workspace_id,
-                    "Snapshot export: workspace not found");
-                return;
-            }
-            Err(e) => {
-                error!(track_id, workspace_id = %task.workspace_id, error = %e,
-                    "Snapshot export: workspace lookup failed");
-                return;
-            }
-        };
+        // ── TERMINAL-STATE SITE ──────────────────────────────────────────────
+        // All documents on this track are done. Attempt snapshot export (if
+        // configured); then emit ingestion_completed UNCONDITIONALLY regardless
+        // of whether export ran, was skipped, or failed.
 
-        // workspace.slug IS the namespace slug (Phase 23)
-        let slug = match edgequake_core::NamespaceSlug::parse(&workspace.slug) {
-            Ok(slug) => slug,
-            Err(e) => {
-                info!(track_id, slug = %workspace.slug, error = %e,
-                    "Snapshot export skipped: workspace slug is not a namespace slug");
-                return;
-            }
-        };
+        /// Snapshot enrichment produced when export succeeds. Passed out of the
+        /// export attempt block so the emit site uses it as `Option<...>`.
+        struct ExportSuccess {
+            snapshot: IngestionSnapshot,
+            chunks: u64,
+            entities: u64,
+            relationships: u64,
+        }
 
-        let config = match registry.get_config(&slug).await {
-            Ok(Some(config)) => config,
-            Ok(None) => {
-                info!(track_id, namespace = slug.as_str(),
-                    "Snapshot export skipped: no pipeline config for namespace");
-                return;
-            }
-            Err(e) => {
-                error!(track_id, namespace = slug.as_str(), error = %e,
-                    "Snapshot export: pipeline config lookup failed");
-                return;
-            }
-        };
-        let Some(snapshot_uri) = config.snapshot_uri.clone() else {
-            info!(track_id, namespace = slug.as_str(),
-                "Snapshot export skipped: snapshot_uri not configured");
-            return;
-        };
-
-        let vector_storage = match self
-            .get_workspace_vector_storage_strict(&workspace.workspace_id.to_string())
-            .await
-        {
-            Ok(storage) => storage,
-            Err(e) => {
-                error!(track_id, namespace = slug.as_str(), error = %e,
-                    "Snapshot export: failed to resolve workspace vector storage");
-                return;
-            }
-        };
-
-        // Resolve the workspace embedding provider exactly like the pipeline
-        // does (for export-time entity-embedding backfill).
-        let embedding_provider =
-            match edgequake_llm::ProviderFactory::create_safe_embedding_provider(
-                &workspace.embedding_provider,
-                &workspace.embedding_model,
-                workspace.embedding_dimension,
-            ) {
-                Ok(provider) => provider,
+        // Run the full export prep and export inside an async block that
+        // returns `Option<ExportSuccess>`. Every early-return inside becomes
+        // `return None` — control always falls through to the emit site.
+        let export_result: Option<ExportSuccess> = async {
+            let workspace = match workspace_service.get_workspace(task.workspace_id).await {
+                Ok(Some(ws)) => ws,
+                Ok(None) => {
+                    error!(track_id, workspace_id = %task.workspace_id,
+                        "Snapshot export: workspace not found");
+                    return None;
+                }
                 Err(e) => {
-                    error!(track_id, namespace = slug.as_str(), error = %e,
-                        "Snapshot export: failed to create embedding provider");
-                    return;
+                    error!(track_id, workspace_id = %task.workspace_id, error = %e,
+                        "Snapshot export: workspace lookup failed");
+                    return None;
                 }
             };
 
-        let sources = SnapshotExportSources {
-            kv_storage: Arc::clone(&self.kv_storage),
-            graph_storage: Arc::clone(&self.graph_storage),
-            vector_storage,
-            embedding_provider,
-        };
-        match snapshot_export::export_workspace_snapshot(
-            &sources,
-            &workspace,
-            slug.as_str(),
-            &snapshot_uri,
-            &config.snapshot_mode,
-        )
-        .await
-        {
-            Ok(manifest) => {
-                info!(
-                    track_id,
-                    namespace = slug.as_str(),
-                    snapshot_uri = %snapshot_uri,
-                    documents = manifest.counts.documents,
-                    chunks = manifest.counts.chunks,
-                    entities = manifest.counts.entities,
-                    relationships = manifest.counts.relationships,
-                    vectors = manifest.counts.vectors,
-                    bm25 = manifest.counts.bm25,
-                    "Snapshot exported after rebuild track completion"
-                );
+            // workspace.slug IS the namespace slug (Phase 23)
+            let slug = match edgequake_core::NamespaceSlug::parse(&workspace.slug) {
+                Ok(slug) => slug,
+                Err(e) => {
+                    info!(track_id, slug = %workspace.slug, error = %e,
+                        "Snapshot export skipped: workspace slug is not a namespace slug");
+                    return None;
+                }
+            };
+
+            let config = match registry.get_config(&slug).await {
+                Ok(Some(config)) => config,
+                Ok(None) => {
+                    info!(track_id, namespace = slug.as_str(),
+                        "Snapshot export skipped: no pipeline config for namespace");
+                    return None;
+                }
+                Err(e) => {
+                    error!(track_id, namespace = slug.as_str(), error = %e,
+                        "Snapshot export: pipeline config lookup failed");
+                    return None;
+                }
+            };
+            let Some(snapshot_uri) = config.snapshot_uri.clone() else {
+                info!(track_id, namespace = slug.as_str(),
+                    "Snapshot export skipped: snapshot_uri not configured");
+                return None;
+            };
+
+            let vector_storage = match self
+                .get_workspace_vector_storage_strict(&workspace.workspace_id.to_string())
+                .await
+            {
+                Ok(storage) => storage,
+                Err(e) => {
+                    error!(track_id, namespace = slug.as_str(), error = %e,
+                        "Snapshot export: failed to resolve workspace vector storage");
+                    return None;
+                }
+            };
+
+            // Resolve the workspace embedding provider exactly like the pipeline
+            // does (for export-time entity-embedding backfill).
+            let embedding_provider =
+                match edgequake_llm::ProviderFactory::create_safe_embedding_provider(
+                    &workspace.embedding_provider,
+                    &workspace.embedding_model,
+                    workspace.embedding_dimension,
+                ) {
+                    Ok(provider) => provider,
+                    Err(e) => {
+                        error!(track_id, namespace = slug.as_str(), error = %e,
+                            "Snapshot export: failed to create embedding provider");
+                        return None;
+                    }
+                };
+
+            let sources = SnapshotExportSources {
+                kv_storage: Arc::clone(&self.kv_storage),
+                graph_storage: Arc::clone(&self.graph_storage),
+                vector_storage,
+                embedding_provider,
+            };
+            match snapshot_export::export_workspace_snapshot(
+                &sources,
+                &workspace,
+                slug.as_str(),
+                &snapshot_uri,
+                &config.snapshot_mode,
+            )
+            .await
+            {
+                Ok(manifest) => {
+                    info!(
+                        track_id,
+                        namespace = slug.as_str(),
+                        snapshot_uri = %snapshot_uri,
+                        documents = manifest.counts.documents,
+                        chunks = manifest.counts.chunks,
+                        entities = manifest.counts.entities,
+                        relationships = manifest.counts.relationships,
+                        vectors = manifest.counts.vectors,
+                        bm25 = manifest.counts.bm25,
+                        "Snapshot exported after rebuild track completion"
+                    );
+                    Some(ExportSuccess {
+                        snapshot: IngestionSnapshot {
+                            uri: snapshot_uri.clone(),
+                            created_at: manifest.created_at.clone(),
+                            counts: IngestionCounts {
+                                documents: manifest.counts.documents as u64,
+                                chunks: manifest.counts.chunks as u64,
+                                entities: manifest.counts.entities as u64,
+                                relationships: manifest.counts.relationships as u64,
+                                vectors: manifest.counts.vectors as u64,
+                                bm25: manifest.counts.bm25 as u64,
+                            },
+                        },
+                        chunks: manifest.counts.chunks as u64,
+                        entities: manifest.counts.entities as u64,
+                        relationships: manifest.counts.relationships as u64,
+                    })
+                }
+                Err(e) => {
+                    error!(track_id, namespace = slug.as_str(), error = %e,
+                        "Snapshot export failed after rebuild track completion (fail-open)");
+                    None
+                }
             }
-            Err(e) => {
-                error!(track_id, namespace = slug.as_str(), error = %e,
-                    "Snapshot export failed after rebuild track completion (fail-open)");
-            }
+        }
+        .await;
+
+        // ── UNCONDITIONAL EMIT ───────────────────────────────────────────────
+        // Reached on EVERY terminal-track path — whether export ran, was
+        // skipped (no snapshot_uri), or failed. The snapshot field is
+        // Some only when export_result is Some.
+        if let Some(broadcaster) = &self.progress_broadcaster {
+            let completed_at = chrono::Utc::now().to_rfc3339();
+            let total_duration_ms = task
+                .started_at
+                .map(|started| {
+                    let end = task.completed_at.unwrap_or_else(chrono::Utc::now);
+                    (end - started).num_milliseconds().max(0) as u64
+                })
+                .unwrap_or(0);
+
+            let (summary_chunks, summary_entities, summary_relationships, snapshot_block) =
+                match export_result {
+                    Some(s) => (
+                        s.chunks,
+                        s.entities,
+                        s.relationships,
+                        Some(s.snapshot),
+                    ),
+                    None => (0, 0, 0, None),
+                };
+
+            let event = IngestionCompletedEvent::new(
+                track_id.to_string(),
+                task.workspace_id.to_string(),
+                completed_at,
+                total_duration_ms,
+                IngestionSummary {
+                    chunks: summary_chunks,
+                    entities: summary_entities,
+                    relationships: summary_relationships,
+                    total_cost_usd: 0.0,
+                },
+                snapshot_block,
+            );
+            broadcaster.broadcast_ingestion_completed(event);
         }
     }
 
