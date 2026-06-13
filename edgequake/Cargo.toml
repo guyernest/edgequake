@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/edgequake-api",
+    "crates/edgequake-api-lambda",
     "crates/edgequake-audit",
     "crates/edgequake-auth",
     "crates/edgequake-batch",
@@ -150,6 +151,7 @@ criterion = { version = "0.5", features = ["async_tokio"] }
 
 # Workspace crates
 edgequake-api = { path = "crates/edgequake-api" }
+edgequake-api-lambda = { path = "crates/edgequake-api-lambda" }
 edgequake-auth = { path = "crates/edgequake-auth" }
 edgequake-batch = { path = "crates/edgequake-batch" }
 edgequake-core = { path = "crates/edgequake-core" }

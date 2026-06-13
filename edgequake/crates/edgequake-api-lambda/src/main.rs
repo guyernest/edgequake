@@ -1,0 +1,32 @@
+//! Lambda Web Adapter entry point for the edgequake-api axum server.
+//!
+//! Mounts the existing in-memory edgequake-api Server router on 0.0.0.0:8080.
+//! The Lambda Web Adapter (LWA) layer forwards Lambda invocations to this port
+//! and polls GET /health as the readiness probe before accepting traffic.
+//!
+//! Phase 25 D-06 scope fence: this file adds NO new routes, NO Cognito proxy,
+//! and NO CDK route mounting. GET /health is the only surface verified this phase.
+//! All gateway wiring is deferred to Phase 26.
+
+use edgequake_api::{AppState, Server, ServerConfig};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt().json().init();
+
+    let config = ServerConfig {
+        host: "0.0.0.0".to_string(),
+        port: 8080, // must match AWS_LWA_PORT env var (Phase 26 CDK wiring)
+        enable_cors: true,
+        enable_compression: false, // LWA handles compression
+        enable_swagger: false,     // no Swagger UI in Lambda
+    };
+
+    // VERIFIED constructor (synchronous) — do NOT use AppState::new(StorageMode::Memory).await;
+    // that is the approximate PATTERNS form. new_memory falls back to Mock LLM provider
+    // when no API key is set, which is correct for this skeleton (T-25-READY: fast cold start).
+    let state = AppState::new_memory(None::<String>);
+
+    let server = Server::new(config, state);
+    server.run().await.map_err(Into::into)
+}

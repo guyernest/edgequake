@@ -1,0 +1,26 @@
+[package]
+name = "edgequake-api-lambda"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Lambda Web Adapter entry point for the edgequake-api axum server (in-memory mode)"
+
+[[bin]]
+name = "bootstrap"
+path = "src/main.rs"
+
+[dependencies]
+# Existing edgequake-api axum server; default-features = false excludes postgres/aws connectors
+# so the in-memory skeleton cross-compiles for ARM64 without vendored OpenSSL (RESEARCH Pitfall 5).
+edgequake-api = { path = "../edgequake-api", default-features = false }
+
+# Async runtime (workspace-pinned)
+tokio = { workspace = true }
+
+# Error handling with rich context for the skeleton entry point
+anyhow = { workspace = true }
+
+# Structured JSON logging (required by the Lambda execution environment)
+tracing-subscriber = { workspace = true }
