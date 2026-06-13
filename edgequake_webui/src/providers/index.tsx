@@ -44,7 +44,7 @@ export function AppProviders({ children }: AppProvidersProps) {
       <ThemeProvider>
         <I18nProvider>
           <TenantProvider>
-            <WebSocketProvider>
+            <WebSocketProvider enabled={process.env.NEXT_PUBLIC_BACKEND_TYPE !== 'lambda'}>
               <KeyboardShortcutsProvider>
                 {children}
                 <Toaster 
