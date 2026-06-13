@@ -207,7 +207,7 @@ describe("call-order invariant — startTracking args available before reset/nav
     const reset = vi.fn(() => {
       callOrder.push("reset");
     });
-    const push = vi.fn(() => {
+    const push = vi.fn((_path: string) => {
       callOrder.push("push");
     });
 
