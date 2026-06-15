@@ -12,12 +12,21 @@ name = "bootstrap"
 path = "src/main.rs"
 
 [dependencies]
-# Existing edgequake-api axum server; default-features = false excludes postgres/aws connectors
-# so the in-memory skeleton cross-compiles for ARM64 without vendored OpenSSL (RESEARCH Pitfall 5).
+# Existing edgequake-api axum server, used here in in-memory mode.
+# NOTE: edgequake-api currently declares no default features (`default = []`), so
+# `default-features = false` is a defensive no-op today — it does NOT drop postgres/sqlx, which is
+# still compiled in transitively via edgequake-tasks (`features = ["postgres"]`) and the non-optional
+# sqlx in edgequake-audit. ARM64 cross-compile (cargo lambda build --arm64) succeeds because those
+# crates now use sqlx-rustls instead of native-tls (see edgequake-audit/Cargo.toml) — i.e. no vendored
+# OpenSSL — NOT because of this flag. The flag is kept so the in-memory build stays connector-free if
+# edgequake-api ever gains default features.
 edgequake-api = { path = "../edgequake-api", default-features = false }
 
 # Async runtime (workspace-pinned)
 tokio = { workspace = true }
+
+# Structured logging (used to emit SNAPSHOT_BAKED startup log line)
+tracing = { workspace = true }
 
 # Error handling with rich context for the skeleton entry point
 anyhow = { workspace = true }

@@ -14,12 +14,22 @@ use edgequake_api::{AppState, Server, ServerConfig};
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().json().init();
 
+    // REG-03: Mount the read-only guard when SNAPSHOT_BAKED=true.
+    // This env var is injected at deploy time by Plan 01 Task 2
+    // (upload-deployment's injectSnapshotBakedEnvironment). This code only reads it.
+    let read_only = std::env::var("SNAPSHOT_BAKED").as_deref() == Ok("true");
+
+    if read_only {
+        tracing::info!("SNAPSHOT_BAKED=true: mounting read-only guard — write methods will return 405");
+    }
+
     let config = ServerConfig {
         host: "0.0.0.0".to_string(),
         port: 8080, // must match AWS_LWA_PORT env var (Phase 26 CDK wiring)
         enable_cors: true,
         enable_compression: false, // LWA handles compression
         enable_swagger: false,     // no Swagger UI in Lambda
+        read_only,
     };
 
     // VERIFIED constructor (synchronous) — do NOT use AppState::new(StorageMode::Memory).await;
