@@ -33,7 +33,7 @@ use tracing::info;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::middleware::{request_id, request_logging};
+use crate::middleware::{readonly_guard, request_id, request_logging};
 use crate::openapi::ApiDoc;
 use crate::routes::create_router;
 use crate::state::AppState;
@@ -55,6 +55,13 @@ pub struct ServerConfig {
 
     /// Enable Swagger UI.
     pub enable_swagger: bool,
+
+    /// Mount read-only guard (reject all write methods with 405).
+    ///
+    /// Set to `true` on snapshot-baked Lambda instances via the `SNAPSHOT_BAKED` env var.
+    /// When true, `build_router` layers `readonly_guard` before handler dispatch,
+    /// so POST/PUT/PATCH/DELETE return 405 without reaching any handler.
+    pub read_only: bool,
 }
 
 impl Default for ServerConfig {
@@ -65,6 +72,7 @@ impl Default for ServerConfig {
             enable_cors: true,
             enable_compression: true,
             enable_swagger: true,
+            read_only: false,
         }
     }
 }
@@ -91,6 +99,14 @@ impl Server {
             .layer(middleware::from_fn(request_logging))
             .layer(middleware::from_fn(request_id))
             .layer(TraceLayer::new_for_http());
+
+        // REG-03: Read-only guard for snapshot-baked servers.
+        // Layered AFTER TraceLayer so write rejections are still traced/logged.
+        // The guard short-circuits before any handler runs, satisfying D-03 (4xx, not silent 202).
+        if self.config.read_only {
+            info!("read_only=true: mounting readonly_guard — write methods will return 405");
+            app = app.layer(middleware::from_fn(readonly_guard));
+        }
 
         // CORS
         if self.config.enable_cors {
@@ -151,6 +167,7 @@ mod tests {
         assert_eq!(config.port, 8080);
         assert!(config.enable_cors);
         assert!(config.enable_swagger);
+        assert!(!config.read_only);
     }
 
     #[test]

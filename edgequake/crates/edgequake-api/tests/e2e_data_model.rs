@@ -44,6 +44,7 @@ fn create_test_app() -> axum::Router {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, AppState::test_state());
     server.build_router()

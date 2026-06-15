@@ -21,6 +21,7 @@ fn create_test_server() -> Server {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     Server::new(config, AppState::test_state())
 }
@@ -135,6 +136,7 @@ async fn test_create_user_duplicate_username() {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, state);
 
@@ -222,6 +224,7 @@ async fn test_login_flow() {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, state);
 
@@ -287,6 +290,7 @@ async fn test_login_wrong_password() {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, state);
 
@@ -372,6 +376,7 @@ async fn test_refresh_token_flow() {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, state);
 
@@ -456,6 +461,7 @@ async fn test_logout() {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, state);
 
@@ -556,6 +562,7 @@ async fn test_get_user_by_id() {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, state);
 
@@ -630,6 +637,7 @@ async fn test_delete_user() {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, state);
 
@@ -784,6 +792,7 @@ async fn test_revoke_api_key() {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, state);
 
@@ -882,6 +891,7 @@ async fn test_complete_auth_flow() {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, state);
 

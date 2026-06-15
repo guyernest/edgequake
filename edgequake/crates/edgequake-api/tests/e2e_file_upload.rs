@@ -26,6 +26,7 @@ fn create_test_config() -> ServerConfig {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     }
 }
 

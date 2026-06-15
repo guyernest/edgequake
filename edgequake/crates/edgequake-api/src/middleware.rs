@@ -24,7 +24,7 @@
 use axum::{
     body::Body,
     extract::Request,
-    http::{HeaderValue, StatusCode},
+    http::{HeaderValue, Method, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
@@ -84,6 +84,40 @@ pub async fn request_id(mut request: Request, next: Next) -> Response {
         .insert("x-request-id", HeaderValue::from_str(&request_id).unwrap());
 
     response
+}
+
+/// Read-only guard middleware for snapshot-baked servers.
+///
+/// Rejects all write methods (POST, PUT, PATCH, DELETE) with HTTP 405 Method Not Allowed.
+/// GET, HEAD, and OPTIONS pass through unaffected.
+///
+/// Mounted conditionally by `build_router` when `ServerConfig.read_only` is `true`.
+/// The flag is driven by the `SNAPSHOT_BAKED` environment variable (set at deploy time
+/// by Plan 01 Task 2 — this middleware only reads the already-parsed flag).
+///
+/// ## Implements
+///
+/// - **REG-03**: API-layer read-only guard for snapshot-baked GraphRAG instances
+/// - **D-03**: 4xx rejection of writes (not silent 202)
+pub async fn readonly_guard(req: Request, next: Next) -> Response {
+    match req.method() {
+        &Method::GET | &Method::HEAD | &Method::OPTIONS => {
+            // Read-only and safe methods pass through
+            next.run(req).await
+        }
+        method => {
+            warn!(
+                method = %method,
+                uri = %req.uri(),
+                "readonly_guard: rejecting write request on snapshot-baked server"
+            );
+            (
+                StatusCode::METHOD_NOT_ALLOWED,
+                "This server is snapshot-baked and does not accept write operations",
+            )
+                .into_response()
+        }
+    }
 }
 
 /// Authentication configuration.

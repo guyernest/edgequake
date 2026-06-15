@@ -60,6 +60,7 @@ impl TestContext {
             enable_cors: false,
             enable_compression: false,
             enable_swagger: true,
+        read_only: false,
         };
         let server = Server::new(config, state);
         let app = server.build_router();
@@ -431,6 +432,7 @@ async fn test_tenant_with_model_config() {
         enable_cors: false,
         enable_compression: false,
         enable_swagger: true,
+        read_only: false,
     };
     let server = Server::new(config, state);
     let app = server.build_router();

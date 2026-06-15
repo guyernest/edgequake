@@ -56,6 +56,7 @@ mod postgres_rebuild_tests {
             enable_cors: false,
             enable_compression: false,
             enable_swagger: true,
+        read_only: false,
         }
     }
 
