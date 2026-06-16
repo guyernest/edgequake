@@ -614,6 +614,155 @@ impl AppState {
         }
     }
 
+    /// Create AppState from pre-populated storage backends (for dual-protocol baked Lambda, D-04).
+    ///
+    /// The provided `Arc<dyn Trait>` adapters are the SAME instances that `RagRuntime` loaded
+    /// the snapshot into (via `SnapshotLoader`), so REST handlers serve the snapshot data.
+    ///
+    /// Unlike `new_memory()`, this constructor does NOT create fresh empty adapters — it accepts
+    /// the ones already hydrated by `mcp-rag-server-core`'s `init_snapshot_memory`.
+    ///
+    /// LLM and embedding providers are created from env (MockProvider if no key set), identical
+    /// to `new_memory()`. The REST surface on the baked Lambda only reads data; it never calls
+    /// LLM/embedding providers for write operations.
+    ///
+    /// # Pitfall 4 Prevention
+    ///
+    /// Do NOT call `new_memory()` internally — it creates its own fresh empty adapters,
+    /// discarding the loaded ones. This constructor assigns the provided adapters DIRECTLY.
+    pub fn new_memory_from_backends(
+        kv: Arc<dyn edgequake_storage::traits::KVStorage>,
+        vector: Arc<dyn edgequake_storage::traits::VectorStorage>,
+        graph: Arc<dyn edgequake_storage::traits::GraphStorage>,
+        llm_api_key: Option<impl Into<String>>,
+    ) -> Self {
+        use edgequake_llm::ProviderFactory;
+
+        // If API key provided, set it in environment for factory to use
+        if let Some(key) = llm_api_key {
+            std::env::set_var("OPENAI_API_KEY", key.into());
+        }
+
+        // Use ProviderFactory for auto-detection (same as new_memory())
+        let (llm_provider, embedding_provider) =
+            ProviderFactory::from_env().expect("Failed to create LLM provider from environment");
+
+        let embedding_dim = embedding_provider.dimension();
+
+        // Use the provided (already-loaded) adapters — NOT fresh empty ones.
+        // This is the key difference from new_memory(): we accept pre-hydrated adapters
+        // so the REST surface serves the snapshot data, not empty stores.
+        let kv_storage = kv;
+        let vector_storage = vector;
+        let graph_storage = graph;
+
+        tracing::info!(
+            provider = embedding_provider.name(),
+            dimension = embedding_dim,
+            storage_type = "memory-from-backends",
+            "AppState initialized from pre-loaded snapshot adapters"
+        );
+
+        // Create workspace service with default tenant (same as new_memory())
+        let workspace_service: SharedWorkspaceService = Arc::new(InMemoryWorkspaceService::new());
+
+        // Create conversation service (same as new_memory())
+        let conversation_service: SharedConversationService =
+            Arc::new(InMemoryConversationService::new());
+
+        // Create pipeline with LLM and embedding providers (same as new_memory())
+        use edgequake_pipeline::LLMExtractor;
+        let extractor = Arc::new(LLMExtractor::new(Arc::clone(&llm_provider)));
+        let pipeline = Arc::new(
+            Pipeline::default_pipeline()
+                .with_extractor(extractor)
+                .with_embedding_provider(Arc::clone(&embedding_provider)),
+        );
+
+        // Create task infrastructure (same as new_memory())
+        let task_storage = Arc::new(edgequake_tasks::memory::MemoryTaskStorage::new());
+        let task_queue = Arc::new(edgequake_tasks::queue::ChannelTaskQueue::new(100));
+
+        // Create legacy query engine pointing at the provided (loaded) vector/graph adapters
+        let query_engine = Arc::new(QueryEngine::new(
+            QueryEngineConfig::default(),
+            Arc::clone(&vector_storage) as Arc<dyn edgequake_storage::traits::VectorStorage>,
+            Arc::clone(&graph_storage) as Arc<dyn edgequake_storage::traits::GraphStorage>,
+            Arc::clone(&embedding_provider),
+            Arc::clone(&llm_provider),
+        ));
+
+        // Create SOTA query engine pointing at the provided (loaded) adapters
+        let reranker = create_bm25_reranker();
+        let sota_engine = Arc::new(
+            SOTAQueryEngine::new(
+                SOTAQueryConfig::default(),
+                Arc::clone(&vector_storage) as Arc<dyn edgequake_storage::traits::VectorStorage>,
+                Arc::clone(&graph_storage) as Arc<dyn edgequake_storage::traits::GraphStorage>,
+                Arc::clone(&embedding_provider),
+                Arc::clone(&llm_provider),
+            )
+            .with_reranker(reranker),
+        );
+
+        // vector_registry wraps the loaded vector_storage (same Arc clone)
+        let vector_registry: Arc<dyn edgequake_storage::traits::WorkspaceVectorRegistry> =
+            Arc::new(MemoryWorkspaceVectorRegistry::new(
+                Arc::clone(&vector_storage) as Arc<dyn edgequake_storage::traits::VectorStorage>,
+            ));
+
+        // Create auth services (same as new_memory())
+        let auth_config = AuthConfig::default();
+        let jwt_service = Arc::new(JwtService::new(auth_config.clone()));
+        let password_service = Arc::new(PasswordService::new(auth_config.clone()));
+        let rbac_service = Arc::new(RbacService::new());
+
+        Self {
+            kv_storage,
+            vector_storage,
+            vector_registry,
+            graph_storage,
+            llm_provider: Arc::clone(&llm_provider),
+            embedding_provider: Arc::clone(&embedding_provider),
+            query_engine,
+            sota_engine,
+            pipeline,
+            task_storage,
+            task_queue,
+            pipeline_state: PipelineState::new(),
+            progress_broadcaster: ProgressBroadcaster::default(),
+            workspace_service,
+            conversation_service,
+            config: AppConfig::default(),
+            auth_config,
+            jwt_service,
+            password_service,
+            rbac_service,
+            cache_manager: CacheManager::with_defaults(),
+            rate_limiter: RateLimiter::new(TokenBucketConfig::default()),
+            storage_mode: StorageMode::Memory,
+            models_config: Arc::new(
+                ModelsConfig::load().unwrap_or_else(|_| ModelsConfig::builtin_defaults()),
+            ),
+            #[cfg(feature = "postgres")]
+            pg_pool: None,
+            // PDF storage not available in memory/snapshot mode
+            #[cfg(feature = "postgres")]
+            pdf_storage: None,
+            start_time: std::time::Instant::now(),
+            // SECURITY: Memory/snapshot mode uses permissive config for read-only access.
+            // The baked Lambda REST surface is always read-only (read_only=true in ServerConfig).
+            path_validation_config: crate::path_validation::PathValidationConfig {
+                allow_any_path: true,
+                ..Default::default()
+            },
+            namespace_registry: None,
+            namespace_storage_factory: None,
+            namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
+            bm25_storage_factory: None,
+        }
+    }
+
     /// Create a minimal state for testing.
     pub fn test_state() -> Self {
         use edgequake_llm::MockProvider;
