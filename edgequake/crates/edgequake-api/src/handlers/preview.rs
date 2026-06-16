@@ -104,6 +104,20 @@ fn get_registry(state: &AppState) -> Result<&dyn edgequake_core::NamespaceRegist
 /// - 400: Invalid slug
 /// - 404: Namespace not found (no registry or namespace absent)
 /// - 501: Registry not configured
+#[utoipa::path(
+    post,
+    path = "/api/v1/namespaces/{namespace}/preview",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    responses(
+        (status = 202, description = "Preview request recorded; poll GET /preview for progress"),
+        (status = 400, description = "Invalid slug"),
+        (status = 404, description = "Namespace not found"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn run_extraction_preview(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
@@ -172,6 +186,19 @@ pub async fn run_extraction_preview(
 ///
 /// - 400: Invalid slug
 /// - 501: Registry not configured
+#[utoipa::path(
+    get,
+    path = "/api/v1/namespaces/{namespace}/preview",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    responses(
+        (status = 200, description = "Preview result or pending status"),
+        (status = 400, description = "Invalid slug"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn get_extraction_preview(
     State(state): State<AppState>,
     Path(namespace): Path<String>,

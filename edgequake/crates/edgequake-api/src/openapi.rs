@@ -104,6 +104,35 @@ use crate::handlers;
         handlers::update_workspace,
         handlers::delete_workspace,
         handlers::get_workspace_stats,
+        // Namespace management (Wave 0 — missing from committed spec)
+        handlers::list_namespaces,
+        handlers::create_namespace,
+        handlers::describe_namespace,
+        handlers::get_namespace_config,
+        handlers::update_namespace_config,
+        // Namespace schema lifecycle (Wave 0)
+        handlers::get_namespace_schema,
+        handlers::suggest_namespace_schema,
+        handlers::update_namespace_schema,
+        handlers::approve_namespace_schema,
+        handlers::reject_namespace_schema,
+        handlers::get_extraction_preview,
+        handlers::run_extraction_preview,
+        // Document CRUD (Wave 0 — individual document endpoints)
+        handlers::get_document,
+        handlers::update_document,
+        handlers::delete_document,
+        handlers::delete_all_documents,
+        handlers::get_track_status,
+        handlers::scan_directory,
+        handlers::reprocess_failed,
+        // Workspace rebuild / pipeline ops (Wave 0)
+        handlers::rebuild_embeddings,
+        handlers::rebuild_knowledge_graph,
+        handlers::reprocess_all_documents,
+        handlers::export_workspace_snapshot,
+        // Entity resolution (Wave 0)
+        handlers::resolve_entities,
         // Lineage & Provenance
         handlers::get_chunk_detail,
         handlers::get_entity_provenance,
@@ -270,6 +299,11 @@ use crate::handlers;
         handlers::ReprocessAllResponse,
         handlers::RebuildKnowledgeGraphRequest,
         handlers::RebuildKnowledgeGraphResponse,
+        // Entity resolution schemas (Wave 0)
+        handlers::ResolveEntitiesRequest,
+        handlers::ResolveEntitiesResponse,
+        handlers::TermResolution,
+        handlers::ResolvedEntity,
     )),
     tags(
         (name = "Health", description = "Health check endpoints"),
@@ -293,6 +327,7 @@ use crate::handlers;
         (name = "Workspaces", description = "Workspace management within tenants"),
         (name = "Lineage", description = "Data lineage and provenance tracking"),
         (name = "PDF", description = "PDF document upload and processing"),
+        (name = "Namespaces", description = "Namespace management and schema lifecycle"),
     ),
     security(
         ("bearer_auth" = []),

@@ -70,6 +70,18 @@ fn get_registry(
 /// - 400: Invalid slug format
 /// - 409: Namespace with this slug already exists
 /// - 501: Namespace registry not configured
+#[utoipa::path(
+    post,
+    path = "/api/v1/namespaces",
+    request_body = inline(serde_json::Value),
+    responses(
+        (status = 201, description = "Namespace created"),
+        (status = 400, description = "Invalid slug format"),
+        (status = 409, description = "Namespace already exists"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn create_namespace(
     State(state): State<AppState>,
     Json(body): Json<CreateNamespaceRequest>,
@@ -106,6 +118,15 @@ pub async fn create_namespace(
 /// # Errors
 ///
 /// - 501: Namespace registry not configured
+#[utoipa::path(
+    get,
+    path = "/api/v1/namespaces",
+    responses(
+        (status = 200, description = "List of namespaces"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn list_namespaces(
     State(state): State<AppState>,
 ) -> ApiResult<Json<NamespaceListResponse>> {
@@ -133,6 +154,20 @@ pub async fn list_namespaces(
 /// - 400: Invalid slug format
 /// - 404: Namespace not found
 /// - 501: Namespace registry not configured
+#[utoipa::path(
+    get,
+    path = "/api/v1/namespaces/{namespace}",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    responses(
+        (status = 200, description = "Namespace details"),
+        (status = 400, description = "Invalid slug format"),
+        (status = 404, description = "Namespace not found"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn describe_namespace(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
@@ -165,6 +200,20 @@ pub async fn describe_namespace(
 /// - 400: Invalid slug format
 /// - 404: Namespace or config not found
 /// - 501: Namespace registry not configured
+#[utoipa::path(
+    get,
+    path = "/api/v1/namespaces/{namespace}/config",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    responses(
+        (status = 200, description = "Pipeline configuration"),
+        (status = 400, description = "Invalid slug format"),
+        (status = 404, description = "Namespace or config not found"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn get_namespace_config(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
@@ -285,6 +334,21 @@ fn validate_pipeline_config_update(
 /// - 400: Invalid slug format or validation failure
 /// - 404: Namespace not found
 /// - 501: Namespace registry not configured
+#[utoipa::path(
+    put,
+    path = "/api/v1/namespaces/{namespace}/config",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    request_body = inline(serde_json::Value),
+    responses(
+        (status = 200, description = "Updated pipeline configuration"),
+        (status = 400, description = "Invalid slug format or validation failure"),
+        (status = 404, description = "Namespace not found"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn update_namespace_config(
     State(state): State<AppState>,
     Path(namespace): Path<String>,

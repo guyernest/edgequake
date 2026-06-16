@@ -362,6 +362,20 @@ pub(crate) async fn stage_workspace_sampling_dir(
 /// - 400: Invalid slug format
 /// - 404: Namespace not found
 /// - 501: Namespace registry not configured
+#[utoipa::path(
+    get,
+    path = "/api/v1/namespaces/{namespace}/schema",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    responses(
+        (status = 200, description = "Schema proposal"),
+        (status = 400, description = "Invalid slug format"),
+        (status = 404, description = "Namespace not found"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn get_namespace_schema(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
@@ -403,6 +417,21 @@ pub async fn get_namespace_schema(
 /// - 400: Invalid slug or unresolvable data location
 /// - 404: Namespace not found
 /// - 501: Registry not configured
+#[utoipa::path(
+    post,
+    path = "/api/v1/namespaces/{namespace}/schema",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    request_body = inline(serde_json::Value),
+    responses(
+        (status = 202, description = "Schema suggestion accepted; poll GET /schema for progress"),
+        (status = 400, description = "Invalid slug or unresolvable data location"),
+        (status = 404, description = "Namespace not found"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn suggest_namespace_schema(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
@@ -653,6 +682,22 @@ pub async fn suggest_namespace_schema(
 /// - 400: Invalid slug
 /// - 404: No schema proposal exists
 /// - 501: Registry not configured
+#[utoipa::path(
+    patch,
+    path = "/api/v1/namespaces/{namespace}/schema",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    request_body = inline(serde_json::Value),
+    responses(
+        (status = 200, description = "Merged schema proposal"),
+        (status = 400, description = "Invalid slug"),
+        (status = 404, description = "No schema proposal exists"),
+        (status = 409, description = "Schema suggestion in progress"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn update_namespace_schema(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
@@ -734,6 +779,20 @@ pub async fn update_namespace_schema(
 /// - 400: Invalid slug or schema not in Proposed state
 /// - 404: No schema proposal found
 /// - 501: Registry not configured
+#[utoipa::path(
+    post,
+    path = "/api/v1/namespaces/{namespace}/schema/approve",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    responses(
+        (status = 200, description = "Schema approved"),
+        (status = 400, description = "Invalid slug or schema not in Proposed state"),
+        (status = 404, description = "No schema proposal found"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn approve_namespace_schema(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
@@ -765,6 +824,20 @@ pub async fn approve_namespace_schema(
 /// - 400: Invalid slug or schema not in Proposed state
 /// - 404: No schema proposal found
 /// - 501: Registry not configured
+#[utoipa::path(
+    post,
+    path = "/api/v1/namespaces/{namespace}/schema/reject",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    responses(
+        (status = 200, description = "Schema rejected"),
+        (status = 400, description = "Invalid slug or schema not in Proposed state"),
+        (status = 404, description = "No schema proposal found"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
 pub async fn reject_namespace_schema(
     State(state): State<AppState>,
     Path(namespace): Path<String>,

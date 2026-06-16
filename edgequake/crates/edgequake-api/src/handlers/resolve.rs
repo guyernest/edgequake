@@ -26,7 +26,8 @@ use crate::middleware::TenantContext;
 use crate::state::AppState;
 
 use super::namespace_graph::resolve_ns_graph;
-use super::resolve_types::*;
+
+pub use crate::handlers::resolve_types::*;
 
 // ============================================================================
 // Public Handlers
@@ -69,6 +70,17 @@ pub async fn ns_resolve_entities(
 /// Resolve entities using global storage by keyword terms.
 ///
 /// Same logic as `ns_resolve_entities` but uses the global storage backends.
+#[utoipa::path(
+    post,
+    path = "/api/v1/entities/resolve",
+    request_body = ResolveEntitiesRequest,
+    responses(
+        (status = 200, description = "Resolved entities", body = ResolveEntitiesResponse),
+        (status = 400, description = "Invalid request (empty terms or >20 items)"),
+        (status = 500, description = "Embedding or storage error"),
+    ),
+    tags = ["Entities"]
+)]
 pub async fn resolve_entities(
     State(state): State<AppState>,
     _tenant_ctx: TenantContext,
