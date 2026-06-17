@@ -38,6 +38,16 @@ pub struct CreateTenantRequest {
     pub name: String,
     /// URL-friendly slug (auto-generated if not provided).
     pub slug: Option<String>,
+    /// Optional client-supplied deterministic tenant id (D-8/Phase 137).
+    ///
+    /// When present, this id is honored ONLY when it equals the authoritative
+    /// `X-Tenant-ID` from the request's `TenantContext` (the proxy-injected,
+    /// unspoofable header). A mismatch returns 403 (write-path spoofing guard,
+    /// D-9b). When absent, `create_tenant` mints a fresh `Uuid::new_v4()`
+    /// (backward-compatible). Enables the admin UI's deterministic
+    /// `uuid5(PMCP_TENANT_NS, org)` tenant identity for build provisioning.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
     /// Optional description.
     pub description: Option<String>,
     /// Plan type (free, basic, pro, enterprise).
@@ -615,6 +625,7 @@ mod tests {
         let req = CreateTenantRequest {
             name: "Acme Corp".to_string(),
             slug: Some("acme".to_string()),
+            id: None,
             description: Some("Test tenant".to_string()),
             plan: Some("pro".to_string()),
             default_llm_model: Some("gemma3:12b".to_string()),
@@ -629,6 +640,48 @@ mod tests {
         assert!(json.contains("acme"));
         assert!(json.contains("gemma3:12b"));
         assert!(json.contains("ollama"));
+    }
+
+    #[test]
+    fn test_create_tenant_request_id_serde_skip_when_none() {
+        // When id is None, the "id" key must not appear in JSON (D-8/Phase 137).
+        let req = CreateTenantRequest {
+            name: "NoId Corp".to_string(),
+            slug: None,
+            id: None,
+            description: None,
+            plan: None,
+            default_llm_model: None,
+            default_llm_provider: None,
+            default_embedding_model: None,
+            default_embedding_provider: None,
+            default_embedding_dimension: None,
+        };
+
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(!json.contains("\"id\""), "id key must be absent when None");
+
+        // When id is Some, it must be serialized.
+        let known_uuid = Uuid::parse_str("f772b58d-5b3e-54d7-acf4-62980e496f2e").unwrap();
+        let req_with_id = CreateTenantRequest {
+            name: "WithId Corp".to_string(),
+            id: Some(known_uuid),
+            slug: None,
+            description: None,
+            plan: None,
+            default_llm_model: None,
+            default_llm_provider: None,
+            default_embedding_model: None,
+            default_embedding_provider: None,
+            default_embedding_dimension: None,
+        };
+
+        let json_with_id = serde_json::to_string(&req_with_id).unwrap();
+        assert!(json_with_id.contains("\"id\""), "id key must be present when Some");
+        assert!(
+            json_with_id.contains("f772b58d-5b3e-54d7-acf4-62980e496f2e"),
+            "id value must match the supplied uuid"
+        );
     }
 
     #[test]

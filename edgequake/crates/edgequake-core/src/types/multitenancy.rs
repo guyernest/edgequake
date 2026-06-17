@@ -112,6 +112,29 @@ impl Tenant {
         }
     }
 
+    /// Override the server-generated tenant id with a caller-supplied value (D-8/Phase 137).
+    ///
+    /// Used by `create_tenant` to honor a client-supplied deterministic id (e.g. the
+    /// admin UI's `uuid5(PMCP_TENANT_NS, orgId)`) when the caller has proven it owns
+    /// that identity (by matching the `X-Tenant-ID` header, see D-9b validation in
+    /// `workspaces.rs`). The `None` path is unchanged — `Tenant::new` already calls
+    /// `Uuid::new_v4()` which remains the default (backward-compatible).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use edgequake_core::Tenant;
+    /// use uuid::Uuid;
+    ///
+    /// let known_id = Uuid::new_v4();
+    /// let tenant = Tenant::new("Acme Corp", "acme").with_id(known_id);
+    /// assert_eq!(tenant.tenant_id, known_id);
+    /// ```
+    pub fn with_id(mut self, id: Uuid) -> Self {
+        self.tenant_id = id;
+        self
+    }
+
     /// Set the tenant plan.
     pub fn with_plan(mut self, plan: TenantPlan) -> Self {
         self.plan = plan;

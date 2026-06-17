@@ -51,6 +51,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::ApiError;
+use crate::middleware::TenantContext;
 use crate::state::AppState;
 
 // ============ Stats Cache ============
@@ -172,9 +173,26 @@ fn workspace_to_response(workspace: &Workspace) -> WorkspaceResponse {
 )]
 pub async fn create_tenant(
     State(state): State<AppState>,
+    tenant_ctx: TenantContext,
     Json(request): Json<CreateTenantRequest>,
 ) -> Result<(StatusCode, Json<TenantResponse>), ApiError> {
     use edgequake_core::{Tenant, TenantPlan};
+
+    // D-9b: if the caller supplies a deterministic id, validate it against the
+    // authoritative X-Tenant-ID header (proxy-injected, unspoofable). A mismatch
+    // or a supplied id with no header tenant id → 403 (write-path spoofing guard).
+    if let Some(requested_id) = request.id {
+        match tenant_ctx.tenant_id_uuid() {
+            Some(header_id) if header_id == requested_id => {
+                // id matches the authoritative header — proceed
+            }
+            _ => {
+                // Either no X-Tenant-ID header, or the supplied id doesn't match.
+                // Reject unconditionally; never silently honor a mismatched id.
+                return Err(ApiError::Forbidden);
+            }
+        }
+    }
 
     let slug = request.slug.unwrap_or_else(|| generate_slug(&request.name));
 
@@ -186,6 +204,12 @@ pub async fn create_tenant(
     };
 
     let mut tenant = Tenant::new(&request.name, &slug).with_plan(plan);
+
+    // Honor the client-supplied id (Option A — fluent builder, mirrors with_plan/with_description).
+    // Only reached when id matched the header (D-9b gate above).
+    if let Some(id) = request.id {
+        tenant = tenant.with_id(id);
+    }
 
     if let Some(desc) = request.description.as_ref() {
         tenant = tenant.with_description(desc);
