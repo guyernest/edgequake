@@ -128,6 +128,14 @@ fn ollama_api_routes() -> Router<AppState> {
 /// API v1 routes.
 fn api_v1_routes() -> Router<AppState> {
     Router::new()
+        // Health endpoints under /api/v1 as well as the server root (routes.rs:96-98).
+        // The graph-rag-admin proxy rewrites every /api/edgequake/* call to
+        // ${GATEWAY}/api/v1/*, so the admin health check (checkHealth/checkReady in
+        // apps/graph-rag-admin/src/lib/api/edgequake.ts) only reaches the backend here.
+        // Reuse the exact same handlers as the root routes — no behavioral difference.
+        .route("/health", get(handlers::health_check))
+        .route("/ready", get(handlers::readiness_check))
+        .route("/live", get(handlers::liveness_check))
         // Namespace management endpoints (Plan 01-03)
         .route(
             "/namespaces",
