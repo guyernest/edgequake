@@ -75,6 +75,10 @@ const statusConfig = {
   partial_failure: { icon: XCircle, color: 'bg-orange-500', textColor: 'text-orange-600 dark:text-orange-400', label: 'Partial Failure', animate: false },
   // OODA-03: Partial success - some chunks extracted but not all
   partial_success: { icon: CheckCircle, color: 'bg-amber-500', textColor: 'text-amber-600 dark:text-amber-400', label: 'Partial', animate: false },
+  // Phase 143 (D-05/D-07): S3-as-record terminal state. Object existence == uploaded status.
+  // "Queued — processing coming soon" (143 ships before extraction exists in 144/145).
+  // Distinct from `uploading` (in-flight, animated). `uploaded` is non-animated terminal.
+  uploaded: { icon: Upload, color: 'bg-slate-500', textColor: 'text-slate-600 dark:text-slate-400', label: 'Queued', animate: false },
   
   // === LEGACY STAGES (backward compatibility) ===
   pending: { icon: Clock, color: 'bg-yellow-500', textColor: 'text-yellow-600 dark:text-yellow-400', label: 'Pending', animate: false },
@@ -132,7 +136,8 @@ export function isProcessingStatus(status: DocumentStatus): boolean {
  * Check if a status represents a terminal (final) state
  */
 export function isTerminalStatus(status: DocumentStatus): boolean {
-  return ['completed', 'indexed', 'failed', 'partial_failure', 'partial_success', 'cancelled'].includes(status);
+  // Phase 143: 'uploaded' is the S3-as-record terminal state (D-07) — not in-flight.
+  return ['completed', 'indexed', 'failed', 'partial_failure', 'partial_success', 'cancelled', 'uploaded'].includes(status);
 }
 
 /**
