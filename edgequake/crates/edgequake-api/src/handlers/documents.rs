@@ -37,6 +37,7 @@
 //!
 //! Async mode prevents request timeouts for large PDFs (can take 30s+ to process).
 
+use axum::extract::Query;
 use axum::http::StatusCode;
 use axum::{extract::State, Json};
 use axum_extra::extract::Multipart;
@@ -1334,6 +1335,7 @@ pub async fn list_documents(
                 partial_failure: 0,
                 failed: 0,
                 cancelled: 0,
+                uploaded: 0,
             },
         }));
     }
@@ -1682,6 +1684,7 @@ pub async fn list_documents(
             .iter()
             .filter(|d| d.status.as_deref() == Some("cancelled"))
             .count(),
+        uploaded: 0, // S3-listed raw docs not included in the legacy KV-based list (D-01/D-07)
     };
 
     let total = documents.len();
@@ -3632,6 +3635,7 @@ pub async fn get_track_status(
             .iter()
             .filter(|d| d.status.as_deref() == Some("cancelled"))
             .count(),
+        uploaded: 0, // S3-listed raw docs not in the KV track path (D-01/D-07)
     };
 
     // Find earliest created_at
@@ -4737,6 +4741,217 @@ pub async fn update_document(
     }
 }
 
+// ============================================================================
+// Phase 143: Presigned S3 raw-docs upload handlers
+// ============================================================================
+
+/// Query parameters for `GET /documents/raw`.
+#[derive(Debug, serde::Deserialize)]
+pub struct ListRawDocsParams {
+    /// Namespace filter. Required — the caller must supply the namespace that was
+    /// selected in the workspace context (D-08: no silent default namespace).
+    pub namespace: Option<String>,
+}
+
+/// `POST /documents/presign` — mint a scoped presigned S3 PUT URL.
+///
+/// Returns a presigned URL and the exact signed headers the browser must echo on the
+/// PUT request (review concern #1). Does NOT touch DynamoDB / KV storage / pipeline
+/// (S3-as-record design, D-01).
+///
+/// - `document_id` == `req.sha256` (content-addressed, D-03).
+/// - Content-addressed dedup: if the S3 object already exists, returns `is_duplicate:true`
+///   with no URL.
+/// - Every client-controlled key segment is validated (T-143-01, T-143-17).
+/// - `size` is checked against `state.config.max_document_size` (T-143-04 DoS guard).
+pub async fn presign_upload(
+    State(state): State<AppState>,
+    tenant_ctx: TenantContext,
+    Json(req): Json<PresignRequest>,
+) -> ApiResult<(StatusCode, Json<PresignResponse>)> {
+    debug!(
+        tenant_id = ?tenant_ctx.tenant_id,
+        workspace_id = ?tenant_ctx.workspace_id,
+        sha256 = %req.sha256,
+        filename = %req.filename,
+        namespace = %req.namespace,
+        "Presign upload request"
+    );
+
+    // --- Input validation ---
+
+    // sha256 must be non-empty lowercase hex of length 64 (D-03, T-143-06)
+    if req.sha256.is_empty()
+        || req.sha256.len() != 64
+        || !req.sha256.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return Err(ApiError::BadRequest(
+            "sha256 must be a lowercase hex string of exactly 64 characters".to_string(),
+        ));
+    }
+
+    if req.filename.is_empty() {
+        return Err(ApiError::BadRequest("filename must not be empty".to_string()));
+    }
+
+    if req.namespace.is_empty() {
+        return Err(ApiError::BadRequest("namespace must not be empty".to_string()));
+    }
+
+    // DoS guard: reject presign request if the declared size exceeds the configured limit (T-143-04).
+    // The browser-direct PUT means the Lambda never buffers the bytes, but we still gate on
+    // declared size so large-file presign URLs are never minted for this path.
+    if req.size > state.config.max_document_size as u64 {
+        return Err(ApiError::BadRequest(format!(
+            "Declared file size {} bytes exceeds the maximum allowed size of {} bytes",
+            req.size, state.config.max_document_size
+        )));
+    }
+
+    // Resolve tenant/workspace (mirrors the verbatim pattern from upload_file :2882-2886).
+    // WHY-D-09: tenant is server-injected (X-Tenant-ID), never client-supplied.
+    let workspace_id_for_storage = tenant_ctx
+        .workspace_id
+        .clone()
+        .unwrap_or_else(|| "default".to_string());
+
+    // tenant_id_for_storage is Option<String>; use "default" when absent (anonymous/no header).
+    let tenant_id_for_storage = tenant_ctx
+        .tenant_id
+        .clone()
+        .unwrap_or_else(|| "default".to_string());
+
+    // Build content-addressed S3 key (validates all client-controlled segments, T-143-01/17).
+    let s3_key = edgequake_storage_aws::RawDocsStorage::build_key(
+        &tenant_id_for_storage,
+        &workspace_id_for_storage,
+        &req.namespace,
+        &req.sha256,
+        &req.filename,
+    )
+    .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+
+    // document_id == sha256 (content-addressed, D-03)
+    let document_id = req.sha256.clone();
+
+    // --- Content-addressed dedup (D-03) ---
+    // Check S3 via HeadObject BEFORE minting a presigned URL.
+    let already_exists = state
+        .raw_docs
+        .head_exists(&s3_key)
+        .await
+        .map_err(|e| ApiError::Internal(format!("S3 dedup probe failed: {}", e)))?;
+
+    if already_exists {
+        debug!(document_id = %document_id, s3_key = %s3_key, "Duplicate detected — returning is_duplicate:true");
+        return Ok((StatusCode::CREATED, Json(PresignResponse::duplicate(document_id))));
+    }
+
+    // --- Mint presigned PUT URL ---
+    let (upload_url, upload_headers) = state
+        .raw_docs
+        .mint_presigned_put(
+            &s3_key,
+            &req.filename,
+            &req.sha256,
+            &req.namespace,
+            req.content_type.as_deref(),
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to mint presigned URL: {}", e)))?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(PresignResponse {
+            document_id,
+            upload_url: Some(upload_url),
+            upload_headers,
+            s3_key: Some(s3_key),
+            status: "presigned".to_string(),
+            is_duplicate: false,
+        }),
+    ))
+}
+
+/// `GET /documents/raw` — list raw documents from S3 by tenant/workspace/namespace prefix.
+///
+/// Returns a paginated list of all uploaded raw documents (S3 object existence ==
+/// status `uploaded`, D-01/D-07). No DynamoDB / KV storage touched.
+///
+/// Query params:
+/// - `namespace` (required): The namespace to filter by.
+pub async fn list_raw_docs(
+    State(state): State<AppState>,
+    tenant_ctx: TenantContext,
+    Query(params): Query<ListRawDocsParams>,
+) -> ApiResult<Json<Vec<RawDocSummary>>> {
+    let namespace = params.namespace.unwrap_or_default();
+    if namespace.is_empty() {
+        return Err(ApiError::BadRequest(
+            "namespace query parameter is required".to_string(),
+        ));
+    }
+
+    // Validate namespace segment (T-143-17)
+    edgequake_storage_aws::RawDocsStorage::validate_segment("namespace", &namespace)
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+
+    // Build prefix (cross-tenant isolation: always scoped to the caller's tenant/workspace).
+    let workspace_id = tenant_ctx
+        .workspace_id
+        .clone()
+        .unwrap_or_else(|| "default".to_string());
+    let tenant_id = tenant_ctx
+        .tenant_id
+        .clone()
+        .unwrap_or_else(|| "default".to_string());
+
+    let prefix = format!("{}/{}/{}/", tenant_id, workspace_id, namespace);
+
+    debug!(
+        tenant_id = %tenant_id,
+        workspace_id = %workspace_id,
+        namespace = %namespace,
+        prefix = %prefix,
+        "Listing raw docs by prefix"
+    );
+
+    let objects = state
+        .raw_docs
+        .list_raw_docs(&prefix)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to list raw docs: {}", e)))?;
+
+    // Map S3 objects to RawDocSummary.
+    // Key layout: {tenant}/{workspace}/{namespace}/{sha256}/{filename}
+    // Segment indices:   0        1          2         3         4
+    let summaries: Vec<RawDocSummary> = objects
+        .into_iter()
+        .filter_map(|obj| {
+            let segments: Vec<&str> = obj.key.split('/').collect();
+            if segments.len() < 5 {
+                warn!(key = %obj.key, "Raw doc key has unexpected segment count — skipping");
+                return None;
+            }
+            let sha256 = segments[3].to_string();
+            let file_name = segments[4].to_string();
+            let ns = segments[2].to_string();
+
+            Some(RawDocSummary {
+                document_id: sha256.clone(),
+                file_name,
+                file_size: obj.size.max(0) as u64,
+                content_hash: Some(sha256),
+                namespace: ns,
+                uploaded_at: obj.last_modified,
+                status: "uploaded".to_string(),
+            })
+        })
+        .collect();
+
+    Ok(Json(summaries))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4901,6 +5116,7 @@ mod tests {
                 partial_failure: 0,
                 failed: 0,
                 cancelled: 0,
+                uploaded: 0,
             },
         };
 
@@ -5010,6 +5226,7 @@ mod tests {
                 partial_failure: 0,
                 failed: 0,
                 cancelled: 0,
+                uploaded: 0,
             },
             is_complete: true,
             latest_message: Some("All documents processed successfully".to_string()),

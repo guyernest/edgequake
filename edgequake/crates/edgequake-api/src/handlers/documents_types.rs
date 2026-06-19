@@ -209,6 +209,7 @@ pub struct ListDocumentsRequest {
 /// - `partial_failure`: Processing completed but with issues (e.g., 0 entities extracted)
 /// - `failed`: Processing failed with an error
 /// - `cancelled`: Processing was cancelled by user
+/// - `uploaded`: Uploaded to S3 raw-docs store; queued for future processing (D-07)
 #[derive(Debug, Clone, Serialize, Default, ToSchema)]
 pub struct StatusCounts {
     /// Number of pending documents.
@@ -224,6 +225,98 @@ pub struct StatusCounts {
     pub failed: usize,
     /// Number of cancelled documents.
     pub cancelled: usize,
+    /// Number of raw documents uploaded to S3 (D-07 — derived from S3 object existence,
+    /// not a stored KV row; source of truth is the S3 list-raw-docs read path).
+    pub uploaded: usize,
+}
+
+// ============================================================================
+// Presigned-S3 raw-docs upload DTOs (Phase 143)
+// ============================================================================
+
+/// Request body for `POST /documents/presign`.
+///
+/// The caller provides the file metadata so the server can build a content-addressed
+/// S3 key and mint a scoped presigned PUT URL. The client computes `sha256` in-page
+/// (Web Crypto API) before calling this endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
+pub struct PresignRequest {
+    /// Original filename (client-supplied; validated — no '/', '..', control chars).
+    pub filename: String,
+    /// File size in bytes. Used for DoS guard (T-143-04); must not exceed
+    /// `AppConfig::max_document_size`.
+    pub size: u64,
+    /// SHA-256 content hash (hex, lowercase, 64 chars). Acts as the content-addressed
+    /// `document_id` (D-03). Advisory only — not a security boundary (D-04).
+    pub sha256: String,
+    /// Optional MIME type (e.g. `application/pdf`). When present it is signed into the
+    /// presigned URL; the browser must echo it as the `Content-Type` header on the PUT.
+    pub content_type: Option<String>,
+    /// Namespace within the workspace (client-supplied; validated).
+    pub namespace: String,
+}
+
+/// Response from `POST /documents/presign`.
+///
+/// On a fresh upload: `upload_url` + `upload_headers` are populated, `is_duplicate` is
+/// false, and `status` is `"presigned"`.
+///
+/// On a duplicate (content already in S3): `upload_url` is None, `upload_headers` is
+/// empty, `is_duplicate` is true, and `status` is `"uploaded"`.
+#[derive(Debug, Clone, Serialize, Default, ToSchema)]
+pub struct PresignResponse {
+    /// Content-addressed document identifier (== `sha256` from the request, D-03).
+    pub document_id: String,
+    /// Presigned S3 PUT URL. `None` when `is_duplicate` is true.
+    pub upload_url: Option<String>,
+    /// Exact set of headers the browser must include in the PUT request.
+    ///
+    /// These are the signed `x-amz-meta-*` headers (and optionally `content-type`)
+    /// baked into the presigned URL signature. Omitting any of them causes S3 to return
+    /// `403 SignatureDoesNotMatch` (review concern #1).
+    pub upload_headers: std::collections::BTreeMap<String, String>,
+    /// Full S3 key for the upload (`{tenant}/{workspace}/{namespace}/{sha256}/{filename}`).
+    /// `None` when `is_duplicate` is true.
+    pub s3_key: Option<String>,
+    /// `"presigned"` on a fresh upload; `"uploaded"` when the content already exists.
+    pub status: String,
+    /// `true` when the content-addressed key already exists in S3 (no new URL minted).
+    pub is_duplicate: bool,
+}
+
+impl PresignResponse {
+    /// Construct a duplicate short-circuit response (D-03).
+    pub fn duplicate(document_id: impl Into<String>) -> Self {
+        Self {
+            document_id: document_id.into(),
+            upload_url: None,
+            upload_headers: std::collections::BTreeMap::new(),
+            s3_key: None,
+            status: "uploaded".to_string(),
+            is_duplicate: true,
+        }
+    }
+}
+
+/// Summary of a single raw document from the S3-listed read path (`GET /documents/raw`).
+///
+/// status is always `"uploaded"` (object existence == status, D-01/D-07).
+#[derive(Debug, Clone, Serialize, Default, ToSchema)]
+pub struct RawDocSummary {
+    /// Content-addressed document identifier (SHA-256 segment of the S3 key, D-03).
+    pub document_id: String,
+    /// Original filename (5th segment of the S3 key).
+    pub file_name: String,
+    /// File size in bytes (from S3 object metadata).
+    pub file_size: u64,
+    /// SHA-256 content hash (same as `document_id` — included for clarity).
+    pub content_hash: Option<String>,
+    /// Namespace the document was uploaded into.
+    pub namespace: String,
+    /// ISO-8601 timestamp when the object was last modified (== upload time for new objects).
+    pub uploaded_at: Option<String>,
+    /// Always `"uploaded"` (D-07: derived from S3 object existence).
+    pub status: String,
 }
 
 /// List documents response.
@@ -1145,6 +1238,7 @@ mod tests {
                 partial_failure: 0,
                 failed: 0,
                 cancelled: 0,
+                uploaded: 0,
             },
         };
 
@@ -1254,6 +1348,7 @@ mod tests {
                 partial_failure: 0,
                 failed: 0,
                 cancelled: 0,
+                uploaded: 0,
             },
             is_complete: true,
             latest_message: Some("All documents processed successfully".to_string()),

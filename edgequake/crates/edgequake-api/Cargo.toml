@@ -17,6 +17,7 @@ vision = ["edgequake-pdf/vision"]
 edgequake-core = { path = "../edgequake-core", features = ["pipeline"] }
 edgequake-schema = { path = "../edgequake-schema" }
 edgequake-storage = { path = "../edgequake-storage" }
+edgequake-storage-aws = { path = "../edgequake-storage-aws" }
 edgequake-llm = { path = "../edgequake-llm" }
 edgequake-pipeline = { path = "../edgequake-pipeline" }
 edgequake-query = { path = "../edgequake-query" }

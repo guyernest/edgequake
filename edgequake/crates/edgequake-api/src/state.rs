@@ -322,6 +322,14 @@ pub struct AppState {
     /// Factory for creating namespace-scoped BM25 storage instances.
     /// None when BM25/Athena is not configured (hybrid retrieval falls back to vector-only).
     pub bm25_storage_factory: Option<Arc<dyn Bm25StorageFactory>>,
+
+    /// Raw-docs S3 client (Phase 143 "S3-as-record").
+    ///
+    /// Mints presigned PUT URLs for browser-direct upload, probes object existence for
+    /// content-addressed dedup (D-03), and lists uploaded docs via ListObjectsV2 (D-01a).
+    /// Built from the `RAW_DOCS_BUCKET` env var; an empty bucket is acceptable in
+    /// unit-test / in-memory paths (no S3 calls will be made).
+    pub raw_docs: Arc<edgequake_storage_aws::RawDocsStorage>,
 }
 
 /// Application configuration.
@@ -467,6 +475,15 @@ impl AppState {
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
             bm25_storage_factory: None,
+            raw_docs: Arc::new(
+                // These constructors are synchronous but always called from within an async
+                // Tokio runtime context. block_on() runs the async init on the current thread.
+                tokio::runtime::Handle::current().block_on(
+                    edgequake_storage_aws::RawDocsStorage::new(
+                        std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
+                    ),
+                ),
+            ),
         }
     }
 
@@ -611,6 +628,15 @@ impl AppState {
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
             bm25_storage_factory: None,
+            raw_docs: Arc::new(
+                // These constructors are synchronous but always called from within an async
+                // Tokio runtime context. block_on() runs the async init on the current thread.
+                tokio::runtime::Handle::current().block_on(
+                    edgequake_storage_aws::RawDocsStorage::new(
+                        std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
+                    ),
+                ),
+            ),
         }
     }
 
@@ -760,6 +786,13 @@ impl AppState {
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
             bm25_storage_factory: None,
+            raw_docs: Arc::new(
+                tokio::runtime::Handle::current().block_on(
+                    edgequake_storage_aws::RawDocsStorage::new(
+                        std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
+                    ),
+                ),
+            ),
         }
     }
 
@@ -858,6 +891,13 @@ impl AppState {
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
             bm25_storage_factory: None,
+            raw_docs: Arc::new(
+                tokio::runtime::Handle::current().block_on(
+                    edgequake_storage_aws::RawDocsStorage::new(
+                        std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
+                    ),
+                ),
+            ),
         }
     }
 
@@ -1118,6 +1158,12 @@ impl AppState {
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
             bm25_storage_factory: None,
+            raw_docs: Arc::new(
+                edgequake_storage_aws::RawDocsStorage::new(
+                    std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
+                )
+                .await,
+            ),
         })
     }
 
