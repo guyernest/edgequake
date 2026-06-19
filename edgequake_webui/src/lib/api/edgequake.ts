@@ -525,6 +525,131 @@ export async function uploadFile(file: File): Promise<UploadDocumentResponse> {
   });
 }
 
+// ============================================================================
+// Phase 143: Presigned S3 upload flow (D-01 / S3-as-record)
+// ============================================================================
+
+/**
+ * Request body for POST /documents/presign.
+ * Field names must match the Rust PresignRequest DTO exactly (snake_case).
+ */
+export interface PresignRequest {
+  /** Original filename (validated server-side — no '/', '..', control chars). */
+  filename: string;
+  /** File size in bytes. Server enforces max_document_size guard. */
+  size: number;
+  /** SHA-256 content hash (hex lowercase 64 chars). Content-addressed dedup (D-03). */
+  sha256: string;
+  /** Optional MIME type. When present, signed into the presigned URL. */
+  content_type?: string;
+  /** Namespace within the workspace (client-supplied; validated server-side). */
+  namespace: string;
+}
+
+/**
+ * Response from POST /documents/presign.
+ * Field names must match the Rust PresignResponse DTO exactly (snake_case).
+ *
+ * Fresh upload: upload_url + upload_headers populated, is_duplicate false, status "presigned".
+ * Duplicate: upload_url null, upload_headers empty, is_duplicate true, status "uploaded".
+ */
+export interface PresignResponse {
+  /** Content-addressed document id (== sha256, D-03). */
+  document_id: string;
+  /** Presigned S3 PUT URL. null when is_duplicate is true. */
+  upload_url: string | null;
+  /**
+   * Exact set of signed headers (x-amz-meta-*, content-type when set) the browser
+   * MUST echo verbatim on the PUT. Omitting any header causes 403 SignatureDoesNotMatch.
+   */
+  upload_headers: Record<string, string>;
+  /** Full S3 key. null when is_duplicate is true. */
+  s3_key: string | null;
+  /** "presigned" on fresh upload; "uploaded" on duplicate. */
+  status: string;
+  /** true when the content-addressed key already exists in S3 (no new PUT needed). */
+  is_duplicate: boolean;
+}
+
+/**
+ * One raw document from GET /documents/raw.
+ * Field names must match the Rust RawDocSummary DTO exactly (snake_case).
+ */
+export interface RawDocSummary {
+  /** Content-addressed document id (SHA-256 segment of S3 key, D-03). */
+  document_id: string;
+  /** Original filename from S3 object metadata. */
+  file_name: string;
+  /** File size in bytes from S3 object metadata. */
+  file_size: number;
+  /** SHA-256 content hash (same as document_id — included for clarity). */
+  content_hash?: string;
+  /** Namespace the document was uploaded into. */
+  namespace: string;
+  /** ISO-8601 upload timestamp (S3 LastModified). */
+  uploaded_at?: string;
+  /** Always "uploaded" (D-07: derived from S3 object existence). */
+  status: string;
+}
+
+/**
+ * Compute the SHA-256 hash of a file using native Web Crypto (no npm dep).
+ * CALLER must size-check before invoking this (do not call arrayBuffer on oversized files).
+ */
+export async function computeSha256(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * POST /documents/presign — mint a scoped presigned S3 PUT URL.
+ * Goes through the Next.js proxy so X-Tenant-ID is injected server-side (route.ts:342).
+ */
+export async function presignUpload(
+  req: PresignRequest,
+): Promise<PresignResponse> {
+  return api.post<PresignResponse>("/documents/presign", req);
+}
+
+/**
+ * PUT the file directly to S3 using the presigned URL.
+ *
+ * IMPORTANT: Uses raw fetch, NOT the api client. The api client adds
+ * Authorization/tenant headers that would break the SigV4 signature and
+ * re-introduce the API-GW 10 MB / 29s wall. The ONLY headers attached are
+ * the exact upload_headers from the presign response (signed x-amz-meta-* +
+ * content-type). Adding any other header causes 403 SignatureDoesNotMatch.
+ */
+export async function putToS3(
+  uploadUrl: string,
+  file: File,
+  headers: Record<string, string>,
+): Promise<void> {
+  const res = await fetch(uploadUrl, {
+    method: "PUT",
+    body: file,
+    headers,
+  });
+  if (!res.ok) {
+    throw new Error(`S3 PUT failed: ${res.status} ${res.statusText}`);
+  }
+}
+
+/**
+ * GET /documents/raw?namespace=... — list raw uploaded docs for the current
+ * tenant/workspace/namespace. Goes through the Next.js proxy (tenant injected).
+ */
+export async function listRawDocs(
+  namespace: string,
+): Promise<RawDocSummary[]> {
+  return api.get<RawDocSummary[]>(
+    `/documents/raw?namespace=${encodeURIComponent(namespace)}`,
+  );
+}
+
 /**
  * Upload a PDF document for vision-based extraction.
  * @param file The PDF file to upload
