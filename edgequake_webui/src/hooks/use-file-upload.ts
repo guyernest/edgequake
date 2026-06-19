@@ -4,28 +4,44 @@
  * @fileoverview Extracted from DocumentManager (OODA-13)
  * WHY: SRP - Upload orchestration is a distinct responsibility
  *
+ * Phase 143: Retargeted to presigned S3 flow (D-01 / S3-as-record).
+ * Upload sequence: size-check → SHA-256 → presign → direct S3 PUT echoing upload_headers.
+ * No confirm endpoint (D-01). No legacy uploadDocument/uploadFile calls from this hook.
+ *
  * @module edgequake_webui/hooks/use-file-upload
  */
 "use client";
 
 import type { UploadingFile } from "@/components/documents/types";
 import {
-  uploadDocument,
-  uploadPdfDocument,
+  computeSha256,
+  presignUpload,
+  putToS3,
   type DocumentsListResult,
 } from "@/lib/api/edgequake";
-import type { Document } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+/**
+ * Maximum file size in bytes (50 MB).
+ * Size is checked BEFORE hashing to avoid loading oversized files into memory (T-143-19).
+ */
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+
 export interface UseFileUploadOptions {
   /** Tenant ID for multi-tenancy */
   tenantId?: string | null;
   /** Workspace ID for isolation */
   workspaceId?: string | null;
+  /**
+   * Namespace for the presigned S3 upload key (D-08: taken from the current
+   * workspace/documents context, NOT a new picker). If absent at upload time,
+   * uploads are blocked with a clear error — no silent "default" fallback (D-08).
+   */
+  namespace?: string | null;
   /** Callback when upload starts (e.g., to switch filter) */
   onUploadStart?: () => void;
 }
@@ -48,17 +64,21 @@ export interface UseFileUploadReturn {
 /**
  * useFileUpload - Manages file upload state and orchestration
  *
- * Handles:
- * - Sequential file upload with progress tracking
- * - PDF vs text file routing
- * - Optimistic cache updates
- * - Duplicate detection
- * - Success/error toast notifications
+ * Phase 143 presigned-S3 flow:
+ * 1. Size-check BEFORE hashing (T-143-19 DoS guard — never load oversized into memory)
+ * 2. Require explicit namespace — missing namespace blocks upload, no silent fallback (D-08)
+ * 3. SHA-256 via native Web Crypto (no npm dep)
+ * 4. POST /documents/presign → duplicate short-circuit (D-03) or upload_url + upload_headers
+ * 5. PUT file directly to S3 echoing ONLY the signed upload_headers (T-143-11/T-143-18)
+ * 6. Invalidate BOTH documents + raw-docs query keys for immediate list refresh
+ *
+ * No confirm endpoint (D-01). No legacy uploadDocument/uploadFile calls.
+ * PDF path retargeted to the same presign flow (D-06: content-type agnostic presign).
  */
 export function useFileUpload(
   options: UseFileUploadOptions = {},
 ): UseFileUploadReturn {
-  const { tenantId, workspaceId, onUploadStart } = options;
+  const { tenantId, workspaceId, namespace, onUploadStart } = options;
 
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -68,8 +88,8 @@ export function useFileUpload(
   const { t } = useTranslation();
 
   /**
-   * Main upload handler with progress tracking
-   * WHY: Process files sequentially for better feedback and error isolation
+   * Main upload handler — presigned S3 flow (Phase 143).
+   * Processes files sequentially for per-file feedback and error isolation.
    */
   const handleFilesUpload = useCallback(
     async (files: File[]) => {
@@ -79,9 +99,6 @@ export function useFileUpload(
       onUploadStart?.();
 
       setIsUploading(true);
-
-      // Generate a shared track_id for this batch
-      const trackId = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
       // Initialize upload state for all files
       const initialFiles: UploadingFile[] = files.map((file) => ({
@@ -106,29 +123,79 @@ export function useFileUpload(
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
 
-        // Phase 1: Reading file
-        setUploadingFiles((prev) =>
-          prev.map((f, idx) =>
-            idx === i
-              ? {
-                  ...f,
-                  status: "reading" as const,
-                  progress: 10,
-                  phase: t("documents.upload.reading", "Reading file..."),
-                }
-              : f,
-          ),
-        );
-
         try {
-          // Phase 2: Uploading to server
+          // ── Step 1: Size check BEFORE hashing (T-143-19: never arrayBuffer an oversized file) ──
+          if (file.size > MAX_FILE_SIZE_BYTES) {
+            const sizeMb = (file.size / 1024 / 1024).toFixed(1);
+            toast.error(
+              `${file.name} is too large (${sizeMb} MB). Maximum allowed: ${MAX_FILE_SIZE_BYTES / 1024 / 1024} MB.`,
+              { duration: 6000 },
+            );
+            setUploadingFiles((prev) =>
+              prev.map((f, idx) =>
+                idx === i
+                  ? {
+                      ...f,
+                      status: "error" as const,
+                      progress: 100,
+                      error: `File too large (${sizeMb} MB)`,
+                      phase: t("common.failed", "Failed"),
+                    }
+                  : f,
+              ),
+            );
+            errorCount++;
+            continue;
+          }
+
+          // ── Step 2: Require explicit namespace — no silent fallback (D-08) ──
+          if (!namespace) {
+            toast.error(
+              `No namespace selected for this workspace — cannot upload ${file.name}. Please select a namespace context before uploading.`,
+              { duration: 6000 },
+            );
+            setUploadingFiles((prev) =>
+              prev.map((f, idx) =>
+                idx === i
+                  ? {
+                      ...f,
+                      status: "error" as const,
+                      progress: 100,
+                      error: "No namespace selected for this workspace",
+                      phase: t("common.failed", "Failed"),
+                    }
+                  : f,
+              ),
+            );
+            errorCount++;
+            continue;
+          }
+
+          // Phase: Reading file (SHA-256)
+          setUploadingFiles((prev) =>
+            prev.map((f, idx) =>
+              idx === i
+                ? {
+                    ...f,
+                    status: "reading" as const,
+                    progress: 10,
+                    phase: t("documents.upload.reading", "Reading file..."),
+                  }
+                : f,
+            ),
+          );
+
+          // ── Step 3: Compute SHA-256 (native Web Crypto, no npm dep) ──
+          const sha256 = await computeSha256(file);
+
+          // Phase: Presigning
           setUploadingFiles((prev) =>
             prev.map((f, idx) =>
               idx === i
                 ? {
                     ...f,
                     status: "uploading" as const,
-                    progress: 40,
+                    progress: 30,
                     phase: t(
                       "documents.upload.uploading",
                       "Uploading to server...",
@@ -138,152 +205,25 @@ export function useFileUpload(
             ),
           );
 
-          let response: {
-            document_id?: string;
-            pdf_id?: string;
-            duplicate_of?: string;
-            task_id?: string;
-            track_id?: string;
-          };
+          // ── Step 4: POST /documents/presign ──
+          const presign = await presignUpload({
+            filename: file.name,
+            size: file.size,
+            sha256,
+            content_type: file.type || undefined,
+            namespace,
+          });
 
-          // Check if file is PDF - route to PDF upload endpoint
-          const isPdfFile = file.type === "application/pdf";
-
-          if (isPdfFile) {
-            // Upload PDF file directly (multipart/form-data)
-            const pdfResponse = await uploadPdfDocument(file, {
-              title: file.name,
-              enable_vision: true, // Enable vision extraction by default for PDFs
-              track_id: trackId,
-            });
-
-            response = {
-              document_id: pdfResponse.document_id,
-              pdf_id: pdfResponse.pdf_id,
-              duplicate_of: pdfResponse.duplicate_of,
-              task_id: pdfResponse.task_id,
-              track_id: pdfResponse.track_id,
-            };
-
-            // Optimistic update for PDF upload
-            // WHY: PDFs must appear immediately in documents panel
-            // FIX: Use predicate-based filter for reliable query matching
-            if (pdfResponse.pdf_id && !pdfResponse.duplicate_of) {
-              const optimisticDoc: Document = {
-                id: pdfResponse.pdf_id,
-                title: file.name,
-                file_name: file.name,
-                file_size: file.size,
-                source_type: "pdf",
-                status: "processing",
-                mime_type: "application/pdf",
-                created_at: new Date().toISOString(),
-                pdf_id: pdfResponse.pdf_id,
-                track_id: pdfResponse.track_id,
-                tenant_id: tenantId ?? undefined,
-                workspace_id: workspaceId ?? undefined,
-              };
-
-              // Add to query cache for instant visibility
-              // Use predicate to match ANY documents query regardless of pagination params
-              queryClient.setQueriesData<DocumentsListResult>(
-                { predicate: (query) => query.queryKey[0] === "documents" },
-                (old) => {
-                  if (!old || !old.items || !Array.isArray(old.items))
-                    return old;
-                  const exists = old.items.some(
-                    (d) =>
-                      d.pdf_id === pdfResponse.pdf_id ||
-                      d.id === pdfResponse.pdf_id,
-                  );
-                  if (exists) return old;
-                  return {
-                    ...old,
-                    items: [optimisticDoc, ...old.items],
-                    total: (old.total ?? 0) + 1,
-                  };
-                },
-              );
-            }
-
-            // Store track_id and isPdf flag for progress tracking
-            setUploadingFiles((prev) =>
-              prev.map((f, idx) =>
-                idx === i
-                  ? {
-                      ...f,
-                      trackId: pdfResponse.track_id,
-                      isPdf: true,
-                    }
-                  : f,
-              ),
-            );
-          } else {
-            // Read text file content
-            const text = await file.text();
-
-            // Upload text document with async processing
-            const textResponse = await uploadDocument({
-              content: text,
-              source_type: "text",
-              title: file.name,
-              async_processing: true,
-              track_id: trackId,
-            });
-
-            response = textResponse;
-
-            // Optimistic update for text/markdown files
-            // FIX: Use predicate-based filter for reliable query matching
-            if (textResponse.document_id && !textResponse.duplicate_of) {
-              const optimisticDoc: Document = {
-                id: textResponse.document_id,
-                title: file.name,
-                file_name: file.name,
-                file_size: file.size,
-                source_type: "text",
-                status: "processing",
-                mime_type: file.type || "text/plain",
-                created_at: new Date().toISOString(),
-                track_id: textResponse.track_id,
-                tenant_id: tenantId ?? undefined,
-                workspace_id: workspaceId ?? undefined,
-              };
-
-              queryClient.setQueriesData<DocumentsListResult>(
-                { predicate: (query) => query.queryKey[0] === "documents" },
-                (old) => {
-                  if (!old || !old.items || !Array.isArray(old.items))
-                    return old;
-                  const exists = old.items.some(
-                    (d) => d.id === textResponse.document_id,
-                  );
-                  if (exists) return old;
-                  return {
-                    ...old,
-                    items: [optimisticDoc, ...old.items],
-                    total: (old.total ?? 0) + 1,
-                  };
-                },
-              );
-            }
-          }
-
-          // Check for duplicate
-          if (response.duplicate_of) {
+          // ── Step 5: Duplicate short-circuit (D-03) ──
+          if (presign.is_duplicate) {
             toast.warning(
               t(
                 "documents.upload.duplicate",
-                "{{name}} is a duplicate (existing: {{id}})",
-                {
-                  name: file.name,
-                  id: response.duplicate_of.slice(0, 8),
-                },
+                "{{name}} is a duplicate (already uploaded)",
+                { name: file.name },
               ),
               { duration: 4000 },
             );
-
-            // Mark as duplicate (treat as success with warning)
             setUploadingFiles((prev) =>
               prev.map((f, idx) =>
                 idx === i
@@ -303,32 +243,31 @@ export function useFileUpload(
             continue;
           }
 
-          // Phase 3: Extraction queued
+          // ── Step 6: PUT directly to S3, echoing signed upload_headers (T-143-11/T-143-18) ──
+          // putToS3 uses raw fetch — NOT the api client. Only the presign upload_headers
+          // are attached (signed x-amz-meta-* + content-type). Adding Authorization/tenant
+          // headers here would break the SigV4 signature and return 403.
+          if (!presign.upload_url) {
+            throw new Error(
+              "Presign response missing upload_url (not a duplicate)",
+            );
+          }
+
           setUploadingFiles((prev) =>
             prev.map((f, idx) =>
               idx === i
                 ? {
                     ...f,
-                    status: "extracting" as const,
-                    progress: 80,
-                    phase: response.task_id
-                      ? t(
-                          "documents.upload.queued",
-                          "Queued for extraction (Task: {{taskId}})",
-                          {
-                            taskId: response.task_id.slice(0, 8),
-                          },
-                        )
-                      : t("documents.upload.extracting", "Processing..."),
+                    progress: 60,
+                    phase: "Uploading to S3...",
                   }
                 : f,
             ),
           );
 
-          // Brief delay to show extraction phase
-          await new Promise((resolve) => setTimeout(resolve, 300));
+          await putToS3(presign.upload_url, file, presign.upload_headers);
 
-          // Mark as complete
+          // ── Step 7: Mark complete ──
           setUploadingFiles((prev) =>
             prev.map((f, idx) =>
               idx === i
@@ -410,16 +349,21 @@ export function useFileUpload(
         );
       }
 
-      // Refresh documents list - invalidate AND refetch immediately
-      // WHY: Ensures the document panel shows newly uploaded files immediately
-      // even if WebSocket updates are delayed or miss the initial document
+      // Refresh both documents list AND raw-docs list.
+      // WHY: invalidate "documents" for existing consumers + "raw-docs" for the
+      // new S3-listed raw-docs list (Task 4). Both query keys use the same
+      // invalidation so an upload immediately surfaces in the list.
       await queryClient.invalidateQueries({ queryKey: ["documents"] });
-      // Force immediate refetch of all documents queries
-      queryClient.refetchQueries({ 
+      await queryClient.invalidateQueries({ queryKey: ["raw-docs"] });
+      queryClient.refetchQueries({
         queryKey: ["documents"],
         type: "active",
       });
-      
+      queryClient.refetchQueries({
+        queryKey: ["raw-docs"],
+        type: "active",
+      });
+
       setIsUploading(false);
 
       // Clear upload list after delay
@@ -427,7 +371,7 @@ export function useFileUpload(
         setUploadingFiles([]);
       }, 3000);
     },
-    [queryClient, t, router, tenantId, workspaceId, onUploadStart],
+    [queryClient, t, router, namespace, tenantId, workspaceId, onUploadStart],
   );
 
   /**

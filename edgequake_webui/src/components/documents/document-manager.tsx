@@ -79,6 +79,13 @@ export function DocumentManager() {
   const [pipelineDialogOpen, setPipelineDialogOpen] = useState(false);
 
   // OODA-13: Upload state extracted to useFileUpload hook
+  // Phase 143 (D-08): namespace is taken from the current workspace/documents context.
+  // The documents view does not yet expose a namespace selector; it is null here,
+  // which causes useFileUpload to block uploads with a clear "no namespace" error.
+  // Wire a real namespace value once the workspace/namespace context is available
+  // in this view (tracked for follow-up — see Phase 143 SUMMARY known stubs).
+  const uploadNamespace: string | null = null;
+
   const {
     uploadingFiles,
     isUploading,
@@ -89,6 +96,7 @@ export function DocumentManager() {
   } = useFileUpload({
     tenantId: selectedTenantId,
     workspaceId: selectedWorkspaceId,
+    namespace: uploadNamespace,
     onUploadStart: () => setStatusFilter('all'),
   });
 
