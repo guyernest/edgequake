@@ -21,7 +21,8 @@
  */
 'use client';
 
-import { listRawDocs, type RawDocSummary } from '@/lib/api/edgequake';
+import { getWorkspace, listRawDocs, type RawDocSummary } from '@/lib/api/edgequake';
+import { resolveNamespaceSlug, NamespaceSlugError } from '@/lib/namespace-resolve';
 import { useTenantStore } from '@/stores/use-tenant-store';
 import type { Document } from '@/types';
 import { useQuery } from '@tanstack/react-query';
@@ -80,13 +81,25 @@ export function DocumentManager() {
   // Pipeline status dialog state
   const [pipelineDialogOpen, setPipelineDialogOpen] = useState(false);
 
-  // OODA-13: Upload state extracted to useFileUpload hook
-  // Phase 143 (D-08): namespace is taken from the current workspace/documents context.
-  // The documents view does not yet expose a namespace selector; it is null here,
-  // which causes useFileUpload to block uploads with a clear "no namespace" error.
-  // Wire a real namespace value once the workspace/namespace context is available
-  // in this view (tracked for follow-up — see Phase 143 SUMMARY known stubs).
-  const uploadNamespace: string | null = null;
+  // Phase 143 gap-fix (D-08): resolve the namespace from the currently-selected workspace
+  // via getWorkspace + resolveNamespaceSlug — mirrors workspace/page.tsx lines ~307-317.
+  // If the workspace lacks a namespace_slug the NamespaceSlugError is caught and
+  // uploadNamespace stays null, causing useFileUpload to block with a clear toast error.
+  const { data: workspaceForNamespace } = useQuery({
+    queryKey: ['workspace', selectedTenantId, selectedWorkspaceId],
+    queryFn: () => getWorkspace(selectedTenantId!, selectedWorkspaceId!),
+    enabled: !!selectedTenantId && !!selectedWorkspaceId,
+  });
+
+  let uploadNamespace: string | null = null;
+  if (workspaceForNamespace) {
+    try {
+      uploadNamespace = resolveNamespaceSlug(workspaceForNamespace);
+    } catch (e) {
+      if (!(e instanceof NamespaceSlugError)) throw e;
+      uploadNamespace = null;
+    }
+  }
 
   const {
     uploadingFiles,
