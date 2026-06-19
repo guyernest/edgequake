@@ -21,8 +21,10 @@
  */
 'use client';
 
+import { listRawDocs, type RawDocSummary } from '@/lib/api/edgequake';
 import { useTenantStore } from '@/stores/use-tenant-store';
 import type { Document } from '@/types';
+import { useQuery } from '@tanstack/react-query';
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -100,6 +102,17 @@ export function DocumentManager() {
     onUploadStart: () => setStatusFilter('all'),
   });
 
+  // Phase 143: Query GET /documents/raw so S3-uploaded raw docs appear in the list.
+  // Key matches the one invalidated by useFileUpload after a successful upload, so
+  // the list refreshes immediately without a manual reload.
+  // Guard with enabled: !!uploadNamespace — no fire without an explicit namespace (D-08).
+  const { data: rawDocsData } = useQuery<RawDocSummary[]>({
+    queryKey: ['raw-docs', selectedTenantId, selectedWorkspaceId, uploadNamespace],
+    queryFn: () => listRawDocs(uploadNamespace!),
+    enabled: !!uploadNamespace,
+    staleTime: 10_000,
+  });
+
   // OODA-14: Document mutations extracted to useDocumentMutations hook
   const {
     deleteMutation,
@@ -135,10 +148,37 @@ export function DocumentManager() {
     t,
   });
 
+  // Phase 143: Map RawDocSummary records to the Document shape the list expects.
+  // status is cast via spread because Document.status is a strict union but
+  // normalizeStatus() in status-badge.tsx handles any in-map key, including 'uploaded'.
+  const rawDocsMapped: Document[] = (rawDocsData ?? []).map(
+    (raw): Document => ({
+      id: raw.document_id,
+      title: raw.file_name,
+      file_name: raw.file_name,
+      file_size: raw.file_size,
+      content_hash: raw.content_hash,
+      created_at: raw.uploaded_at,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      status: raw.status as any, // 'uploaded' — handled by normalizeStatus + statusConfig
+      source_type: 'file',
+    }),
+  );
+
   // OODA-19: Filter and sort documents using extracted hook
   // OODA-20: Also compute status counts in hook
+  //
+  // Phase 143: Merge raw docs (S3 listed) with the existing in-memory KV docs.
+  // De-duplicate by id (document_id == sha256 for raw docs, so identical content
+  // that appears in both sources is shown only once — raw-docs entry takes priority).
+  const rawDocIds = new Set(rawDocsMapped.map((d) => d.id));
+  const mergedItems = [
+    ...rawDocsMapped,
+    ...(data?.items || []).filter((d) => !rawDocIds.has(d.id)),
+  ];
+
   const { documents, totalCount, totalPages, statusCounts } = useDocumentFiltering({
-    documents: data?.items || [],
+    documents: mergedItems,
     searchQuery,
     statusFilter,
     sortField,
