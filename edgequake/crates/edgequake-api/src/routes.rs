@@ -264,6 +264,9 @@ fn api_v1_routes() -> Router<AppState> {
             "/documents/upload/batch",
             post(handlers::upload_files_batch),
         )
+        // Phase 143: Presigned-S3 raw-docs upload — MUST come before /documents/{document_id}
+        .route("/documents/presign", post(handlers::presign_upload))
+        .route("/documents/raw", get(handlers::list_raw_docs))
         // PDF Upload (SPEC-007) - MUST come before /documents/{document_id}
         .route("/documents/pdf", post(handlers::upload_pdf_document))
         .route("/documents/pdf", get(handlers::list_pdfs))
@@ -507,6 +510,9 @@ fn namespace_scoped_routes() -> Router<AppState> {
             "/documents/upload/batch",
             post(handlers::upload_files_batch),
         )
+        // Phase 143: Presigned-S3 raw-docs upload — MUST come before /documents/{document_id}
+        .route("/documents/presign", post(handlers::presign_upload))
+        .route("/documents/raw", get(handlers::list_raw_docs))
         .route("/documents/{document_id}", get(handlers::get_document))
         .route("/documents/{document_id}", put(handlers::update_document))
         .route(
