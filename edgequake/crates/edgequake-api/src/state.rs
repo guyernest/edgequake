@@ -1516,4 +1516,148 @@ mod tests {
         assert!(state.storage_mode.is_memory());
         assert_eq!(state.config.workspace_id, "default");
     }
+
+    // ============================================================================
+    // Tests for seed_default_workspace (Phase 30 WSU-01)
+    // ============================================================================
+
+    /// Build a minimal in-memory AppState for testing seed_default_workspace.
+    async fn make_seed_state() -> AppState {
+        use edgequake_storage::{MemoryGraphStorage, MemoryKVStorage, MemoryVectorStorage};
+        use std::sync::Arc;
+        let kv = Arc::new(MemoryKVStorage::new("test")) as Arc<dyn edgequake_storage::traits::KVStorage>;
+        let vectors = Arc::new(MemoryVectorStorage::new("test", 768)) as Arc<dyn edgequake_storage::traits::VectorStorage>;
+        let graph = Arc::new(MemoryGraphStorage::new("test")) as Arc<dyn edgequake_storage::traits::GraphStorage>;
+        AppState::new_memory_from_backends(kv, vectors, graph, None::<String>)
+    }
+
+    /// INV-1 at the LIST level: after seed, list_tenants + list_workspaces return the expected row.
+    #[tokio::test]
+    async fn seed_default_workspace_inv1_list_level() {
+        let state = make_seed_state().await;
+        state.seed_default_workspace("university-courses").await.unwrap();
+
+        let tenants = state.workspace_service.list_tenants(10, 0).await.unwrap();
+        assert_eq!(tenants.len(), 1, "expected exactly 1 tenant after seed");
+
+        let tenant_id = tenants[0].tenant_id;
+        let workspaces = state.workspace_service.list_workspaces(tenant_id).await.unwrap();
+        assert_eq!(workspaces.len(), 1, "expected exactly 1 workspace after seed");
+        assert_eq!(workspaces[0].slug, "university-courses", "workspace.slug must equal namespace");
+
+        // NamespaceSlug::parse must succeed on the slug (INV-1)
+        let ns = edgequake_core::NamespaceSlug::parse(&workspaces[0].slug);
+        assert!(ns.is_ok(), "seeded slug must be a valid NamespaceSlug");
+    }
+
+    /// INV-1 at the RESPONSE level: namespace_slug in the serialized WorkspaceResponse == namespace.
+    #[tokio::test]
+    async fn seed_default_workspace_inv1_response_level() {
+        use edgequake_core::NamespaceSlug;
+
+        let state = make_seed_state().await;
+        state.seed_default_workspace("university-courses").await.unwrap();
+
+        let tenants = state.workspace_service.list_tenants(10, 0).await.unwrap();
+        let tenant_id = tenants[0].tenant_id;
+        let workspaces = state.workspace_service.list_workspaces(tenant_id).await.unwrap();
+        let ws = &workspaces[0];
+
+        // Replicate workspace_to_response namespace_slug derivation:
+        //   if NamespaceSlug::parse(slug).is_ok() { slug.clone() } else { String::new() }
+        let derived_namespace_slug = if NamespaceSlug::parse(&ws.slug).is_ok() {
+            ws.slug.clone()
+        } else {
+            String::new()
+        };
+        assert_eq!(
+            derived_namespace_slug, "university-courses",
+            "serialized WorkspaceResponse.namespace_slug must equal manifest namespace"
+        );
+    }
+
+    /// Pair-scoped idempotency: two calls with the same namespace → exactly 1 tenant + 1 workspace.
+    #[tokio::test]
+    async fn seed_default_workspace_pair_scoped_idempotency() {
+        let state = make_seed_state().await;
+        state.seed_default_workspace("university-courses").await.unwrap();
+
+        // Capture ids from first call
+        let tenants_first = state.workspace_service.list_tenants(10, 0).await.unwrap();
+        let tid = tenants_first[0].tenant_id;
+        let workspaces_first = state.workspace_service.list_workspaces(tid).await.unwrap();
+        let wid = workspaces_first[0].workspace_id;
+
+        // Second call — must be a no-op
+        state.seed_default_workspace("university-courses").await.unwrap();
+
+        let tenants_second = state.workspace_service.list_tenants(10, 0).await.unwrap();
+        assert_eq!(tenants_second.len(), 1, "must still be exactly 1 tenant after 2nd seed");
+        let workspaces_second = state.workspace_service.list_workspaces(tid).await.unwrap();
+        assert_eq!(workspaces_second.len(), 1, "must still be exactly 1 workspace after 2nd seed");
+        assert_eq!(workspaces_second[0].workspace_id, wid, "workspace_id must be identical both calls");
+    }
+
+    /// Non-global-skip: seed "a" then seed "b" → 2 tenants, each with its own workspace.
+    #[tokio::test]
+    async fn seed_default_workspace_non_global_skip() {
+        let state = make_seed_state().await;
+        state.seed_default_workspace("alpha-project").await.unwrap();
+        state.seed_default_workspace("beta-project").await.unwrap();
+
+        let tenants = state.workspace_service.list_tenants(10, 0).await.unwrap();
+        assert_eq!(tenants.len(), 2, "two different namespaces must produce 2 tenants");
+
+        for t in &tenants {
+            let wss = state.workspace_service.list_workspaces(t.tenant_id).await.unwrap();
+            assert_eq!(wss.len(), 1, "each tenant must have exactly 1 workspace");
+        }
+    }
+
+    /// Determinism: two fresh AppStates seeded with the same namespace derive identical ids.
+    #[tokio::test]
+    async fn seed_default_workspace_determinism() {
+        let state1 = make_seed_state().await;
+        state1.seed_default_workspace("university-courses").await.unwrap();
+        let t1 = state1.workspace_service.list_tenants(10, 0).await.unwrap();
+        let tid1 = t1[0].tenant_id;
+        let ws1 = state1.workspace_service.list_workspaces(tid1).await.unwrap();
+        let wid1 = ws1[0].workspace_id;
+
+        let state2 = make_seed_state().await;
+        state2.seed_default_workspace("university-courses").await.unwrap();
+        let t2 = state2.workspace_service.list_tenants(10, 0).await.unwrap();
+        let tid2 = t2[0].tenant_id;
+        let ws2 = state2.workspace_service.list_workspaces(tid2).await.unwrap();
+        let wid2 = ws2[0].workspace_id;
+
+        assert_eq!(tid1, tid2, "same namespace must derive same tenant_id across fresh AppStates");
+        assert_eq!(wid1, wid2, "same namespace must derive same workspace_id across fresh AppStates");
+    }
+
+    /// Fail-loud: invalid namespace slugs must return Err and not seed anything.
+    #[tokio::test]
+    async fn seed_default_workspace_invalid_namespace_fails_loud() {
+        // Case 1: uppercase + underscore
+        let state = make_seed_state().await;
+        let result = state.seed_default_workspace("Bad_NS").await;
+        assert!(result.is_err(), "uppercase/underscore namespace must return Err");
+        let tenants = state.workspace_service.list_tenants(10, 0).await.unwrap();
+        assert_eq!(tenants.len(), 0, "no tenant must be seeded on invalid namespace (Bad_NS)");
+
+        // Case 2: empty string
+        let state2 = make_seed_state().await;
+        let result2 = state2.seed_default_workspace("").await;
+        assert!(result2.is_err(), "empty namespace must return Err");
+        let tenants2 = state2.workspace_service.list_tenants(10, 0).await.unwrap();
+        assert_eq!(tenants2.len(), 0, "no tenant must be seeded on empty namespace");
+
+        // Case 3: >63 chars
+        let long_ns = "a".repeat(64);
+        let state3 = make_seed_state().await;
+        let result3 = state3.seed_default_workspace(&long_ns).await;
+        assert!(result3.is_err(), ">63 char namespace must return Err");
+        let tenants3 = state3.workspace_service.list_tenants(10, 0).await.unwrap();
+        assert_eq!(tenants3.len(), 0, "no tenant must be seeded on >63 char namespace");
+    }
 }
