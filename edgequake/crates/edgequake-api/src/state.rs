@@ -1339,6 +1339,125 @@ impl AppState {
         Ok(())
     }
 
+    /// Seed one deterministic default tenant + workspace into the in-memory WorkspaceService.
+    ///
+    /// # Purpose (Phase 30 WSU-01)
+    ///
+    /// Read-only baked graph-rag Lambdas construct an `InMemoryWorkspaceService` with empty
+    /// tenants/workspaces HashMaps. This helper seeds exactly one tenant and one workspace so
+    /// `GET /api/v1/tenants` and `GET /api/v1/tenants/{id}/workspaces` return a browsable
+    /// workspace instead of `[]`.
+    ///
+    /// # Invariants
+    ///
+    /// - **INV-1**: `workspace.slug == namespace` (the `WorkspaceResponse.namespace_slug` field
+    ///   is derived from `workspace.slug`, so it equals the manifest namespace).
+    /// - **INV-2**: This method is called in-process at cold start, NEVER via HTTP, so the
+    ///   `readonly_guard` (which 405s non-GET requests from the UI) is completely bypassed.
+    ///
+    /// # Deterministic IDs
+    ///
+    /// Tenant and workspace IDs are derived using UUIDv5 from `SEED_UUID_NAMESPACE`, a
+    /// project-stable namespace constant. Changing `SEED_UUID_NAMESPACE` would re-key every
+    /// seeded tenant and workspace — treat it as stable API.
+    ///
+    /// Derivation scheme:
+    /// - `tenant_id = Uuid::new_v5(&SEED_UUID_NAMESPACE, namespace.as_bytes())`
+    /// - `workspace_id = Uuid::new_v5(&SEED_UUID_NAMESPACE, "workspace:{namespace}".as_bytes())`
+    ///
+    /// # Idempotency
+    ///
+    /// The guard is PAIR-SCOPED: checks only the deterministic tenant/workspace pair derived
+    /// from `namespace`. If they already exist, returns `Ok(())` immediately. Does NOT gate on
+    /// `list_tenants().is_empty()` — seeding a second namespace ("b") when "a" already exists
+    /// must succeed.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ApiError::BadRequest` if `namespace` fails `NamespaceSlug::parse` (fail loud
+    /// per RISK-3 / T-30-03). No tenant or workspace is created on error.
+    pub async fn seed_default_workspace(&self, namespace: &str) -> crate::error::ApiResult<()> {
+        use edgequake_core::{NamespaceSlug, Tenant, Workspace};
+
+        // Step 1: Validate the namespace via NamespaceSlug::parse (fail loud on invalid input).
+        let slug = NamespaceSlug::parse(namespace).map_err(|e| {
+            crate::error::ApiError::BadRequest(format!(
+                "seed_default_workspace: invalid namespace slug '{}': {}",
+                namespace, e
+            ))
+        })?;
+        let ns = slug.as_str();
+
+        // SEED_UUID_NAMESPACE: project-stable constant for UUIDv5 derivation.
+        // STABLE API — DO NOT CHANGE. Changing this re-keys every seeded tenant/workspace.
+        // Value: a random UUID minted for this project (Phase 30 WSU-01, 2026-06-20).
+        const SEED_UUID_NAMESPACE: uuid::Uuid =
+            uuid::Uuid::from_bytes([0x9e, 0x4a, 0x1b, 0xd7, 0xf3, 0x8c, 0x4a, 0x2e,
+                                    0xb6, 0xd0, 0x5c, 0x71, 0x3e, 0x8f, 0x92, 0xa1]);
+
+        // Step 2: Derive deterministic IDs.
+        let tenant_id = uuid::Uuid::new_v5(&SEED_UUID_NAMESPACE, ns.as_bytes());
+        let workspace_id = uuid::Uuid::new_v5(
+            &SEED_UUID_NAMESPACE,
+            format!("workspace:{ns}").as_bytes(),
+        );
+
+        // Step 3: Pair-scoped idempotency guard.
+        // If the workspace already exists for this deterministic tenant, skip.
+        if let Ok(Some(_)) = self.workspace_service.get_workspace_by_slug(tenant_id, ns).await {
+            tracing::debug!(
+                namespace = %ns,
+                tenant_id = %tenant_id,
+                "seed_default_workspace: already seeded, skipping"
+            );
+            return Ok(());
+        }
+
+        // Step 4: Create the tenant (only if it does not yet exist).
+        if self.workspace_service.get_tenant(tenant_id).await.map_or(true, |opt| opt.is_none()) {
+            let tenant = Tenant::new(ns, ns).with_id(tenant_id);
+            self.workspace_service
+                .create_tenant(tenant)
+                .await
+                .map_err(|e| {
+                    crate::error::ApiError::Internal(format!(
+                        "seed_default_workspace: failed to create tenant for '{}': {}",
+                        ns, e
+                    ))
+                })?;
+            tracing::info!(
+                namespace = %ns,
+                tenant_id = %tenant_id,
+                "seed_default_workspace: created default tenant"
+            );
+        }
+
+        // Step 5: Insert the workspace with the deterministic id + slug == namespace.
+        // Use insert_workspace (not create_workspace) so both id AND slug are set explicitly.
+        let mut workspace = Workspace::new(tenant_id, ns, ns);
+        workspace.workspace_id = workspace_id;
+        workspace.is_active = true;
+
+        self.workspace_service
+            .insert_workspace(workspace)
+            .await
+            .map_err(|e| {
+                crate::error::ApiError::Internal(format!(
+                    "seed_default_workspace: failed to insert workspace for '{}': {}",
+                    ns, e
+                ))
+            })?;
+
+        tracing::info!(
+            namespace = %ns,
+            tenant_id = %tenant_id,
+            workspace_id = %workspace_id,
+            "seed_default_workspace: seeded default workspace (slug == namespace)"
+        );
+
+        Ok(())
+    }
+
     /// Create a workspace-specific pipeline with the workspace's LLM configuration.
     ///
     /// @implements SPEC-032: Workspace-specific LLM for ingestion
@@ -1522,19 +1641,16 @@ mod tests {
     // ============================================================================
 
     /// Build a minimal in-memory AppState for testing seed_default_workspace.
-    async fn make_seed_state() -> AppState {
-        use edgequake_storage::{MemoryGraphStorage, MemoryKVStorage, MemoryVectorStorage};
-        use std::sync::Arc;
-        let kv = Arc::new(MemoryKVStorage::new("test")) as Arc<dyn edgequake_storage::traits::KVStorage>;
-        let vectors = Arc::new(MemoryVectorStorage::new("test", 768)) as Arc<dyn edgequake_storage::traits::VectorStorage>;
-        let graph = Arc::new(MemoryGraphStorage::new("test")) as Arc<dyn edgequake_storage::traits::GraphStorage>;
-        AppState::new_memory_from_backends(kv, vectors, graph, None::<String>)
+    /// Uses block_in_place to allow test_state()'s internal block_on to succeed inside
+    /// a #[tokio::test] async context (which runs on a multi-thread scheduler).
+    fn make_seed_state() -> AppState {
+        tokio::task::block_in_place(|| AppState::test_state())
     }
 
     /// INV-1 at the LIST level: after seed, list_tenants + list_workspaces return the expected row.
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn seed_default_workspace_inv1_list_level() {
-        let state = make_seed_state().await;
+        let state = make_seed_state();
         state.seed_default_workspace("university-courses").await.unwrap();
 
         let tenants = state.workspace_service.list_tenants(10, 0).await.unwrap();
@@ -1551,11 +1667,11 @@ mod tests {
     }
 
     /// INV-1 at the RESPONSE level: namespace_slug in the serialized WorkspaceResponse == namespace.
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn seed_default_workspace_inv1_response_level() {
         use edgequake_core::NamespaceSlug;
 
-        let state = make_seed_state().await;
+        let state = make_seed_state();
         state.seed_default_workspace("university-courses").await.unwrap();
 
         let tenants = state.workspace_service.list_tenants(10, 0).await.unwrap();
@@ -1577,9 +1693,9 @@ mod tests {
     }
 
     /// Pair-scoped idempotency: two calls with the same namespace → exactly 1 tenant + 1 workspace.
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn seed_default_workspace_pair_scoped_idempotency() {
-        let state = make_seed_state().await;
+        let state = make_seed_state();
         state.seed_default_workspace("university-courses").await.unwrap();
 
         // Capture ids from first call
@@ -1599,9 +1715,9 @@ mod tests {
     }
 
     /// Non-global-skip: seed "a" then seed "b" → 2 tenants, each with its own workspace.
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn seed_default_workspace_non_global_skip() {
-        let state = make_seed_state().await;
+        let state = make_seed_state();
         state.seed_default_workspace("alpha-project").await.unwrap();
         state.seed_default_workspace("beta-project").await.unwrap();
 
@@ -1615,16 +1731,16 @@ mod tests {
     }
 
     /// Determinism: two fresh AppStates seeded with the same namespace derive identical ids.
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn seed_default_workspace_determinism() {
-        let state1 = make_seed_state().await;
+        let state1 = make_seed_state();
         state1.seed_default_workspace("university-courses").await.unwrap();
         let t1 = state1.workspace_service.list_tenants(10, 0).await.unwrap();
         let tid1 = t1[0].tenant_id;
         let ws1 = state1.workspace_service.list_workspaces(tid1).await.unwrap();
         let wid1 = ws1[0].workspace_id;
 
-        let state2 = make_seed_state().await;
+        let state2 = make_seed_state();
         state2.seed_default_workspace("university-courses").await.unwrap();
         let t2 = state2.workspace_service.list_tenants(10, 0).await.unwrap();
         let tid2 = t2[0].tenant_id;
@@ -1636,17 +1752,17 @@ mod tests {
     }
 
     /// Fail-loud: invalid namespace slugs must return Err and not seed anything.
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn seed_default_workspace_invalid_namespace_fails_loud() {
         // Case 1: uppercase + underscore
-        let state = make_seed_state().await;
+        let state = make_seed_state();
         let result = state.seed_default_workspace("Bad_NS").await;
         assert!(result.is_err(), "uppercase/underscore namespace must return Err");
         let tenants = state.workspace_service.list_tenants(10, 0).await.unwrap();
         assert_eq!(tenants.len(), 0, "no tenant must be seeded on invalid namespace (Bad_NS)");
 
         // Case 2: empty string
-        let state2 = make_seed_state().await;
+        let state2 = make_seed_state();
         let result2 = state2.seed_default_workspace("").await;
         assert!(result2.is_err(), "empty namespace must return Err");
         let tenants2 = state2.workspace_service.list_tenants(10, 0).await.unwrap();
@@ -1654,7 +1770,7 @@ mod tests {
 
         // Case 3: >63 chars
         let long_ns = "a".repeat(64);
-        let state3 = make_seed_state().await;
+        let state3 = make_seed_state();
         let result3 = state3.seed_default_workspace(&long_ns).await;
         assert!(result3.is_err(), ">63 char namespace must return Err");
         let tenants3 = state3.workspace_service.list_tenants(10, 0).await.unwrap();
