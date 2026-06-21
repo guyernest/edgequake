@@ -656,7 +656,7 @@ impl AppState {
     ///
     /// Do NOT call `new_memory()` internally — it creates its own fresh empty adapters,
     /// discarding the loaded ones. This constructor assigns the provided adapters DIRECTLY.
-    pub fn new_memory_from_backends(
+    pub async fn new_memory_from_backends(
         kv: Arc<dyn edgequake_storage::traits::KVStorage>,
         vector: Arc<dyn edgequake_storage::traits::VectorStorage>,
         graph: Arc<dyn edgequake_storage::traits::GraphStorage>,
@@ -786,12 +786,15 @@ impl AppState {
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
             bm25_storage_factory: None,
+            // Phase 30 fix: new_memory_from_backends is async (baked-lambda cold-start path),
+            // so await RawDocsStorage::new directly. The prior Handle::current().block_on()
+            // panicked ("Cannot start a runtime from within a runtime") when invoked inside
+            // the lambda's tokio runtime.
             raw_docs: Arc::new(
-                tokio::runtime::Handle::current().block_on(
-                    edgequake_storage_aws::RawDocsStorage::new(
-                        std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
-                    ),
-                ),
+                edgequake_storage_aws::RawDocsStorage::new(
+                    std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
+                )
+                .await,
             ),
         }
     }
