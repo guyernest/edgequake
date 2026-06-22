@@ -94,7 +94,7 @@ async fn create_test_workspace(
 async fn test_workspace_pipeline_uses_configured_mock_provider() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create workspace explicitly configured with Mock provider
     let workspace = create_test_workspace(
@@ -148,7 +148,7 @@ async fn test_workspace_openai_without_api_key_behavior() {
     // Ensure NO OpenAI API key is set
     std::env::remove_var("OPENAI_API_KEY");
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create workspace configured with OpenAI (but no API key available)
     let workspace = create_test_workspace(
@@ -197,7 +197,7 @@ async fn test_workspace_pipeline_handles_invalid_provider() {
     clean_provider_env();
     std::env::remove_var("OPENAI_API_KEY");
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create workspace with OpenAI (which will fail without API key)
     let workspace = create_test_workspace(
@@ -250,7 +250,7 @@ async fn test_workspace_pipeline_handles_invalid_provider() {
 async fn test_multiple_workspaces_provider_isolation() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create workspace 1 with Mock provider
     let ws1 = create_test_workspace(

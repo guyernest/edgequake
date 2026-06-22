@@ -32,10 +32,12 @@ async fn main() -> anyhow::Result<()> {
         read_only,
     };
 
-    // VERIFIED constructor (synchronous) — do NOT use AppState::new(StorageMode::Memory).await;
-    // that is the approximate PATTERNS form. new_memory falls back to Mock LLM provider
-    // when no API key is set, which is correct for this skeleton (T-25-READY: fast cold start).
-    let state = AppState::new_memory(None::<String>);
+    // new_memory is async (Phase 30 fix completion): it awaits RawDocsStorage::new during
+    // AppState init. Falls back to Mock LLM provider when no API key is set (correct for this
+    // skeleton, T-25-READY). The earlier synchronous form used Handle::current().block_on(),
+    // which panicked ("Cannot start a runtime from within a runtime") inside this tokio
+    // runtime on every cold start.
+    let state = AppState::new_memory(None::<String>).await;
 
     let server = Server::new(config, state);
     server.run().await.map_err(Into::into)

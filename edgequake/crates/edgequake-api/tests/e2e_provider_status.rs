@@ -18,7 +18,7 @@ async fn test_provider_status_mock() {
     std::env::remove_var("OLLAMA_HOST");
     std::env::remove_var("EDGEQUAKE_LLM_PROVIDER");
 
-    let app_state = edgequake_api::AppState::new_memory(None::<String>);
+    let app_state = edgequake_api::AppState::new_memory(None::<String>).await;
     let app = edgequake_api::create_router(app_state);
 
     // Act: GET /api/v1/settings/provider/status
@@ -62,7 +62,7 @@ async fn test_provider_status_ollama() {
     std::env::remove_var("OPENAI_API_KEY");
     std::env::remove_var("EDGEQUAKE_LLM_PROVIDER");
 
-    let app_state = edgequake_api::AppState::new_memory(None::<String>);
+    let app_state = edgequake_api::AppState::new_memory(None::<String>).await;
     let app = edgequake_api::create_router(app_state);
 
     // Act
@@ -101,7 +101,7 @@ async fn test_provider_status_uptime() {
     std::env::remove_var("OLLAMA_HOST");
     std::env::remove_var("EDGEQUAKE_LLM_PROVIDER");
 
-    let app_state = edgequake_api::AppState::new_memory(None::<String>);
+    let app_state = edgequake_api::AppState::new_memory(None::<String>).await;
     let app = edgequake_api::create_router(app_state);
 
     // Wait a bit to accumulate uptime
@@ -152,7 +152,7 @@ async fn test_provider_status_dimension_mismatch() {
     std::env::remove_var("OLLAMA_HOST");
     std::env::remove_var("EDGEQUAKE_LLM_PROVIDER");
 
-    let app_state = edgequake_api::AppState::new_memory(None::<String>);
+    let app_state = edgequake_api::AppState::new_memory(None::<String>).await;
     let app = edgequake_api::create_router(app_state);
 
     // Act

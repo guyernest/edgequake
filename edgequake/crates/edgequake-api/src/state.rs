@@ -501,7 +501,7 @@ impl AppState {
     /// 2. OLLAMA_HOST or OLLAMA_MODEL (selects Ollama)
     /// 3. OPENAI_API_KEY (selects OpenAI)
     /// 4. Fallback to Mock provider
-    pub fn new_memory(llm_api_key: Option<impl Into<String>>) -> Self {
+    pub async fn new_memory(llm_api_key: Option<impl Into<String>>) -> Self {
         use edgequake_llm::ProviderFactory;
 
         // If API key provided, set it in environment for factory to use
@@ -628,14 +628,16 @@ impl AppState {
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
             bm25_storage_factory: None,
+            // Phase 30 fix (completion): new_memory is now async (live-lambda cold-start
+            // path), so await RawDocsStorage::new directly. The prior Handle::current()
+            // .block_on() panicked ("Cannot start a runtime from within a runtime") when
+            // invoked inside the lambda's tokio runtime — same defect already fixed in
+            // new_memory_from_backends; this completes it for the live (non-baked) path.
             raw_docs: Arc::new(
-                // These constructors are synchronous but always called from within an async
-                // Tokio runtime context. block_on() runs the async init on the current thread.
-                tokio::runtime::Handle::current().block_on(
-                    edgequake_storage_aws::RawDocsStorage::new(
-                        std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
-                    ),
-                ),
+                edgequake_storage_aws::RawDocsStorage::new(
+                    std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
+                )
+                .await,
             ),
         }
     }

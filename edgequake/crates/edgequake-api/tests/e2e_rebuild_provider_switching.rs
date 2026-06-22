@@ -46,8 +46,8 @@ fn create_test_config() -> ServerConfig {
     }
 }
 
-fn create_memory_state() -> AppState {
-    AppState::new_memory(None::<String>)
+async fn create_memory_state() -> AppState {
+    AppState::new_memory(None::<String>).await
 }
 
 async fn extract_json(response: axum::response::Response) -> Value {
@@ -72,7 +72,7 @@ async fn extract_json(response: axum::response::Response) -> Value {
 async fn test_rebuild_embeddings_returns_updated_provider_config() {
     clean_provider_env();
 
-    let state = create_memory_state();
+    let state = create_memory_state().await;
 
     // Create tenant
     let tenant = Tenant::new("Rebuild Test", &format!("test-{}", Uuid::new_v4()));
@@ -170,7 +170,7 @@ async fn test_rebuild_embeddings_returns_updated_provider_config() {
 async fn test_rebuild_embeddings_requires_force_if_unchanged() {
     clean_provider_env();
 
-    let state = create_memory_state();
+    let state = create_memory_state().await;
 
     // Create tenant and workspace
     let tenant = Tenant::new("Force Test", &format!("test-{}", Uuid::new_v4()));
@@ -239,7 +239,7 @@ async fn test_rebuild_embeddings_requires_force_if_unchanged() {
 async fn test_rebuild_knowledge_graph_returns_updated_provider_config() {
     clean_provider_env();
 
-    let state = create_memory_state();
+    let state = create_memory_state().await;
 
     // Create tenant
     let tenant = Tenant::new("KG Rebuild Test", &format!("test-{}", Uuid::new_v4()));
@@ -331,7 +331,7 @@ async fn test_rebuild_knowledge_graph_returns_updated_provider_config() {
 async fn test_rebuild_knowledge_graph_requires_force_if_unchanged() {
     clean_provider_env();
 
-    let state = create_memory_state();
+    let state = create_memory_state().await;
 
     // Create tenant and workspace
     let tenant = Tenant::new("KG Force Test", &format!("test-{}", Uuid::new_v4()));
@@ -399,7 +399,7 @@ async fn test_rebuild_knowledge_graph_requires_force_if_unchanged() {
 async fn test_rebuild_workspace_isolation() {
     clean_provider_env();
 
-    let state = create_memory_state();
+    let state = create_memory_state().await;
 
     // Create tenant
     let tenant = Tenant::new("Isolation Test", &format!("test-{}", Uuid::new_v4()));
@@ -512,7 +512,7 @@ async fn test_rebuild_workspace_isolation() {
 async fn test_pipeline_uses_updated_config_after_rebuild() {
     clean_provider_env();
 
-    let state = create_memory_state();
+    let state = create_memory_state().await;
 
     // Create tenant
     let tenant = Tenant::new("Pipeline Test", &format!("test-{}", Uuid::new_v4()));
@@ -594,7 +594,7 @@ async fn test_pipeline_uses_updated_config_after_rebuild() {
 async fn test_rebuild_nonexistent_workspace_returns_404() {
     clean_provider_env();
 
-    let state = create_memory_state();
+    let state = create_memory_state().await;
     let app = Server::new(create_test_config(), state).build_router();
 
     let fake_workspace_id = Uuid::new_v4();
@@ -635,7 +635,7 @@ async fn test_rebuild_nonexistent_workspace_returns_404() {
 async fn test_rebuild_embeddings_response_fields() {
     clean_provider_env();
 
-    let state = create_memory_state();
+    let state = create_memory_state().await;
 
     // Create tenant and workspace
     let tenant = Tenant::new("Response Test", &format!("test-{}", Uuid::new_v4()));
@@ -737,7 +737,7 @@ async fn test_rebuild_embeddings_response_fields() {
 async fn test_rebuild_knowledge_graph_response_fields() {
     clean_provider_env();
 
-    let state = create_memory_state();
+    let state = create_memory_state().await;
 
     // Create tenant and workspace
     let tenant = Tenant::new("KG Response Test", &format!("test-{}", Uuid::new_v4()));

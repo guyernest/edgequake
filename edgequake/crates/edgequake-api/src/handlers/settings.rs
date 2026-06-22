@@ -88,7 +88,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_provider_status_structure() {
         // Setup: Create AppState with mock provider
-        let app_state = AppState::new_memory(None::<String>);
+        let app_state = AppState::new_memory(None::<String>).await;
 
         // Act: Call handler
         let result = get_provider_status(State(app_state)).await;
@@ -108,7 +108,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_available_providers() {
         // Setup: Create AppState with mock provider
-        let app_state = AppState::new_memory(None::<String>);
+        let app_state = AppState::new_memory(None::<String>).await;
 
         // Act: Call handler
         let result = list_available_providers(State(app_state)).await;

@@ -406,7 +406,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .expect("Failed to initialize PostgreSQL storage")
     } else {
         info!("Memory storage mode (no DATABASE_URL) - namespace entity browser via AWS stores");
-        AppState::new_memory(Some(&api_key))
+        AppState::new_memory(Some(&api_key)).await
     };
 
     // Construct namespace registry if NAMESPACE_TABLE is set (or use default)

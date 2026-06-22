@@ -19,7 +19,7 @@ async fn test_dimension_logged_memory_mock() {
     std::env::set_var("RUST_LOG", "edgequake_api=info");
 
     // Create AppState
-    let _state = AppState::new_memory(None::<String>);
+    let _state = AppState::new_memory(None::<String>).await;
 
     // Note: Actual log verification requires tracing-subscriber setup
     // For now, we just verify it doesn't panic
@@ -37,7 +37,7 @@ async fn test_dimension_logged_memory_ollama() {
 
     // This will use Ollama provider (768-dim) if available
     // Otherwise falls back to Mock
-    let _state = AppState::new_memory(None::<String>);
+    let _state = AppState::new_memory(None::<String>).await;
 
     // Cleanup
     std::env::remove_var("OLLAMA_HOST");

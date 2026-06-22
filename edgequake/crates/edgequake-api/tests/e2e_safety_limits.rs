@@ -113,7 +113,7 @@ fn test_factory_creates_safe_providers() {
 async fn test_workspace_pipeline_uses_workspace_provider() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create a tenant
     let tenant = Tenant::new("Test Tenant", &format!("test-{}", Uuid::new_v4()));
@@ -157,7 +157,7 @@ async fn test_workspace_pipeline_uses_workspace_provider() {
 async fn test_multiple_workspaces_different_providers() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create a tenant
     let tenant = Tenant::new(
@@ -298,7 +298,7 @@ fn test_permissive_config() {
 async fn test_invalid_workspace_id_fallback() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Try to create pipeline with invalid workspace ID
     let pipeline = state.create_workspace_pipeline("not-a-valid-uuid").await;
@@ -315,7 +315,7 @@ async fn test_invalid_workspace_id_fallback() {
 async fn test_nonexistent_workspace_fallback() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Try to create pipeline for a workspace that doesn't exist
     let fake_uuid = Uuid::new_v4().to_string();

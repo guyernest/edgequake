@@ -38,7 +38,7 @@ async fn test_appstate_default_mock_provider() {
     std::env::remove_var("OPENAI_API_KEY");
 
     // Create AppState - should use Mock provider
-    let state = AppState::new_memory(None::<String>);
+    let state = AppState::new_memory(None::<String>).await;
 
     // Verify Mock provider selected
     assert_eq!(
@@ -69,7 +69,7 @@ async fn test_appstate_explicit_mock_selection() {
     std::env::remove_var("OLLAMA_HOST");
     std::env::remove_var("OPENAI_API_KEY");
 
-    let state = AppState::new_memory(None::<String>);
+    let state = AppState::new_memory(None::<String>).await;
 
     assert_eq!(state.llm_provider.name(), "mock");
     assert_eq!(state.embedding_provider.dimension(), 1536);
@@ -87,7 +87,7 @@ async fn test_provider_dimension_matrix() {
     std::env::remove_var("OLLAMA_HOST");
     std::env::remove_var("OPENAI_API_KEY");
 
-    let state_mock = AppState::new_memory(None::<String>);
+    let state_mock = AppState::new_memory(None::<String>).await;
     let mock_dimension = state_mock.embedding_provider.dimension();
     assert_eq!(mock_dimension, 1536, "Mock should have 1536 dimensions");
 

@@ -93,7 +93,7 @@ async fn test_processing_stats_serializes_lineage() {
 async fn test_workspace_pipeline_uses_workspace_config_for_lineage() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create tenant
     let tenant = Tenant::new("Lineage Test", &format!("test-{}", Uuid::new_v4()));
@@ -150,7 +150,7 @@ async fn test_workspace_pipeline_uses_workspace_config_for_lineage() {
 async fn test_workspace_update_changes_lineage_source() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create tenant and workspace
     let tenant = Tenant::new("Update Test", &format!("test-{}", Uuid::new_v4()));
@@ -221,7 +221,7 @@ async fn test_workspace_update_changes_lineage_source() {
 async fn test_workspaces_have_isolated_lineage_config() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create tenant
     let tenant = Tenant::new("Isolation Test", &format!("test-{}", Uuid::new_v4()));

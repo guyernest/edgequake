@@ -17,7 +17,7 @@ use edgequake_api::{AppState, Server, ServerConfig};
 use tower::ServiceExt;
 
 /// Build a router with `read_only` set to the given value.
-fn app_with_read_only(read_only: bool) -> axum::Router {
+async fn app_with_read_only(read_only: bool) -> axum::Router {
     let config = ServerConfig {
         host: "127.0.0.1".to_string(),
         port: 0,
@@ -26,7 +26,7 @@ fn app_with_read_only(read_only: bool) -> axum::Router {
         enable_swagger: false,
         read_only,
     };
-    Server::new(config, AppState::new_memory(None::<String>)).build_router()
+    Server::new(config, AppState::new_memory(None::<String>).await).build_router()
 }
 
 // ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ fn app_with_read_only(read_only: bool) -> axum::Router {
 /// POST to a write route returns 405 on a baked server.
 #[tokio::test]
 async fn test_post_returns_405_when_read_only() {
-    let app = app_with_read_only(true);
+    let app = app_with_read_only(true).await;
 
     let response = app
         .oneshot(
@@ -60,7 +60,7 @@ async fn test_post_returns_405_when_read_only() {
 /// PUT to a write route returns 405 on a baked server.
 #[tokio::test]
 async fn test_put_returns_405_when_read_only() {
-    let app = app_with_read_only(true);
+    let app = app_with_read_only(true).await;
 
     let response = app
         .oneshot(
@@ -84,7 +84,7 @@ async fn test_put_returns_405_when_read_only() {
 /// PATCH to a write route returns 405 on a baked server.
 #[tokio::test]
 async fn test_patch_returns_405_when_read_only() {
-    let app = app_with_read_only(true);
+    let app = app_with_read_only(true).await;
 
     let response = app
         .oneshot(
@@ -108,7 +108,7 @@ async fn test_patch_returns_405_when_read_only() {
 /// DELETE to a write route returns 405 on a baked server.
 #[tokio::test]
 async fn test_delete_returns_405_when_read_only() {
-    let app = app_with_read_only(true);
+    let app = app_with_read_only(true).await;
 
     let response = app
         .oneshot(
@@ -131,7 +131,7 @@ async fn test_delete_returns_405_when_read_only() {
 /// GET /health returns 200 on a baked server (read passes through).
 #[tokio::test]
 async fn test_get_health_passes_when_read_only() {
-    let app = app_with_read_only(true);
+    let app = app_with_read_only(true).await;
 
     let response = app
         .oneshot(
@@ -163,7 +163,7 @@ async fn test_get_health_passes_when_read_only() {
 /// durable write side-effects — so HEAD-via-GET is safe to allow.
 #[tokio::test]
 async fn test_head_passes_when_read_only() {
-    let app = app_with_read_only(true);
+    let app = app_with_read_only(true).await;
 
     let response = app
         .oneshot(
@@ -193,7 +193,7 @@ async fn test_head_passes_when_read_only() {
 /// request body is minimal — what matters is it is NOT the guard's 405.
 #[tokio::test]
 async fn test_post_not_blocked_when_read_only_false() {
-    let app = app_with_read_only(false);
+    let app = app_with_read_only(false).await;
 
     let response = app
         .oneshot(

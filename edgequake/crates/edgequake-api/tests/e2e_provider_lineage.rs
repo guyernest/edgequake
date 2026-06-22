@@ -284,7 +284,7 @@ async fn test_workspace_provides_correct_lineage() {
     // Clean environment
     std::env::remove_var("OPENAI_API_KEY");
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create workspace with specific provider config
     let workspace = create_test_workspace(
@@ -323,7 +323,7 @@ async fn test_workspace_provides_correct_lineage() {
 async fn test_workspace_lineage_isolation() {
     std::env::remove_var("OPENAI_API_KEY");
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create two workspaces with different providers
     let ws1 = create_test_workspace(

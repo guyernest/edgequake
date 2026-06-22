@@ -39,7 +39,7 @@ fn clean_provider_env() {
 async fn test_workspace_update_changes_provider_config() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create tenant
     let tenant = Tenant::new("Test Tenant", &format!("test-{}", Uuid::new_v4()));
@@ -118,7 +118,7 @@ async fn test_workspace_update_changes_provider_config() {
 async fn test_pipeline_uses_updated_workspace_config() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create tenant and workspace
     let tenant = Tenant::new("Test Tenant", &format!("test-{}", Uuid::new_v4()));
@@ -250,7 +250,7 @@ async fn test_safe_embedding_provider_accepts_dimension_param() {
 async fn test_concurrent_workspace_pipelines() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create tenant
     let tenant = Tenant::new("Concurrent Test", &format!("test-{}", Uuid::new_v4()));
@@ -327,7 +327,7 @@ async fn test_invalid_provider_logs_error_and_falls_back() {
     clean_provider_env();
     std::env::remove_var("OPENAI_API_KEY");
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     // Create tenant and workspace with OpenAI (but no API key)
     let tenant = Tenant::new("Invalid Provider Test", &format!("test-{}", Uuid::new_v4()));

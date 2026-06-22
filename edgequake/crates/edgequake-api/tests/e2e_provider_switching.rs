@@ -41,7 +41,7 @@ fn clean_provider_env() {
 async fn test_provider_autodetect_default_mock() {
     clean_provider_env();
 
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
 
     assert_eq!(
         state.llm_provider.name(),
@@ -60,7 +60,7 @@ async fn test_provider_detection_priority() {
 
     // Test 1: Only OpenAI set - should use OpenAI
     std::env::set_var("OPENAI_API_KEY", "sk-test-key");
-    let _state = edgequake_api::AppState::new_memory(None::<String>);
+    let _state = edgequake_api::AppState::new_memory(None::<String>).await;
     // May or may not be openai depending on if it validates the key
     clean_provider_env();
 
@@ -71,7 +71,7 @@ async fn test_provider_detection_priority() {
     clean_provider_env();
 
     // Test 3: All cleared - back to Mock
-    let state_mock = edgequake_api::AppState::new_memory(None::<String>);
+    let state_mock = edgequake_api::AppState::new_memory(None::<String>).await;
     assert_eq!(state_mock.llm_provider.name(), "mock");
 }
 
@@ -257,7 +257,7 @@ async fn test_workspace_provider_switching() {
 #[serial]
 async fn test_provider_registry_api() {
     clean_provider_env();
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
     let app = edgequake_api::create_router(state);
 
     let response = app
@@ -287,7 +287,7 @@ async fn test_provider_registry_api() {
 #[serial]
 async fn test_provider_status_api() {
     clean_provider_env();
-    let state = edgequake_api::AppState::new_memory(None::<String>);
+    let state = edgequake_api::AppState::new_memory(None::<String>).await;
     let app = edgequake_api::create_router(state);
 
     let response = app
