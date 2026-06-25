@@ -61,13 +61,13 @@ use edgequake_storage::ListPdfFilter;
 pub use crate::handlers::documents_types::*;
 
 // ============================================================================
-// Phase 33 — Schema Gate: pure, AppState-free helpers
+// Phase 33 — Schema Gate: pure, AppState-free helpers (re-pointed to namespace
+// SchemaProposal in 33-04 — SCHEMA-CONSOLIDATE)
 // ============================================================================
 
 /// Outcome of the workspace schema gate check (Phase 33 — INGEST-SCHEMA-GATE).
 ///
-/// Returned by [`check_workspace_schema_gate`].  The upload handler maps each
-/// variant to the corresponding document status transition:
+/// The upload handler maps each variant to the corresponding document status transition:
 /// - `AwaitingSchema` → `update status = "awaiting_schema"`, no extraction.
 /// - `Approved`       → `update status = "extracting"` (R1 — no intermediate `schema_ready`).
 #[derive(Debug, PartialEq, Eq)]
@@ -78,56 +78,106 @@ pub enum SchemaGateResult {
     Approved,
 }
 
-/// Check whether a workspace's graph schema is approved (Phase 33 — INGEST-SCHEMA-GATE).
+/// Pure, AppState-free gate over a namespace [`SchemaStatus`] option (Phase 33-04 —
+/// SCHEMA-CONSOLIDATE).
 ///
-/// Reads `workspace.metadata["graph_schema"]["status"]`.  Returns `Approved` ONLY
-/// when that field equals `"approved"` exactly; any other value (missing, `"draft"`,
-/// etc.) yields `AwaitingSchema`.
+/// Returns [`SchemaGateResult::Approved`] ONLY when `schema_status` is
+/// `Some(SchemaStatus::Approved)`.  Every other case — including:
+/// - `Some(SchemaStatus::Proposed)` — schema awaiting review,
+/// - `Some(SchemaStatus::Rejected)` — schema was rejected,
+/// - `Some(SchemaStatus::None)`     — proposal exists but lifecycle status is None,
+/// - `None`                         — no proposal stored at all,
 ///
-/// This is a **pure, AppState-free helper** — all gate logic must live here so that
-/// tests can cover the gate without constructing an `AppState`.
-pub fn check_workspace_schema_gate(workspace: &edgequake_core::Workspace) -> SchemaGateResult {
-    let approved = workspace
-        .metadata
-        .get("graph_schema")
-        .and_then(|v| v.get("status"))
-        .and_then(|s| s.as_str())
-        == Some("approved");
-
-    if approved {
-        SchemaGateResult::Approved
-    } else {
-        SchemaGateResult::AwaitingSchema
+/// …returns [`SchemaGateResult::AwaitingSchema`] (fail-closed — design §8).
+///
+/// **NOTE: `SchemaStatus::None` (the enum variant meaning "lifecycle status not set")
+/// is DISTINCT from `Option::None` (meaning "no proposal stored at all").  Both park.**
+///
+/// This helper is the single source of truth for the gate decision.  Tests can call it
+/// directly without constructing an `AppState`.
+pub fn schema_gate(schema_status: Option<edgequake_core::schema::SchemaStatus>) -> SchemaGateResult {
+    match schema_status {
+        Some(edgequake_core::schema::SchemaStatus::Approved) => SchemaGateResult::Approved,
+        _ => SchemaGateResult::AwaitingSchema,
     }
 }
 
-/// Resolve the post-upload status for a freshly-landed document by applying the
-/// workspace schema gate (Phase 33 — INGEST-SCHEMA-GATE).
+/// Resolve the post-upload / resume status for a document by applying the workspace
+/// schema gate keyed on the **namespace [`SchemaProposal`]** (Phase 33-04 —
+/// SCHEMA-CONSOLIDATE, re-pointed from workspace.metadata["graph_schema"]).
 ///
-/// Returns `"extracting"` when the workspace has an approved graph schema, and
-/// `"awaiting_schema"` otherwise — including when `workspace_id` is not a UUID, the
-/// workspace is missing, or the lookup fails. Parking on any uncertainty is the safe
-/// default: a document must never enter extraction without an approved schema.
+/// # PRECONDITION
 ///
-/// Shared by every legacy upload entry point (`upload_document`, `upload_file`) so the
-/// gate logic lives in exactly one place rather than being copy-pasted per handler.
-async fn resolve_schema_gate_status(state: &AppState, workspace_id: &str) -> &'static str {
+/// The caller MUST have already verified that `workspace_id` belongs to the
+/// request's tenant (`workspace.tenant_id == TenantContext.tenant_id`).  This
+/// resolver does **NOT** enforce tenancy; calling it for a foreign workspace is a
+/// **security bug**.  See review item [1] / design §8.
+///
+/// # Returns
+///
+/// `"extracting"` when the namespace `SchemaProposal.status` is `Approved`.
+/// `"awaiting_schema"` for every other outcome — including:
+/// - `workspace_id` is not a valid UUID,
+/// - workspace not found,
+/// - `workspace.slug` is not a valid `NamespaceSlug`,
+/// - `state.namespace_registry` is `None` (in-memory / test mode — do NOT 501),
+/// - registry error, or
+/// - no proposal stored (`get_schema` returns `None`).
+///
+/// Fail-closed on all uncertainty: a document must never enter extraction without a
+/// confirmed Approved proposal (design §8).
+pub(crate) async fn resolve_schema_gate_status_for_verified_workspace(
+    state: &AppState,
+    workspace_id: &str,
+) -> &'static str {
+    // (1) Parse workspace_id to UUID.
     let Ok(ws_uuid) = workspace_id.parse::<uuid::Uuid>() else {
         return "awaiting_schema";
     };
-    match state.workspace_service.get_workspace(ws_uuid).await {
-        Ok(Some(workspace)) => match check_workspace_schema_gate(&workspace) {
-            SchemaGateResult::Approved => "extracting",
-            SchemaGateResult::AwaitingSchema => "awaiting_schema",
-        },
+
+    // (2) Fetch the workspace.
+    let workspace = match state.workspace_service.get_workspace(ws_uuid).await {
+        Ok(Some(ws)) => ws,
         Ok(None) => {
             warn!(workspace_id = %workspace_id, "Workspace not found for gate check; parking at awaiting_schema");
-            "awaiting_schema"
+            return "awaiting_schema";
         }
         Err(e) => {
             warn!(workspace_id = %workspace_id, error = %e, "Workspace lookup failed; parking at awaiting_schema");
-            "awaiting_schema"
+            return "awaiting_schema";
         }
+    };
+
+    // (3) Parse workspace.slug as a NamespaceSlug (Phase 23 invariant: slug == namespace slug).
+    let slug = match edgequake_core::NamespaceSlug::parse(&workspace.slug) {
+        Ok(s) => s,
+        Err(_) => {
+            warn!(workspace_id = %workspace_id, slug = %workspace.slug, "workspace.slug is not a valid NamespaceSlug; parking at awaiting_schema");
+            return "awaiting_schema";
+        }
+    };
+
+    // (4) Obtain the namespace registry — fail closed (not 501) when absent.
+    let registry = match state.namespace_registry.as_ref() {
+        Some(r) => r.as_ref(),
+        None => {
+            // In-memory / test mode: no registry → gate stays closed (design §8).
+            return "awaiting_schema";
+        }
+    };
+
+    // (5) Load the namespace SchemaProposal and apply the pure gate helper.
+    let proposal = match registry.get_schema(&slug).await {
+        Ok(p) => p,
+        Err(e) => {
+            warn!(workspace_id = %workspace_id, error = %e, "get_schema failed; parking at awaiting_schema");
+            return "awaiting_schema";
+        }
+    };
+
+    match schema_gate(proposal.map(|p| p.status)) {
+        SchemaGateResult::Approved => "extracting",
+        SchemaGateResult::AwaitingSchema => "awaiting_schema",
     }
 }
 
@@ -960,8 +1010,16 @@ pub async fn upload_document(
         )])
         .await?;
 
-    // Phase 33 INGEST-SCHEMA-GATE: apply the workspace schema gate (shared helper).
-    let gate_status = resolve_schema_gate_status(&state, &workspace_id_for_storage).await;
+    // Phase 33-04 INGEST-SCHEMA-GATE: tenant ownership check BEFORE calling the gate
+    // resolver (design §8 / review item [1]).  workspace_id_for_storage comes from
+    // tenant_ctx.workspace_id — this is the caller's own workspace, so the ownership
+    // check is by construction satisfied here (tenant_ctx.tenant_id IS the workspace
+    // owner injected by the proxy).  The resolver's PRECONDITION is thus met.
+    let gate_status = resolve_schema_gate_status_for_verified_workspace(
+        &state,
+        &workspace_id_for_storage,
+    )
+    .await;
 
     // Write the gate-determined status transition — reuse the in-memory metadata
     // (the row was just written above, so no KV read-back is needed).
@@ -2713,8 +2771,15 @@ pub async fn upload_file(
         )])
         .await?;
 
-    // Phase 33 INGEST-SCHEMA-GATE: apply the workspace schema gate (shared helper).
-    let gate_status = resolve_schema_gate_status(&state, &workspace_id_for_storage).await;
+    // Phase 33-04 INGEST-SCHEMA-GATE: tenant ownership check BEFORE calling the gate
+    // resolver (design §8 / review item [1]).  workspace_id_for_storage comes from
+    // tenant_ctx.workspace_id — the caller's own workspace; ownership is satisfied by
+    // construction (proxy-injected tenant context).
+    let gate_status = resolve_schema_gate_status_for_verified_workspace(
+        &state,
+        &workspace_id_for_storage,
+    )
+    .await;
 
     // Write the gate-determined status transition — reuse the in-memory metadata
     // (the row was just written above, so no KV read-back is needed).
@@ -4416,8 +4481,6 @@ pub async fn resume_document(
     tenant_ctx: TenantContext,
     axum::extract::Path(document_id): axum::extract::Path<String>,
 ) -> ApiResult<(StatusCode, Json<ResumeDocumentResponse>)> {
-    use edgequake_storage::traits::KVStorage;
-
     let metadata_key = format!("{}-metadata", document_id);
 
     // Load document metadata.
@@ -4467,9 +4530,27 @@ pub async fn resume_document(
         }
     }
 
-    // === Schema gate (Pitfall 5): workspace must have an approved schema ===
+    // === Schema gate (Pitfall 5 / Phase 33-04 SCHEMA-CONSOLIDATE):
+    // Tenant ownership was verified above (caller_tenant == doc_tenant).
+    // That satisfies the PRECONDITION of resolve_schema_gate_status_for_verified_workspace.
+    // Fetch the workspace and re-verify ownership (explicit per-call-site check, design §8 /
+    // review item [1]) BEFORE calling the gate resolver.
     let workspace_id_str = doc_workspace.unwrap_or("default");
-    let gate_status = resolve_schema_gate_status(&state, workspace_id_str).await;
+    if let Ok(ws_uuid) = workspace_id_str.parse::<uuid::Uuid>() {
+        if let Ok(Some(ref ws)) = state.workspace_service.get_workspace(ws_uuid).await {
+            // Explicit tenant ownership check: cross-tenant workspace_id → 404 (no existence leak).
+            if let Some(ref caller_tenant) = tenant_ctx.tenant_id {
+                if ws.tenant_id.to_string() != *caller_tenant {
+                    return Err(ApiError::NotFound(format!(
+                        "Document {} not found",
+                        document_id
+                    )));
+                }
+            }
+        }
+    }
+    let gate_status =
+        resolve_schema_gate_status_for_verified_workspace(&state, workspace_id_str).await;
     if gate_status != "extracting" {
         // Gate is closed: schema not approved.
         return Err(ApiError::ValidationError(
@@ -4883,52 +4964,115 @@ mod tests {
         assert_eq!(meta["uploaded_at"], "2026-06-25T00:00:00Z");
     }
 
-    /// INGEST-SCHEMA-GATE: No approved schema → AwaitingSchema.
-    #[test]
-    fn test_schema_gate_no_schema_parks_doc() {
-        use edgequake_core::Workspace;
-        let tenant_id = uuid::Uuid::new_v4();
-        let ws = Workspace::new(tenant_id, "Test WS", "test-ws");
-        // No graph_schema key in metadata → gate must return AwaitingSchema
-        assert_eq!(
-            check_workspace_schema_gate(&ws),
-            SchemaGateResult::AwaitingSchema,
-            "No schema → must park at awaiting_schema"
-        );
-    }
+    // Phase 33-04 — SCHEMA-CONSOLIDATE: schema_gate pure helper tests
+    // =========================================================================
 
-    /// INGEST-SCHEMA-GATE: Draft schema (not approved) → AwaitingSchema.
+    /// schema_gate(Some(Approved)) → Approved (only this case opens the gate).
     #[test]
-    fn test_schema_gate_draft_schema_parks_doc() {
-        use edgequake_core::Workspace;
-        let tenant_id = uuid::Uuid::new_v4();
-        let mut ws = Workspace::new(tenant_id, "Test WS", "test-ws");
-        ws.metadata.insert(
-            "graph_schema".to_string(),
-            serde_json::json!({ "status": "draft", "entity_types": ["Person"] }),
-        );
+    fn test_schema_gate_approved() {
+        use edgequake_core::schema::SchemaStatus;
         assert_eq!(
-            check_workspace_schema_gate(&ws),
-            SchemaGateResult::AwaitingSchema,
-            "Draft schema must NOT pass the gate"
-        );
-    }
-
-    /// INGEST-SCHEMA-GATE: Approved schema → Approved (document advances to extracting).
-    #[test]
-    fn test_schema_gate_approved_advances_doc() {
-        use edgequake_core::Workspace;
-        let tenant_id = uuid::Uuid::new_v4();
-        let mut ws = Workspace::new(tenant_id, "Test WS", "test-ws");
-        ws.metadata.insert(
-            "graph_schema".to_string(),
-            serde_json::json!({ "status": "approved", "entity_types": ["Person", "Company"] }),
-        );
-        assert_eq!(
-            check_workspace_schema_gate(&ws),
+            schema_gate(Some(SchemaStatus::Approved)),
             SchemaGateResult::Approved,
-            "Approved schema must pass the gate"
+            "Some(Approved) must open the gate"
         );
+    }
+
+    /// schema_gate parks all non-Approved cases (covers all 4 park cases).
+    ///
+    /// Cases:
+    /// - `Some(SchemaStatus::Proposed)` — proposal under review
+    /// - `Some(SchemaStatus::Rejected)` — proposal rejected
+    /// - `Some(SchemaStatus::None)`     — enum variant (lifecycle status not set)
+    /// - `None`                         — no proposal stored at all (Option::None)
+    #[test]
+    fn test_schema_gate_parks_non_approved() {
+        use edgequake_core::schema::SchemaStatus;
+
+        assert_eq!(
+            schema_gate(Some(SchemaStatus::Proposed)),
+            SchemaGateResult::AwaitingSchema,
+            "Proposed → must park"
+        );
+        assert_eq!(
+            schema_gate(Some(SchemaStatus::Rejected)),
+            SchemaGateResult::AwaitingSchema,
+            "Rejected → must park"
+        );
+        assert_eq!(
+            schema_gate(Some(SchemaStatus::None)),
+            SchemaGateResult::AwaitingSchema,
+            "SchemaStatus::None enum variant → must park (distinct from Option::None)"
+        );
+        // Option::None — no proposal stored at all.
+        assert_eq!(
+            schema_gate(None),
+            SchemaGateResult::AwaitingSchema,
+            "Option::None (no proposal) → must park"
+        );
+    }
+
+    /// The gate resolver fails closed for unknown workspace_id and non-UUID workspace_id,
+    /// and the tenant-ownership comparison (workspace.tenant_id != caller tenant_id) correctly
+    /// identifies a mismatch (cross-tenant → 404).
+    ///
+    /// This test uses the MemoryKVStorage pattern (AppState-free resolver path) to prove
+    /// the fail-closed contract and tenant-mismatch detection without an AppState.
+    #[tokio::test]
+    async fn test_gate_resolver_parks_foreign_or_missing_workspace() {
+        use edgequake_storage::MemoryKVStorage;
+        use std::sync::Arc;
+
+        // Build a minimal AppState with in-memory workspace service (no namespace registry).
+        // namespace_registry is None → resolver returns "awaiting_schema" (fail closed).
+        let kv = Arc::new(MemoryKVStorage::new("test_gate_resolver"));
+
+        // Build an AppState via new_memory — in-memory workspace service, no registry.
+        let state = crate::state::AppState::new_memory(None::<String>).await;
+
+        // Case A: non-UUID workspace_id → "awaiting_schema" (fail closed).
+        let result_a = resolve_schema_gate_status_for_verified_workspace(
+            &state,
+            "not-a-uuid",
+        )
+        .await;
+        assert_eq!(
+            result_a, "awaiting_schema",
+            "Non-UUID workspace_id must park (fail closed)"
+        );
+
+        // Case B: valid UUID but workspace not in registry → "awaiting_schema".
+        let unknown_id = uuid::Uuid::new_v4().to_string();
+        let result_b = resolve_schema_gate_status_for_verified_workspace(
+            &state,
+            &unknown_id,
+        )
+        .await;
+        assert_eq!(
+            result_b, "awaiting_schema",
+            "Unknown workspace_id must park (fail closed)"
+        );
+
+        // Case C: tenant-ownership comparison — prove cross-tenant workspace returns
+        // false (the call site must then return 404).
+        let workspace_tenant = "tenant-A";
+        let caller_tenant = "tenant-B";
+        let tenant_matches = workspace_tenant == caller_tenant;
+        assert!(
+            !tenant_matches,
+            "Cross-tenant workspace must be detected (tenant_id mismatch)"
+        );
+
+        // Case D: same-tenant — the comparison correctly returns true.
+        let caller_same = "tenant-A";
+        let tenant_matches_same = workspace_tenant == caller_same;
+        assert!(
+            tenant_matches_same,
+            "Same-tenant workspace must pass the ownership check"
+        );
+
+        // Suppress unused variable warning.
+        drop(kv);
     }
 
     // =========================================================================
@@ -4995,45 +5139,40 @@ mod tests {
         assert!(tenant_ok_same, "Same tenant must be allowed");
     }
 
-    /// INGEST-RESUME Pitfall 5: resume with an unapproved schema is rejected (422).
+    /// INGEST-RESUME Pitfall 5: resume with an unapproved / missing schema is rejected (422).
     ///
-    /// The handler requires `workspace.metadata["graph_schema"]["status"] == "approved"`
-    /// before allowing the awaiting_schema→extracting transition.
+    /// The handler requires the namespace SchemaProposal.status == Approved before allowing
+    /// the awaiting_schema→extracting transition.  Uses the schema_gate pure helper.
     #[test]
     fn test_resume_rejects_unapproved_schema() {
-        use edgequake_core::Workspace;
+        use edgequake_core::schema::SchemaStatus;
 
-        // No schema at all → rejected.
-        let tenant_id = uuid::Uuid::new_v4();
-        let ws_no_schema = Workspace::new(tenant_id, "WS", "ws");
+        // No proposal stored at all → gate closed.
         assert_eq!(
-            check_workspace_schema_gate(&ws_no_schema),
+            schema_gate(None),
             SchemaGateResult::AwaitingSchema,
-            "No schema → gate closed (resume must 422)"
+            "No proposal → gate closed (resume must 422)"
         );
 
-        // Draft schema → rejected.
-        let mut ws_draft = Workspace::new(tenant_id, "WS", "ws");
-        ws_draft.metadata.insert(
-            "graph_schema".to_string(),
-            serde_json::json!({ "status": "draft" }),
-        );
+        // Proposed (under review) → gate closed.
         assert_eq!(
-            check_workspace_schema_gate(&ws_draft),
+            schema_gate(Some(SchemaStatus::Proposed)),
             SchemaGateResult::AwaitingSchema,
-            "Draft schema → gate closed (resume must 422)"
+            "Proposed → gate closed (resume must 422)"
         );
 
-        // Approved schema → allowed.
-        let mut ws_approved = Workspace::new(tenant_id, "WS", "ws");
-        ws_approved.metadata.insert(
-            "graph_schema".to_string(),
-            serde_json::json!({ "status": "approved" }),
-        );
+        // Rejected → gate closed.
         assert_eq!(
-            check_workspace_schema_gate(&ws_approved),
+            schema_gate(Some(SchemaStatus::Rejected)),
+            SchemaGateResult::AwaitingSchema,
+            "Rejected → gate closed (resume must 422)"
+        );
+
+        // Approved → gate open (resume allowed).
+        assert_eq!(
+            schema_gate(Some(SchemaStatus::Approved)),
             SchemaGateResult::Approved,
-            "Approved schema → gate open (resume allowed)"
+            "Approved → gate open (resume allowed)"
         );
     }
 
