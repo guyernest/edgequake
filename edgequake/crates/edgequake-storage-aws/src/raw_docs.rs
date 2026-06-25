@@ -206,6 +206,73 @@ impl RawDocsStorage {
         }
     }
 
+    /// Retrieve the bytes of a raw document stored at `key`.
+    ///
+    /// Returns the full object body as a `Vec<u8>`, or `AwsStorageError` when the
+    /// object is missing or any S3 error occurs.
+    ///
+    /// Used by the AI schema-draft endpoint to sample workspace docs, and by any
+    /// code-path that must read content back from the raw-docs bucket in-Lambda.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AwsStorageError::S3Error` on any SDK or body-read error.
+    pub async fn get_object(&self, key: &str) -> Result<Vec<u8>, AwsStorageError> {
+        let response = self
+            .s3_client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|e| {
+                AwsStorageError::S3Error(format!("get_object '{}': {}", key, e))
+            })?;
+
+        let body = response
+            .body
+            .collect()
+            .await
+            .map_err(|e| {
+                AwsStorageError::S3Error(format!("read body '{}': {}", key, e))
+            })?;
+
+        Ok(body.into_bytes().to_vec())
+    }
+
+    /// Store `bytes` in S3 at `key` with the given `content_type`.
+    ///
+    /// Used by legacy upload handlers (`upload_file`, `upload_document`) to land file
+    /// bytes in the raw-docs bucket before writing document metadata. The caller should
+    /// use `build_key` to derive `key` so the key layout is consistent with the
+    /// presigned-upload path.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AwsStorageError::S3Error` on any SDK error.
+    pub async fn put_bytes(
+        &self,
+        key: &str,
+        bytes: Vec<u8>,
+        content_type: &str,
+    ) -> Result<(), AwsStorageError> {
+        use aws_sdk_s3::primitives::ByteStream;
+
+        self.s3_client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .body(ByteStream::from(bytes))
+            .content_type(content_type)
+            .send()
+            .await
+            .map_err(|e| {
+                AwsStorageError::S3Error(format!("put_bytes '{}': {}", key, e))
+            })?;
+
+        Ok(())
+    }
+
     /// List raw documents under `prefix`, following continuation tokens to return ALL
     /// matching objects (review concern #6 — do not silently cap at 1,000 objects).
     ///
