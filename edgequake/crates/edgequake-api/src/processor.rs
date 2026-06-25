@@ -3030,6 +3030,62 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_provider_failure_marks_failed() {
+        // INGEST-NO-HANG: a provider/dependency failure writes status="failed" with a
+        // reason string — it is never a silent fallback or a hang.
+        // Mirrors the existing test_update_document_status_with_error_message but is
+        // named to pin the no-hang ledger guarantee explicitly.
+        let pipeline = create_test_pipeline();
+        let (kv, vector, vector_registry, graph) = create_test_storages();
+        let pipeline_state = PipelineState::new();
+
+        let doc_id = "test-doc-provider-failure";
+        let metadata_key = format!("{}-metadata", doc_id);
+
+        kv.upsert(&[(
+            metadata_key.clone(),
+            json!({
+                "id": doc_id,
+                "status": "awaiting_schema",
+                "updated_at": "2020-01-01T00:00:00Z"
+            }),
+        )])
+        .await
+        .unwrap();
+
+        let processor = DocumentTaskProcessor::new(
+            pipeline,
+            create_test_llm_provider(),
+            kv.clone(),
+            vector,
+            vector_registry,
+            graph,
+            pipeline_state,
+        );
+
+        let failure_reason = "Provider creation failed: OPENAI_API_KEY not set";
+        let result = processor
+            .update_document_status(doc_id, "failed", Some(failure_reason))
+            .await;
+        assert!(result.is_ok(), "update_document_status should succeed for failed status");
+
+        let metadata = kv.get_by_id(&metadata_key).await.unwrap().unwrap();
+        assert_eq!(
+            metadata["status"], "failed",
+            "status must be persisted as failed"
+        );
+        assert_eq!(
+            metadata["error_message"], failure_reason,
+            "reason must be stored in error_message"
+        );
+        let updated_at = metadata["updated_at"].as_str().unwrap_or("");
+        assert!(
+            !updated_at.is_empty() && updated_at != "2020-01-01T00:00:00Z",
+            "updated_at must be written for failed status; got: {updated_at}"
+        );
+    }
+
+    #[tokio::test]
     async fn test_task_types_are_distinct() {
         // Verify all task types are handled distinctly
         let pipeline = create_test_pipeline();
