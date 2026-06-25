@@ -1815,6 +1815,8 @@ impl DocumentTaskProcessor {
         // SPEC-002: Map legacy status names to unified stage names
         let unified_stage = match status {
             "pending" => "uploading",
+            "uploaded" => "uploaded",
+            "awaiting_schema" => "awaiting_schema", // Phase 33: explicit pause gate
             "processing" => "preprocessing",
             "chunking" => "chunking",
             "extracting" => "extracting",
@@ -1828,6 +1830,8 @@ impl DocumentTaskProcessor {
         // SPEC-002: Build stage message based on status
         let stage_message = match status {
             "pending" => "Document queued for processing",
+            "uploaded" => "Document uploaded, awaiting processing",
+            "awaiting_schema" => "Waiting for workspace schema approval",
             "processing" | "preprocessing" => "Preprocessing document...",
             "chunking" => "Splitting document into chunks...",
             "extracting" => "Extracting entities and relationships...",
@@ -1864,7 +1868,23 @@ impl DocumentTaskProcessor {
 
                 json!(updated)
             } else {
-                return Ok(()); // Malformed metadata, skip update
+                // T-33-01-DH (Phase 33): Malformed (non-object) existing row must not
+                // silently skip the status+updated_at write.  Overwrite with a fresh
+                // object so a document can never be wedged with an absent updated_at.
+                let mut fresh = serde_json::Map::new();
+                fresh.insert("id".to_string(), json!(document_id));
+                fresh.insert("status".to_string(), json!(status));
+                fresh.insert("current_stage".to_string(), json!(unified_stage));
+                fresh.insert("stage_message".to_string(), json!(stage_message));
+                fresh.insert(
+                    "updated_at".to_string(),
+                    json!(chrono::Utc::now().to_rfc3339()),
+                );
+                if let Some(msg) = error_message {
+                    fresh.insert("error_message".to_string(), json!(msg));
+                    fresh.insert("stage_message".to_string(), json!(msg));
+                }
+                json!(fresh)
             }
         } else {
             // SPEC-002: Create new metadata for documents that don't have it
@@ -1897,6 +1917,23 @@ impl DocumentTaskProcessor {
             .await
             .map_err(|e| edgequake_tasks::TaskError::Storage(e.to_string()))?;
 
+        Ok(())
+    }
+
+    /// Resume stub for Phase 33 — walks a parked document through the ledger.
+    ///
+    /// Transitions: `awaiting_schema` → `extracting` → `completed`, writing
+    /// `updated_at` at each step.  NO real extraction, embedding, or graph-build
+    /// work is performed (R9 — stub proves ledger+gate contract only).
+    ///
+    /// Called by the resume handler in 33-03 after it has verified:
+    /// - `doc.status == "awaiting_schema"`
+    /// - `workspace.graph_schema.status == "approved"`
+    pub(crate) async fn run_resume_stub(&self, document_id: &str) -> TaskResult<()> {
+        self.update_document_status(document_id, "extracting", None)
+            .await?;
+        self.update_document_status(document_id, "completed", None)
+            .await?;
         Ok(())
     }
 
@@ -2891,6 +2928,105 @@ mod tests {
         assert!(Arc::strong_count(&kv) >= 1);
         assert!(Arc::strong_count(&vector) >= 1);
         assert!(Arc::strong_count(&graph) >= 1);
+    }
+
+    // ── Wave-0: ledger + no-hang + stub tests (Phase 33-01) ─────────────────
+
+    #[tokio::test]
+    async fn test_update_document_status_awaiting_schema() {
+        // INGEST-LEDGER: awaiting_schema writes updated_at and is an explicit stage.
+        let pipeline = create_test_pipeline();
+        let (kv, vector, vector_registry, graph) = create_test_storages();
+        let pipeline_state = PipelineState::new();
+
+        let doc_id = "test-doc-awaiting-schema";
+        let metadata_key = format!("{}-metadata", doc_id);
+
+        // Pre-create a metadata row so we exercise the "existing row" branch
+        kv.upsert(&[(
+            metadata_key.clone(),
+            json!({
+                "id": doc_id,
+                "status": "uploaded",
+                "updated_at": "2020-01-01T00:00:00Z"
+            }),
+        )])
+        .await
+        .unwrap();
+
+        let processor = DocumentTaskProcessor::new(
+            pipeline,
+            create_test_llm_provider(),
+            kv.clone(),
+            vector,
+            vector_registry,
+            graph,
+            pipeline_state,
+        );
+
+        let result = processor
+            .update_document_status(doc_id, "awaiting_schema", None)
+            .await;
+        assert!(result.is_ok(), "update_document_status should succeed");
+
+        let metadata = kv.get_by_id(&metadata_key).await.unwrap().unwrap();
+        assert_eq!(
+            metadata["status"], "awaiting_schema",
+            "status must be persisted as awaiting_schema"
+        );
+        let updated_at = metadata["updated_at"].as_str().unwrap_or("");
+        assert!(
+            !updated_at.is_empty() && updated_at != "2020-01-01T00:00:00Z",
+            "updated_at must be written and must differ from the seed value; got: {updated_at}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_resume_stub_walks_ledger() {
+        // INGEST-STUB: run_resume_stub transitions awaiting_schema → extracting → completed,
+        // writing updated_at at each step.
+        let pipeline = create_test_pipeline();
+        let (kv, vector, vector_registry, graph) = create_test_storages();
+        let pipeline_state = PipelineState::new();
+
+        let doc_id = "test-doc-resume-stub";
+        let metadata_key = format!("{}-metadata", doc_id);
+
+        // Seed the document at awaiting_schema with a fixed updated_at
+        kv.upsert(&[(
+            metadata_key.clone(),
+            json!({
+                "id": doc_id,
+                "status": "awaiting_schema",
+                "updated_at": "2020-01-01T00:00:00Z"
+            }),
+        )])
+        .await
+        .unwrap();
+
+        let processor = DocumentTaskProcessor::new(
+            pipeline,
+            create_test_llm_provider(),
+            kv.clone(),
+            vector,
+            vector_registry,
+            graph,
+            pipeline_state,
+        );
+
+        let result = processor.run_resume_stub(doc_id).await;
+        assert!(result.is_ok(), "run_resume_stub must succeed");
+
+        let metadata = kv.get_by_id(&metadata_key).await.unwrap().unwrap();
+        assert_eq!(
+            metadata["status"], "completed",
+            "final status must be completed after stub walk"
+        );
+        let final_updated_at = metadata["updated_at"].as_str().unwrap_or("");
+        assert!(
+            !final_updated_at.is_empty() && final_updated_at != "2020-01-01T00:00:00Z",
+            "updated_at must be written and must differ from the seed value; got: {final_updated_at}"
+        );
     }
 
     #[tokio::test]
