@@ -168,6 +168,7 @@ async fn test_embedding_provider_switch_updates_config() {
         embedding_model: Some("text-embedding-nomic".to_string()),
         embedding_provider: Some("lmstudio".to_string()),
         embedding_dimension: Some(768),
+        metadata: None,
     };
 
     state

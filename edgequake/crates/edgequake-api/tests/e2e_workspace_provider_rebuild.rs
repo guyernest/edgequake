@@ -84,6 +84,7 @@ async fn test_workspace_update_changes_provider_config() {
         embedding_dimension: Some(1536),
         max_documents: None,
         is_active: None,
+        metadata: None,
     };
 
     let updated = state

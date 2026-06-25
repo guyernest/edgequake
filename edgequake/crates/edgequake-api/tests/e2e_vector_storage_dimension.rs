@@ -216,6 +216,7 @@ async fn test_dimension_update_on_existing_workspace() {
         embedding_model: Some("text-embedding-3-small".to_string()),
         embedding_provider: Some("openai".to_string()),
         embedding_dimension: Some(1536),
+        metadata: None,
     };
 
     state

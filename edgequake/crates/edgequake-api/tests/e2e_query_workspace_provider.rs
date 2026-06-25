@@ -247,6 +247,7 @@ async fn test_workspace_provider_update_affects_query_config() {
         embedding_model: Some("updated-embedding".to_string()),
         embedding_dimension: Some(768), // Changed dimension
         is_active: None,
+        metadata: None,
     };
 
     let updated = state

@@ -1069,6 +1069,20 @@ pub struct UpdateWorkspaceRequest {
     pub embedding_provider: Option<String>,
     /// New embedding dimension (optional).
     pub embedding_dimension: Option<usize>,
+
+    // Phase 33 — INGEST-SCHEMA-DRAFT: allow arbitrary metadata key/value merges.
+    // Handlers that need to persist workspace-level config (e.g. `graph_schema`)
+    // supply a partial metadata map here; the service impl merges it into the
+    // existing workspace.metadata HashMap before persisting.
+    //
+    // `None` = no metadata changes (the common case — backward-compatible with all
+    // existing callers that don't set this field).
+    /// Arbitrary metadata entries to merge into `workspace.metadata`.
+    ///
+    /// Keys in this map are inserted/overwritten in `workspace.metadata`; keys
+    /// NOT in this map are left untouched (merge, not replace).
+    #[serde(default)]
+    pub metadata: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 /// Statistics for a workspace.

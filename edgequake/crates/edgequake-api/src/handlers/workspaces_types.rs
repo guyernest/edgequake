@@ -300,6 +300,16 @@ pub struct WorkspaceResponse {
     /// Equals `slug` — included explicitly so the webui can resolve
     /// `/namespaces/{namespace_slug}/config` without additional lookup.
     pub namespace_slug: String,
+
+    // Phase 33 — INGEST-SCHEMA-DRAFT (Pitfall 4):
+    // Expose the workspace-level graph schema so the dashboard schema editor
+    // can read the current status/entity_types/relationship_types without a
+    // separate GET /graph-schema call.
+    /// Current workspace graph schema, or `null` if none has been set.
+    ///
+    /// Shape: `{ "version": N, "status": "draft"|"approved", "entity_types": [...], ... }`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graph_schema: Option<serde_json::Value>,
 }
 
 // ============================================================================
@@ -787,6 +797,8 @@ mod tests {
             updated_at: "2024-01-01T00:00:00Z".to_string(),
             // Phase 23: namespace_slug = workspace slug
             namespace_slug: "test".to_string(),
+            // Phase 33: graph_schema — None in this test (no schema set)
+            graph_schema: None,
         };
 
         let json = serde_json::to_string(&response).unwrap();

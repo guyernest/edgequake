@@ -170,6 +170,7 @@ async fn test_provider_switch_updates_names() {
         embedding_provider: Some("lmstudio".to_string()),
         embedding_model: Some("text-embedding-nomic".to_string()),
         embedding_dimension: Some(384),
+        metadata: None,
     };
 
     let updated = state

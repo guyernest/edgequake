@@ -250,6 +250,7 @@ async fn test_pipeline_changes_after_provider_switch() {
         embedding_model: Some("text-embedding-nomic".to_string()),
         embedding_provider: Some("lmstudio".to_string()),
         embedding_dimension: Some(768),
+        metadata: None,
     };
 
     state

@@ -564,6 +564,12 @@ impl WorkspaceService for WorkspaceServiceImpl {
                 serde_json::json!(embedding_dimension),
             );
         }
+        // Phase 33 — INGEST-SCHEMA-DRAFT: merge arbitrary metadata entries.
+        if let Some(extra_meta) = request.metadata {
+            for (k, v) in extra_meta {
+                workspace.metadata.insert(k, v);
+            }
+        }
         workspace.updated_at = chrono::Utc::now();
 
         // Store all config in metadata JSONB column (database schema uses metadata, not separate columns)

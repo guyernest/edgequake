@@ -155,6 +155,7 @@ async fn test_llm_provider_switch_updates_config() {
         embedding_model: None,
         embedding_provider: None,
         embedding_dimension: None,
+        metadata: None,
     };
 
     state

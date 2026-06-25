@@ -228,6 +228,7 @@ async fn test_provider_switch_affects_document_processing() {
         embedding_model: Some("mock-embed-v2".to_string()),
         embedding_provider: Some("mock".to_string()),
         embedding_dimension: Some(512), // Different dimension
+        metadata: None,
     };
 
     state

@@ -471,6 +471,12 @@ impl WorkspaceService for InMemoryWorkspaceService {
         if let Some(embedding_dimension) = request.embedding_dimension {
             workspace.embedding_dimension = embedding_dimension;
         }
+        // Phase 33 — INGEST-SCHEMA-DRAFT: merge arbitrary metadata entries.
+        if let Some(extra_meta) = request.metadata {
+            for (k, v) in extra_meta {
+                workspace.metadata.insert(k, v);
+            }
+        }
 
         workspace.updated_at = chrono::Utc::now();
 

@@ -144,6 +144,10 @@ fn workspace_to_response(workspace: &Workspace) -> WorkspaceResponse {
         } else {
             String::new()
         },
+        // Phase 33 — INGEST-SCHEMA-DRAFT (Pitfall 4):
+        // Populate graph_schema from workspace.metadata so the dashboard schema
+        // editor can read the current schema state without an extra GET call.
+        graph_schema: workspace.metadata.get("graph_schema").cloned(),
     }
 }
 
@@ -793,6 +797,7 @@ pub async fn update_workspace(
         embedding_model: request.embedding_model,
         embedding_provider: request.embedding_provider,
         embedding_dimension: request.embedding_dimension,
+        metadata: None,
     };
 
     let workspace = state

@@ -318,6 +318,7 @@ async fn test_query_http_after_provider_switch() {
         embedding_model: Some("mock-embedding-v2".to_string()),
         embedding_provider: Some("mock".to_string()),
         embedding_dimension: Some(768), // Different dimension
+        metadata: None,
     };
 
     state

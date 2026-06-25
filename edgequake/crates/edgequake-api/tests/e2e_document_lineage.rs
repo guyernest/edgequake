@@ -310,6 +310,7 @@ async fn test_provider_switch_updates_lineage_config() {
         embedding_model: Some("mock-embed-v2".to_string()), // Updated model
         embedding_dimension: Some(1536),
         is_active: None,
+        metadata: None,
     };
 
     let updated = state
