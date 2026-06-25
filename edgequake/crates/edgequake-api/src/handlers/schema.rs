@@ -217,6 +217,24 @@ pub struct SchemaActionResponse {
     pub schema: SchemaProposal,
 }
 
+/// Response body for the POST /schema/resample endpoint.
+///
+/// Returns a rich diff so the UI can highlight newly-added types without
+/// re-fetching the schema and computing the diff client-side.
+#[derive(Debug, Serialize)]
+pub struct ResampleResponse {
+    /// The merged Proposed schema (status = Proposed, admin descriptions preserved).
+    pub schema: SchemaResponseBody,
+    /// Names of entity types that were added by this resample (new to current).
+    pub added: Vec<String>,
+    /// Names of entity types that were preserved from the current schema.
+    pub preserved: Vec<String>,
+    /// Relation-name conflicts where resampled proposed different endpoints
+    /// (current endpoints are preserved; these are surfaced for review).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub conflicts: Vec<RelationConflict>,
+}
+
 // ---------------------------------------------------------------------------
 // Helpers (copied verbatim from namespace.rs)
 // ---------------------------------------------------------------------------
@@ -462,18 +480,28 @@ pub async fn suggest_namespace_schema(
         }
     }
 
-    // --- Deduplication: if already proposing, don't spawn a second task ---
+    // --- Deduplication + overwrite guard (WR-02 + review item [2]) ---
+    //
     // Registry errors are propagated (not swallowed); a pending marker older
     // than PENDING_STALENESS_MS is treated as expired and a fresh task is
     // spawned instead of dedup-blocking forever (WR-02).
-    let existing = registry
+    //
+    // CONSTRAINT (review item [2]): `suggest_namespace_schema` must NOT wholesale-
+    // overwrite an existing non-None proposal (especially an Approved one).
+    // - First proposal (no current schema) → store directly (original behaviour).
+    // - PENDING_SENTINEL → dedup as before.
+    // - Any non-None status (Proposed/Approved/Rejected) → reject the suggest call
+    //   and direct the caller to use POST /schema/defaults (for a deliberate reset)
+    //   or POST /schema/resample (for an additive non-destructive update).
+    //   This closes the destructive overwrite path (T-33-05-DD mitigated).
+    let existing_proposal = registry
         .get_schema(&slug)
         .await
         .map_err(map_registry_error)?;
-    if let Some(existing) = existing {
+    if let Some(ref existing) = existing_proposal {
         if existing.domain_hint.as_deref() == Some(PENDING_SENTINEL) {
             let now_ms = chrono::Utc::now().timestamp_millis();
-            if !is_pending_stale(&existing, now_ms) {
+            if !is_pending_stale(existing, now_ms) {
                 info!(namespace = slug.as_str(), "Schema suggestion already in progress");
                 return Ok((
                     StatusCode::ACCEPTED,
@@ -489,6 +517,28 @@ pub async fn suggest_namespace_schema(
                 "Stale pending suggestion marker found (older than {}ms); spawning a fresh task",
                 PENDING_STALENESS_MS
             );
+            // Fall through: stale sentinel — treat as no existing proposal.
+        } else {
+            // A real non-None proposal exists (Proposed, Approved, or Rejected).
+            // Refuse the destructive suggest path — direct to the safe alternatives.
+            match existing.status {
+                SchemaStatus::None => {
+                    // status=None with no sentinel = effectively no proposal; fall through.
+                }
+                _ => {
+                    // Proposed / Approved / Rejected — refuse overwrite.
+                    return Err(ApiError::Conflict(format!(
+                        "A {:?} schema proposal already exists for namespace '{}'. \
+                         Use POST /namespaces/{}/schema/resample to add new types \
+                         non-destructively, or POST /namespaces/{}/schema/defaults \
+                         to start over from the 4 baseline types (destructive reset).",
+                        existing.status,
+                        slug.as_str(),
+                        slug.as_str(),
+                        slug.as_str()
+                    )));
+                }
+            }
         }
     }
 
@@ -857,6 +907,254 @@ pub async fn reject_namespace_schema(
     Ok(Json(SchemaActionResponse {
         namespace: slug.as_str().to_string(),
         schema: proposal,
+    }))
+}
+
+/// Seed the namespace schema from the 4 BASELINE entity types (no LLM).
+///
+/// REPLACE semantics (design §4.1): stores a fresh `Proposed` SchemaProposal
+/// seeded from the 4 BASELINE types (PERSON, ORGANIZATION, LOCATION, DATE),
+/// replacing ANY existing proposal — including an Approved one.
+///
+/// This is the ONLY sanctioned destructive path on the schema lifecycle. The
+/// admin uses this to start from scratch, then edits and approves via the
+/// existing PATCH + POST /approve endpoints.
+///
+/// The caller must exercise explicit intent (POST, not GET) because this action
+/// is destructive: an Approved schema is replaced by the fresh Proposed baseline.
+///
+/// # Errors
+///
+/// - 400: Invalid slug format
+/// - 404: Namespace not found
+/// - 501: Namespace registry not configured
+#[utoipa::path(
+    post,
+    path = "/api/v1/namespaces/{namespace}/schema/defaults",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    responses(
+        (status = 200, description = "Baseline schema seeded — status=Proposed; admin must edit and approve"),
+        (status = 400, description = "Invalid slug format"),
+        (status = 404, description = "Namespace not found"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
+pub async fn start_from_defaults(
+    State(state): State<AppState>,
+    Path(namespace): Path<String>,
+) -> ApiResult<Json<SchemaResponse>> {
+    let registry = get_registry(&state)?;
+
+    let slug = NamespaceSlug::parse(&namespace)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid namespace slug: {}", e)))?;
+
+    info!(
+        namespace = slug.as_str(),
+        "start-from-defaults: seeding baseline proposal (REPLACE semantics)"
+    );
+
+    let baseline = build_baseline_proposal();
+
+    // REPLACE: store_schema is a wholesale replace — any existing proposal
+    // (including Approved) is overwritten with the fresh Proposed baseline.
+    // This is the ONLY sanctioned destructive path (design §4.1).
+    registry
+        .store_schema(&slug, &baseline)
+        .await
+        .map_err(map_registry_error)?;
+
+    let body = schema_proposal_to_body(baseline, chrono::Utc::now().timestamp_millis());
+    Ok(Json(SchemaResponse {
+        namespace: slug.as_str().to_string(),
+        schema: body,
+    }))
+}
+
+/// Re-sample the namespace schema via a synchronous LLM call + additive merge.
+///
+/// PINNED route: `POST /namespaces/{ns}/schema/resample` (never overwrites
+/// suggest_namespace_schema's route).
+///
+/// Unlike the initial suggest endpoint (POST /schema, which uses tokio::spawn),
+/// this handler runs ONE bounded synchronous LLM call (`tokio::time::timeout`)
+/// and merges the result additively into the current proposal via `merge_schema`.
+///
+/// **Non-destructive:** An Approved schema is NEVER overwritten wholesale.
+/// The merged delta is stored as Proposed so the admin reviews before re-approving.
+/// Malformed LLM output → 422 Unprocessable, leaving the approved schema intact (§8).
+///
+/// Returns `{ schema, added, preserved }` — the rich diff — so the UI can
+/// highlight newly-added types without client-side diffing.
+///
+/// # Errors
+///
+/// - 400: Invalid slug or no data location resolvable
+/// - 404: Namespace not found
+/// - 422: LLM output was malformed — approved schema preserved
+/// - 501: Registry not configured
+#[utoipa::path(
+    post,
+    path = "/api/v1/namespaces/{namespace}/schema/resample",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    request_body = inline(serde_json::Value),
+    responses(
+        (status = 200, description = "Re-sampled schema delta — { schema (Proposed), added, preserved }"),
+        (status = 400, description = "Invalid slug or no data location resolvable"),
+        (status = 404, description = "Namespace not found"),
+        (status = 422, description = "Malformed LLM output — approved schema intact"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
+pub async fn resample_namespace_schema(
+    State(state): State<AppState>,
+    Path(namespace): Path<String>,
+    Json(body): Json<SuggestSchemaRequest>,
+) -> ApiResult<Json<ResampleResponse>> {
+    let registry = get_registry(&state)?;
+
+    let slug = NamespaceSlug::parse(&namespace)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid namespace slug: {}", e)))?;
+
+    debug!(namespace = slug.as_str(), "Re-sampling namespace schema");
+
+    // Read the current proposal (may be None, Proposed, Approved, or Rejected).
+    let current_opt = registry
+        .get_schema(&slug)
+        .await
+        .map_err(map_registry_error)?;
+
+    // Guard: do NOT run if a suggest is already in-flight (PENDING_SENTINEL).
+    if let Some(ref curr) = current_opt {
+        if curr.domain_hint.as_deref() == Some(PENDING_SENTINEL) {
+            let now_ms = chrono::Utc::now().timestamp_millis();
+            if !is_pending_stale(curr, now_ms) {
+                return Err(ApiError::Conflict(
+                    "A schema suggestion is already in progress; wait for it to complete before re-sampling".to_string(),
+                ));
+            }
+        }
+    }
+
+    // Resolve data location (same logic as suggest_namespace_schema).
+    let (location, _sample_dir) = match stage_workspace_sampling_dir(&state, &slug).await {
+        Some((location, dir, document_count)) => {
+            info!(
+                namespace = slug.as_str(),
+                documents = document_count,
+                "Re-sampling schema from workspace documents"
+            );
+            (location, Some(dir))
+        }
+        None => {
+            let config = registry
+                .get_config(&slug)
+                .await
+                .map_err(map_registry_error)?
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!(
+                        "Pipeline config not found for namespace: {}",
+                        slug
+                    ))
+                })?;
+
+            let location = config.snapshot_uri.clone().ok_or_else(|| {
+                ApiError::BadRequest(format!(
+                    "Cannot re-sample schema for namespace '{}': no workspace documents \
+                     found and snapshot_uri is not configured.",
+                    slug
+                ))
+            })?;
+            if location.contains("..") {
+                return Err(ApiError::BadRequest(
+                    "snapshot_uri must not contain '..' path-traversal sequences".to_string(),
+                ));
+            }
+            (location, None)
+        }
+    };
+
+    // Build suggest input.
+    let suggest_input = edgequake_schema::SuggestSchemaInput {
+        domain_description: body.domain_description,
+        domain_hint: body.domain_hint,
+        sample_budget: body.sample_budget,
+        ..Default::default()
+    };
+
+    let openai_api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
+    if openai_api_key.is_empty() {
+        warn!(namespace = slug.as_str(), "OPENAI_API_KEY not set for re-sample");
+    }
+    let openai_config = edgequake_schema::OpenAiConfig::new(&openai_api_key);
+
+    // ONE synchronous bounded LLM call (T-33-05-DH: timeout prevents API GW 29s blowout).
+    // Do NOT use tokio::spawn — resample is synchronous by design.
+    const RESAMPLE_TIMEOUT_SECS: u64 = 25;
+    let suggest_result = tokio::time::timeout(
+        std::time::Duration::from_secs(RESAMPLE_TIMEOUT_SECS),
+        edgequake_schema::suggest_schema(&location, &suggest_input, &openai_config),
+    )
+    .await
+    .map_err(|_| {
+        ApiError::ValidationError(
+            "Schema re-sample timed out (LLM did not respond in time). \
+             The approved schema is intact."
+                .to_string(),
+        )
+    })?
+    .map_err(|e| {
+        ApiError::ValidationError(format!(
+            "Schema re-sample failed (malformed LLM output): {}. \
+             The approved schema is intact.",
+            e
+        ))
+    })?;
+
+    let now_ms = chrono::Utc::now().timestamp_millis();
+
+    // Additive merge or first-time store.
+    let (merge_added, merge_preserved, merge_conflicts, merged_proposal) =
+        if let Some(current) = current_opt {
+            let m = merge_schema(&current, &suggest_result);
+            let added = m.added.clone();
+            let preserved = m.preserved.clone();
+            let conflicts = m.conflicts.clone();
+            (added, preserved, conflicts, m.proposal)
+        } else {
+            // No existing proposal: store directly; all types are "added".
+            let added: Vec<String> = suggest_result
+                .entity_types
+                .iter()
+                .map(|e| e.name.clone())
+                .collect();
+            (added, vec![], vec![], suggest_result)
+        };
+
+    // Store the merged Proposed delta (never overwrites with Approved state).
+    let stored_proposal = SchemaProposal {
+        status: SchemaStatus::Proposed,
+        reviewed_at: None,
+        ..merged_proposal
+    };
+
+    registry
+        .store_schema(&slug, &stored_proposal)
+        .await
+        .map_err(map_registry_error)?;
+
+    let schema_body = schema_proposal_to_body(stored_proposal, now_ms);
+
+    Ok(Json(ResampleResponse {
+        schema: schema_body,
+        added: merge_added,
+        preserved: merge_preserved,
+        conflicts: merge_conflicts,
     }))
 }
 
