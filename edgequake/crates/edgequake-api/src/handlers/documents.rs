@@ -4370,6 +4370,203 @@ pub async fn list_raw_docs(
     Ok(Json(summaries))
 }
 
+// ============================================================================
+// Phase 33 — POST /documents/{id}/resume (INGEST-RESUME, R3, R5)
+// ============================================================================
+
+/// Response returned by `POST /documents/{id}/resume`.
+#[derive(Debug, serde::Serialize)]
+pub struct ResumeDocumentResponse {
+    /// Document identifier.
+    pub document_id: String,
+    /// Final status after the resume operation.
+    pub status: String,
+    /// Human-readable outcome message.
+    pub message: String,
+}
+
+/// Resume a parked document from `awaiting_schema` → `extracting` → `completed` (stub).
+///
+/// # Security (R5)
+///
+/// Loads the doc metadata and verifies `doc.tenant_id` / `doc.workspace_id` match the
+/// server-injected `TenantContext` BEFORE any status mutation.  A mismatch returns 404
+/// (do not leak that the document exists).
+///
+/// # Schema gate (Pitfall 5)
+///
+/// Requires `workspace.metadata["graph_schema"]["status"] == "approved"` else 422.
+///
+/// # Idempotency (R3)
+///
+/// Status branches (see [`resume_decision`]):
+/// - `awaiting_schema` → CAS to `extracting`, then [`run_resume_stub`] → `completed`; 200.
+/// - `extracting`      → 202 (already running, no-op).
+/// - `completed`       → 200 (idempotent no-op).
+/// - `failed` | `cancelled` | other → 409.
+///
+/// The CAS (compare-and-set via [`KVStorage::transition_if_status`]) prevents double-advance
+/// under concurrent calls (R9 approve-during-upload race).
+///
+/// # Route registration
+///
+/// NOT registered here — routing is owned by 33-03 (routes.rs).
+pub async fn resume_document(
+    State(state): State<AppState>,
+    tenant_ctx: TenantContext,
+    axum::extract::Path(document_id): axum::extract::Path<String>,
+) -> ApiResult<(StatusCode, Json<ResumeDocumentResponse>)> {
+    use edgequake_storage::traits::KVStorage;
+
+    let metadata_key = format!("{}-metadata", document_id);
+
+    // Load document metadata.
+    let raw_meta = state
+        .kv_storage
+        .get_by_ids(std::slice::from_ref(&metadata_key))
+        .await?
+        .into_iter()
+        .next()
+        .and_then(|v| if v.is_object() { Some(v) } else { None });
+
+    let meta = match raw_meta {
+        Some(m) => m,
+        None => {
+            // Doc not found — return 404 regardless of reason (no existence leak).
+            return Err(ApiError::NotFound(format!(
+                "Document {} not found",
+                document_id
+            )));
+        }
+    };
+
+    // === R5: Tenant/workspace isolation check (BEFORE any mutation) ===
+    let doc_tenant = meta.get("tenant_id").and_then(|v| v.as_str());
+    let doc_workspace = meta.get("workspace_id").and_then(|v| v.as_str());
+
+    // Verify tenant_id matches.  A missing doc tenant_id is treated as "not owned by caller"
+    // unless the caller also has no tenant context (legacy / in-memory path).
+    if let Some(ref caller_tenant) = tenant_ctx.tenant_id {
+        let tenant_ok = doc_tenant.map(|t| t == caller_tenant).unwrap_or(false);
+        if !tenant_ok {
+            return Err(ApiError::NotFound(format!(
+                "Document {} not found",
+                document_id
+            )));
+        }
+    }
+
+    // Verify workspace_id matches.
+    if let Some(ref caller_workspace) = tenant_ctx.workspace_id {
+        let workspace_ok = doc_workspace.map(|w| w == caller_workspace).unwrap_or(false);
+        if !workspace_ok {
+            return Err(ApiError::NotFound(format!(
+                "Document {} not found",
+                document_id
+            )));
+        }
+    }
+
+    // === Schema gate (Pitfall 5): workspace must have an approved schema ===
+    let workspace_id_str = doc_workspace.unwrap_or("default");
+    let gate_status = resolve_schema_gate_status(&state, workspace_id_str).await;
+    if gate_status != "extracting" {
+        // Gate is closed: schema not approved.
+        return Err(ApiError::ValidationError(
+            "Workspace schema is not approved — cannot resume document".to_string(),
+        ));
+    }
+
+    // === R3: Branch on current status ===
+    let current_status = meta
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    match resume_decision(current_status) {
+        ResumeAction::AlreadyRunning => {
+            return Ok((
+                StatusCode::ACCEPTED,
+                Json(ResumeDocumentResponse {
+                    document_id,
+                    status: "extracting".to_string(),
+                    message: "Document is already being extracted".to_string(),
+                }),
+            ));
+        }
+        ResumeAction::NoOp => {
+            return Ok((
+                StatusCode::OK,
+                Json(ResumeDocumentResponse {
+                    document_id,
+                    status: "completed".to_string(),
+                    message: "Document already completed".to_string(),
+                }),
+            ));
+        }
+        ResumeAction::Conflict => {
+            return Err(ApiError::Conflict(format!(
+                "Document {} is in status '{}' and cannot be resumed (409). \
+                 Only awaiting_schema documents can be resumed.",
+                document_id, current_status
+            )));
+        }
+        ResumeAction::AdvanceToExtracting => {
+            // CAS: only advance if status is still awaiting_schema (prevents double-advance, R3/R9).
+            let advanced = state
+                .kv_storage
+                .transition_if_status(&metadata_key, "awaiting_schema", "extracting")
+                .await
+                .map_err(|e| {
+                    ApiError::Internal(format!(
+                        "CAS transition awaiting_schema→extracting failed: {}",
+                        e
+                    ))
+                })?;
+
+            if !advanced {
+                // Another concurrent call already advanced it — idempotent response.
+                return Ok((
+                    StatusCode::ACCEPTED,
+                    Json(ResumeDocumentResponse {
+                        document_id,
+                        status: "extracting".to_string(),
+                        message: "Document is already being extracted (concurrent advance)".to_string(),
+                    }),
+                ));
+            }
+
+            // CAS succeeded: run the extraction stub (awaiting_schema→extracting→completed).
+            // Construct a DocumentTaskProcessor from AppState fields (no `processor` field
+            // on AppState — build one per-call for the stub; it is stateless for our use).
+            let processor = crate::processor::DocumentTaskProcessor::new(
+                Arc::clone(&state.pipeline),
+                Arc::clone(&state.llm_provider),
+                Arc::clone(&state.kv_storage),
+                Arc::clone(&state.vector_storage),
+                Arc::clone(&state.vector_registry),
+                Arc::clone(&state.graph_storage),
+                state.pipeline_state.clone(),
+            );
+            processor
+                .run_resume_stub(&document_id)
+                .await
+                .map_err(|e| {
+                    ApiError::Internal(format!("Resume stub failed for document {}: {}", document_id, e))
+                })?;
+
+            Ok((
+                StatusCode::OK,
+                Json(ResumeDocumentResponse {
+                    document_id,
+                    status: "completed".to_string(),
+                    message: "Document resumed and stub extraction completed".to_string(),
+                }),
+            ))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
