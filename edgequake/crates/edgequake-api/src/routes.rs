@@ -249,15 +249,9 @@ fn api_v1_routes() -> Router<AppState> {
             "/workspaces/{workspace_id}/export-snapshot",
             post(handlers::export_workspace_snapshot),
         )
-        // Phase 33 — INGEST-SCHEMA-DRAFT / INGEST-RESUME: workspace graph-schema endpoints
-        .route(
-            "/workspaces/{workspace_id}/graph-schema/draft",
-            post(handlers::draft_workspace_graph_schema),
-        )
-        .route(
-            "/workspaces/{workspace_id}/graph-schema",
-            get(handlers::get_workspace_graph_schema).put(handlers::approve_workspace_graph_schema),
-        )
+        // Phase 33-04 — SCHEMA-CONSOLIDATE: workspace-level draft/approve/get schema routes
+        // retired. Namespace SchemaProposal routes (/namespaces/{slug}/schema) are canonical.
+        // Phase 33 — INGEST-RESUME: release all awaiting_schema docs for a workspace.
         .route(
             "/workspaces/{workspace_id}/resume-all",
             post(handlers::resume_all_documents),
