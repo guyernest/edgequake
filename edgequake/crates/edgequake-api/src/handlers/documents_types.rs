@@ -210,6 +210,7 @@ pub struct ListDocumentsRequest {
 /// - `failed`: Processing failed with an error
 /// - `cancelled`: Processing was cancelled by user
 /// - `uploaded`: Uploaded to S3 raw-docs store; queued for future processing (D-07)
+/// - `awaiting_schema`: Parked at schema gate — workspace schema not yet approved (Phase 33)
 #[derive(Debug, Clone, Serialize, Default, ToSchema)]
 pub struct StatusCounts {
     /// Number of pending documents.
@@ -228,6 +229,10 @@ pub struct StatusCounts {
     /// Number of raw documents uploaded to S3 (D-07 — derived from S3 object existence,
     /// not a stored KV row; source of truth is the S3 list-raw-docs read path).
     pub uploaded: usize,
+    /// Number of documents parked at the schema gate waiting for workspace schema approval.
+    /// Phase 33 — INGEST-SCHEMA-GATE.
+    #[serde(default)]
+    pub awaiting_schema: usize,
 }
 
 // ============================================================================
@@ -1239,6 +1244,7 @@ mod tests {
                 failed: 0,
                 cancelled: 0,
                 uploaded: 0,
+                awaiting_schema: 0,
             },
         };
 
@@ -1349,6 +1355,7 @@ mod tests {
                 failed: 0,
                 cancelled: 0,
                 uploaded: 0,
+                awaiting_schema: 0,
             },
             is_complete: true,
             latest_message: Some("All documents processed successfully".to_string()),

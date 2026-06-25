@@ -183,6 +183,7 @@ fn status_counts_serialize_includes_uploaded() {
         failed: 0,
         cancelled: 0,
         uploaded: 3,
+        awaiting_schema: 0,
     };
     let json = serde_json::to_string(&counts).expect("serialize");
     assert!(json.contains("\"uploaded\":3"), "Serialized JSON must include uploaded field");
