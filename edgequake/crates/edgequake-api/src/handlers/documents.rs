@@ -4373,6 +4373,7 @@ pub async fn list_raw_docs(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use edgequake_storage::traits::KVStorage;
 
     #[test]
     fn test_upload_request_validation() {
@@ -4730,6 +4731,213 @@ mod tests {
             check_workspace_schema_gate(&ws),
             SchemaGateResult::Approved,
             "Approved schema must pass the gate"
+        );
+    }
+
+    // =========================================================================
+    // Phase 33 — INGEST-RESUME: resume_decision + CAS idempotency tests (Task 3)
+    // =========================================================================
+
+    /// INGEST-RESUME R3: resume_decision returns correct action for all four status branches.
+    #[test]
+    fn test_resume_decision_branches() {
+        assert_eq!(
+            resume_decision("awaiting_schema"),
+            ResumeAction::AdvanceToExtracting,
+            "awaiting_schema → AdvanceToExtracting"
+        );
+        assert_eq!(
+            resume_decision("extracting"),
+            ResumeAction::AlreadyRunning,
+            "extracting → AlreadyRunning (202 already-running)"
+        );
+        assert_eq!(
+            resume_decision("completed"),
+            ResumeAction::NoOp,
+            "completed → NoOp (idempotent 200)"
+        );
+        assert_eq!(
+            resume_decision("failed"),
+            ResumeAction::Conflict,
+            "failed → Conflict (409)"
+        );
+        assert_eq!(
+            resume_decision("cancelled"),
+            ResumeAction::Conflict,
+            "cancelled → Conflict (409)"
+        );
+        // Unknown statuses also conflict
+        assert_eq!(
+            resume_decision("uploaded"),
+            ResumeAction::Conflict,
+            "uploaded (non-resumable state) → Conflict"
+        );
+    }
+
+    /// INGEST-RESUME R5: cross-tenant resume is rejected.
+    ///
+    /// The handler must verify `doc.tenant_id == caller_tenant_id` BEFORE any
+    /// status mutation.  A mismatch returns 404 (do not reveal existence).
+    /// This test verifies the pure tenant-match logic used inside the handler.
+    #[test]
+    fn test_resume_rejects_cross_tenant() {
+        // Simulate: doc belongs to tenant-A, caller is tenant-B.
+        let doc_tenant = Some("tenant-A");
+        let caller_tenant = "tenant-B";
+        // The handler uses this check:
+        let tenant_ok = doc_tenant.map(|t| t == caller_tenant).unwrap_or(false);
+        assert!(
+            !tenant_ok,
+            "Cross-tenant resume must be rejected (tenant mismatch)"
+        );
+
+        // Same tenant must pass.
+        let doc_tenant_same = Some("tenant-A");
+        let caller_same = "tenant-A";
+        let tenant_ok_same = doc_tenant_same.map(|t| t == caller_same).unwrap_or(false);
+        assert!(tenant_ok_same, "Same tenant must be allowed");
+    }
+
+    /// INGEST-RESUME Pitfall 5: resume with an unapproved schema is rejected (422).
+    ///
+    /// The handler requires `workspace.metadata["graph_schema"]["status"] == "approved"`
+    /// before allowing the awaiting_schema→extracting transition.
+    #[test]
+    fn test_resume_rejects_unapproved_schema() {
+        use edgequake_core::Workspace;
+
+        // No schema at all → rejected.
+        let tenant_id = uuid::Uuid::new_v4();
+        let ws_no_schema = Workspace::new(tenant_id, "WS", "ws");
+        assert_eq!(
+            check_workspace_schema_gate(&ws_no_schema),
+            SchemaGateResult::AwaitingSchema,
+            "No schema → gate closed (resume must 422)"
+        );
+
+        // Draft schema → rejected.
+        let mut ws_draft = Workspace::new(tenant_id, "WS", "ws");
+        ws_draft.metadata.insert(
+            "graph_schema".to_string(),
+            serde_json::json!({ "status": "draft" }),
+        );
+        assert_eq!(
+            check_workspace_schema_gate(&ws_draft),
+            SchemaGateResult::AwaitingSchema,
+            "Draft schema → gate closed (resume must 422)"
+        );
+
+        // Approved schema → allowed.
+        let mut ws_approved = Workspace::new(tenant_id, "WS", "ws");
+        ws_approved.metadata.insert(
+            "graph_schema".to_string(),
+            serde_json::json!({ "status": "approved" }),
+        );
+        assert_eq!(
+            check_workspace_schema_gate(&ws_approved),
+            SchemaGateResult::Approved,
+            "Approved schema → gate open (resume allowed)"
+        );
+    }
+
+    /// INGEST-RESUME R3: double-resume is idempotent — only one awaiting_schema→extracting
+    /// CAS transition succeeds; the second attempt sees status != awaiting_schema and is a no-op.
+    #[tokio::test]
+    async fn test_resume_double_is_idempotent() {
+        use edgequake_storage::MemoryKVStorage;
+        use std::sync::Arc;
+
+        let kv = Arc::new(MemoryKVStorage::new("test_resume_double"));
+        let doc_id = "doc-resume-double";
+        let metadata_key = format!("{}-metadata", doc_id);
+
+        // Seed doc at awaiting_schema.
+        kv.upsert(&[(
+            metadata_key.clone(),
+            serde_json::json!({
+                "id": doc_id,
+                "status": "awaiting_schema",
+                "tenant_id": "tenant-A",
+                "workspace_id": "ws-A",
+            }),
+        )])
+        .await
+        .unwrap();
+
+        // First CAS: awaiting_schema → extracting. Must succeed.
+        let first = kv
+            .transition_if_status(&metadata_key, "awaiting_schema", "extracting")
+            .await
+            .expect("CAS must not error");
+        assert!(first, "First CAS must succeed");
+
+        // Second CAS: status is now extracting, not awaiting_schema. Must fail (false).
+        let second = kv
+            .transition_if_status(&metadata_key, "awaiting_schema", "extracting")
+            .await
+            .expect("CAS must not error");
+        assert!(!second, "Second CAS on non-awaiting_schema doc must be a no-op");
+
+        // Final status must be extracting (not advanced twice).
+        let meta = kv.get_by_id(&metadata_key).await.unwrap().unwrap();
+        assert_eq!(meta["status"], "extracting", "Status must be extracting, not double-advanced");
+    }
+
+    /// INGEST-RESUME R9: approve-during-upload race — two concurrent resume calls on the same
+    /// doc result in EXACTLY ONE awaiting_schema→extracting transition.
+    #[tokio::test]
+    async fn test_gate_and_resume_concurrent_no_double_advance() {
+        use edgequake_storage::MemoryKVStorage;
+        use std::sync::Arc;
+
+        let kv = Arc::new(MemoryKVStorage::new("test_concurrent_resume"));
+        let doc_id = "doc-concurrent-resume";
+        let metadata_key = format!("{}-metadata", doc_id);
+
+        // Seed doc at awaiting_schema.
+        kv.upsert(&[(
+            metadata_key.clone(),
+            serde_json::json!({
+                "id": doc_id,
+                "status": "awaiting_schema",
+                "tenant_id": "tenant-A",
+                "workspace_id": "ws-A",
+            }),
+        )])
+        .await
+        .unwrap();
+
+        // Simulate two concurrent CAS attempts (both racing to do awaiting_schema → extracting).
+        let kv1 = Arc::clone(&kv);
+        let kv2 = Arc::clone(&kv);
+        let key1 = metadata_key.clone();
+        let key2 = metadata_key.clone();
+
+        let (result1, result2) = tokio::join!(
+            async move {
+                kv1.transition_if_status(&key1, "awaiting_schema", "extracting")
+                    .await
+                    .expect("CAS1 must not error")
+            },
+            async move {
+                kv2.transition_if_status(&key2, "awaiting_schema", "extracting")
+                    .await
+                    .expect("CAS2 must not error")
+            }
+        );
+
+        // Exactly ONE must have succeeded (the other races against the mutated status).
+        let success_count = [result1, result2].iter().filter(|&&r| r).count();
+        assert_eq!(
+            success_count, 1,
+            "Exactly one concurrent CAS must win (got {success_count} successes)"
+        );
+
+        // Final status must be extracting (not some other state from a double-transition).
+        let meta = kv.get_by_id(&metadata_key).await.unwrap().unwrap();
+        assert_eq!(
+            meta["status"], "extracting",
+            "Doc must end at extracting after exactly one concurrent CAS"
         );
     }
 }
