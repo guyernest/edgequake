@@ -249,6 +249,19 @@ fn api_v1_routes() -> Router<AppState> {
             "/workspaces/{workspace_id}/export-snapshot",
             post(handlers::export_workspace_snapshot),
         )
+        // Phase 33 — INGEST-SCHEMA-DRAFT / INGEST-RESUME: workspace graph-schema endpoints
+        .route(
+            "/workspaces/{workspace_id}/graph-schema/draft",
+            post(handlers::draft_workspace_graph_schema),
+        )
+        .route(
+            "/workspaces/{workspace_id}/graph-schema",
+            get(handlers::get_workspace_graph_schema).put(handlers::approve_workspace_graph_schema),
+        )
+        .route(
+            "/workspaces/{workspace_id}/resume-all",
+            post(handlers::resume_all_documents),
+        )
         // Documents
         .route("/documents", post(handlers::upload_document))
         .route("/documents", get(handlers::list_documents))
@@ -314,6 +327,11 @@ fn api_v1_routes() -> Router<AppState> {
         .route(
             "/documents/{document_id}/failed-chunks",
             get(handlers::list_failed_chunks),
+        )
+        // Phase 33 — INGEST-RESUME: resume a single parked document — MUST come before /documents/{document_id}
+        .route(
+            "/documents/{document_id}/resume",
+            post(handlers::resume_document),
         )
         // Document by ID - comes last because {document_id} matches any path segment
         .route("/documents/{document_id}", get(handlers::get_document))
