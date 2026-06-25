@@ -861,6 +861,218 @@ pub async fn reject_namespace_schema(
 }
 
 // ---------------------------------------------------------------------------
+// Baseline seed + merge helpers
+// ---------------------------------------------------------------------------
+
+/// The 4 canonical baseline entity types seeded by start-from-defaults.
+///
+/// These are the ONLY types seeded — NOT the full `default_entity_types()` set.
+/// Design §4.1: the admin starts from here, then edits and approves.
+const BASELINE_ENTITY_TYPES: &[(&str, &str)] = &[
+    ("PERSON", "Named individuals"),
+    (
+        "ORGANIZATION",
+        "Companies, institutions, government agencies",
+    ),
+    ("LOCATION", "Places, addresses, geographic regions"),
+    ("DATE", "Dates, time periods, timestamps"),
+];
+
+/// Build a Proposed SchemaProposal seeded from the 4 BASELINE entity types.
+///
+/// - No LLM call — pure deterministic seed.
+/// - Status = Proposed (admin must edit and approve).
+/// - Empty relation_types, sample_size=0, total_documents=0.
+///
+/// This is the building block for the start-from-defaults endpoint (SCHEMA-MANUAL-DEFAULTS).
+pub fn build_baseline_proposal() -> SchemaProposal {
+    let entity_types = BASELINE_ENTITY_TYPES
+        .iter()
+        .map(|(name, desc)| EntityTypeProposal {
+            name: name.to_string(),
+            description: desc.to_string(),
+            frequency: 0,
+            is_baseline: true,
+        })
+        .collect();
+    SchemaProposal {
+        status: SchemaStatus::Proposed,
+        entity_types,
+        relation_types: vec![],
+        sample_size: 0,
+        total_documents: 0,
+        domain_hint: None,
+        proposed_at: chrono::Utc::now().timestamp_millis(),
+        reviewed_at: None,
+        sampling_metadata: None,
+    }
+}
+
+/// A conflict recorded when `merge_schema` finds a relation with the same NAME
+/// in both `current` and `resampled` but with different source/target endpoints.
+///
+/// The current relation's endpoints are always preserved verbatim; the resampled
+/// endpoints that were rejected are recorded here for surfacing to the caller.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RelationConflict {
+    /// The relation type name that had a conflict.
+    pub name: String,
+    /// The (source_type, target_type) pair from the current (preserved) relation.
+    pub current_endpoints: (String, String),
+    /// The (source_type, target_type) pair from the resampled relation that was rejected.
+    pub rejected_endpoints: (String, String),
+}
+
+/// Output of `merge_schema`: the merged proposal plus partition metadata.
+#[derive(Debug)]
+pub struct MergeResult {
+    /// The merged SchemaProposal (status = Proposed, reviewed_at = None).
+    pub proposal: SchemaProposal,
+    /// Names of entity types that were added (only in `resampled`, not in `current`).
+    pub added: Vec<String>,
+    /// Names of entity types that were preserved (existed in `current`).
+    pub preserved: Vec<String>,
+    /// Relation-name collisions where `resampled` proposed different endpoints.
+    ///
+    /// The current relation is kept verbatim in `proposal`; the rejected
+    /// endpoints are recorded here for the UI/caller to surface.
+    pub conflicts: Vec<RelationConflict>,
+}
+
+/// Additive merge of a `resampled` SchemaProposal into a `current` one.
+///
+/// **Union key for entity types:** entity type NAME (case-sensitive UPPER_SNAKE_CASE).
+/// **Union key for relation types:** relation type NAME ONLY (NOT name+source_type+target_type).
+///
+/// # Merge rules
+///
+/// ## Entity types
+/// - A type in `current` is **preserved verbatim**: description (including
+///   admin edits) is never overwritten, but frequency is refreshed from the
+///   matching `resampled` type when present.
+/// - A type only in `resampled` is **added** (recorded in `MergeResult.added`);
+///   its frequency comes from `resampled`.
+/// - Nothing in `current` is removed.
+///
+/// ## Relation types
+/// - Union by relation NAME only (design "by type name").
+/// - If the same name exists in both with **identical** source/target endpoints,
+///   the current relation is preserved (no clobbering).
+/// - If the same name exists in both but with **different** endpoints, the
+///   current relation is kept verbatim and a [`RelationConflict`] is recorded in
+///   `MergeResult.conflicts` — endpoints are NEVER silently changed.
+/// - Relations only in `resampled` are appended to the merged set.
+///
+/// ## Result
+/// - `status` = Proposed, `reviewed_at` = None.
+/// - `proposed_at` = now.
+/// - "Unreviewed" is carried by the caller via `MergeResult.added` (no schema field change).
+pub fn merge_schema(current: &SchemaProposal, resampled: &SchemaProposal) -> MergeResult {
+    let mut merged_entity_types: Vec<EntityTypeProposal> = Vec::new();
+    let mut added: Vec<String> = Vec::new();
+    let mut preserved: Vec<String> = Vec::new();
+
+    // Build a lookup of resampled entity types by name for O(n) merge.
+    let resampled_entity_map: std::collections::HashMap<&str, &EntityTypeProposal> = resampled
+        .entity_types
+        .iter()
+        .map(|e| (e.name.as_str(), e))
+        .collect();
+
+    // Pass 1: preserve current types (description verbatim; refresh frequency).
+    for current_et in &current.entity_types {
+        let mut merged = current_et.clone();
+        if let Some(resampled_et) = resampled_entity_map.get(current_et.name.as_str()) {
+            // Refresh frequency from resampled; preserve everything else.
+            merged.frequency = resampled_et.frequency;
+        }
+        preserved.push(merged.name.clone());
+        merged_entity_types.push(merged);
+    }
+
+    // Pass 2: append resampled-only types (additive).
+    let current_entity_names: std::collections::HashSet<&str> = current
+        .entity_types
+        .iter()
+        .map(|e| e.name.as_str())
+        .collect();
+    for resampled_et in &resampled.entity_types {
+        if !current_entity_names.contains(resampled_et.name.as_str()) {
+            added.push(resampled_et.name.clone());
+            merged_entity_types.push(resampled_et.clone());
+        }
+    }
+
+    // --- Relation type merge (keyed by NAME only) ---
+    let mut merged_relation_types: Vec<RelationTypeProposal> = Vec::new();
+    let mut conflicts: Vec<RelationConflict> = Vec::new();
+
+    // Build a lookup of resampled relation types by name.
+    let resampled_relation_map: std::collections::HashMap<&str, &RelationTypeProposal> = resampled
+        .relation_types
+        .iter()
+        .map(|r| (r.name.as_str(), r))
+        .collect();
+
+    // Pass 1: process current relations.
+    let mut current_relation_names: std::collections::HashSet<&str> =
+        std::collections::HashSet::new();
+    for current_rt in &current.relation_types {
+        current_relation_names.insert(current_rt.name.as_str());
+        if let Some(resampled_rt) = resampled_relation_map.get(current_rt.name.as_str()) {
+            // Same name in both — check endpoint compatibility.
+            if resampled_rt.source_type != current_rt.source_type
+                || resampled_rt.target_type != current_rt.target_type
+            {
+                // Endpoint conflict: keep current verbatim, record conflict.
+                conflicts.push(RelationConflict {
+                    name: current_rt.name.clone(),
+                    current_endpoints: (
+                        current_rt.source_type.clone(),
+                        current_rt.target_type.clone(),
+                    ),
+                    rejected_endpoints: (
+                        resampled_rt.source_type.clone(),
+                        resampled_rt.target_type.clone(),
+                    ),
+                });
+            }
+            // Always keep current verbatim (description + endpoints preserved).
+            merged_relation_types.push(current_rt.clone());
+        } else {
+            // Current-only relation — preserve as-is.
+            merged_relation_types.push(current_rt.clone());
+        }
+    }
+
+    // Pass 2: append resampled-only relations (additive).
+    for resampled_rt in &resampled.relation_types {
+        if !current_relation_names.contains(resampled_rt.name.as_str()) {
+            merged_relation_types.push(resampled_rt.clone());
+        }
+    }
+
+    let proposal = SchemaProposal {
+        status: SchemaStatus::Proposed,
+        entity_types: merged_entity_types,
+        relation_types: merged_relation_types,
+        sample_size: resampled.sample_size,
+        total_documents: resampled.total_documents,
+        domain_hint: resampled.domain_hint.clone(),
+        proposed_at: chrono::Utc::now().timestamp_millis(),
+        reviewed_at: None,
+        sampling_metadata: resampled.sampling_metadata.clone(),
+    };
+
+    MergeResult {
+        proposal,
+        added,
+        preserved,
+        conflicts,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1180,5 +1392,571 @@ mod tests {
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"status\":\"failed\""));
         assert!(json.contains("\"error\":\"boom\""));
+    }
+
+    // -----------------------------------------------------------------------
+    // Task 1 — TDD: build_baseline_proposal + merge_schema pure helper tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_build_baseline_proposal_seeds_four_types() {
+        // Must seed exactly the 4 baseline entity types; no relations; Proposed.
+        let proposal = build_baseline_proposal();
+        assert_eq!(proposal.status, SchemaStatus::Proposed);
+        assert_eq!(proposal.relation_types.len(), 0, "No relation types in baseline seed");
+        assert_eq!(proposal.entity_types.len(), 4, "Baseline must have exactly 4 entity types");
+
+        let names: Vec<&str> = proposal.entity_types.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"PERSON"), "PERSON must be in baseline");
+        assert!(names.contains(&"ORGANIZATION"), "ORGANIZATION must be in baseline");
+        assert!(names.contains(&"LOCATION"), "LOCATION must be in baseline");
+        assert!(names.contains(&"DATE"), "DATE must be in baseline");
+
+        // All must be marked as baseline
+        assert!(
+            proposal.entity_types.iter().all(|e| e.is_baseline),
+            "All baseline types must have is_baseline=true"
+        );
+        // All have frequency=0 (no documents sampled)
+        assert!(
+            proposal.entity_types.iter().all(|e| e.frequency == 0),
+            "Baseline seed has frequency=0 (no LLM sampling)"
+        );
+        // sample_size and total_documents are 0 (no LLM call)
+        assert_eq!(proposal.sample_size, 0);
+        assert_eq!(proposal.total_documents, 0);
+    }
+
+    #[test]
+    fn test_merge_adds_new_preserves_existing() {
+        // Current has admin-edited PERSON. Resampled has PERSON (different desc) + NEW type.
+        // Merge must preserve admin description of PERSON, add the new type, remove nothing.
+        let current = SchemaProposal {
+            status: SchemaStatus::Approved,
+            entity_types: vec![EntityTypeProposal {
+                name: "PERSON".to_string(),
+                description: "edited by admin — authoritative persons".to_string(),
+                frequency: 5,
+                is_baseline: true,
+            }],
+            relation_types: vec![],
+            sample_size: 10,
+            total_documents: 100,
+            domain_hint: None,
+            proposed_at: 1700000000000,
+            reviewed_at: Some(1700000001000),
+            sampling_metadata: None,
+        };
+
+        let resampled = SchemaProposal {
+            status: SchemaStatus::Proposed,
+            entity_types: vec![
+                EntityTypeProposal {
+                    name: "PERSON".to_string(),
+                    description: "LLM description of person".to_string(),
+                    frequency: 12,
+                    is_baseline: true,
+                },
+                EntityTypeProposal {
+                    name: "LEGAL_CASE".to_string(),
+                    description: "A legal case file".to_string(),
+                    frequency: 8,
+                    is_baseline: false,
+                },
+            ],
+            relation_types: vec![],
+            sample_size: 20,
+            total_documents: 200,
+            domain_hint: None,
+            proposed_at: 1700001000000,
+            reviewed_at: None,
+            sampling_metadata: None,
+        };
+
+        let result = merge_schema(&current, &resampled);
+
+        // Status must be Proposed (for review)
+        assert_eq!(result.proposal.status, SchemaStatus::Proposed);
+        // reviewed_at cleared
+        assert!(result.proposal.reviewed_at.is_none());
+
+        // PERSON must be preserved with admin description
+        let merged_person = result
+            .proposal
+            .entity_types
+            .iter()
+            .find(|e| e.name == "PERSON")
+            .expect("PERSON must be in merged result");
+        assert_eq!(
+            merged_person.description,
+            "edited by admin — authoritative persons",
+            "Admin description must be preserved verbatim"
+        );
+        // But frequency refreshed from resampled
+        assert_eq!(merged_person.frequency, 12, "Frequency refreshed from resampled");
+
+        // LEGAL_CASE must be added
+        assert!(
+            result.proposal.entity_types.iter().any(|e| e.name == "LEGAL_CASE"),
+            "LEGAL_CASE must be added from resampled"
+        );
+
+        // added list has LEGAL_CASE, preserved has PERSON
+        assert!(result.added.contains(&"LEGAL_CASE".to_string()));
+        assert!(result.preserved.contains(&"PERSON".to_string()));
+
+        // Nothing removed: total = 2 (PERSON + LEGAL_CASE)
+        assert_eq!(result.proposal.entity_types.len(), 2);
+
+        // No conflicts
+        assert!(result.conflicts.is_empty());
+    }
+
+    #[test]
+    fn test_merge_refreshes_frequency() {
+        // Verify frequency is refreshed from resampled for existing types.
+        let current = SchemaProposal {
+            status: SchemaStatus::Proposed,
+            entity_types: vec![EntityTypeProposal {
+                name: "ORGANIZATION".to_string(),
+                description: "admin-edited org description".to_string(),
+                frequency: 3,
+                is_baseline: true,
+            }],
+            relation_types: vec![],
+            sample_size: 5,
+            total_documents: 50,
+            domain_hint: None,
+            proposed_at: 1700000000000,
+            reviewed_at: None,
+            sampling_metadata: None,
+        };
+
+        let resampled = SchemaProposal {
+            status: SchemaStatus::Proposed,
+            entity_types: vec![EntityTypeProposal {
+                name: "ORGANIZATION".to_string(),
+                description: "resampled description".to_string(),
+                frequency: 42,
+                is_baseline: false,
+            }],
+            relation_types: vec![],
+            sample_size: 20,
+            total_documents: 200,
+            domain_hint: None,
+            proposed_at: 1700001000000,
+            reviewed_at: None,
+            sampling_metadata: None,
+        };
+
+        let result = merge_schema(&current, &resampled);
+        let merged_org = result
+            .proposal
+            .entity_types
+            .iter()
+            .find(|e| e.name == "ORGANIZATION")
+            .expect("ORGANIZATION in merged result");
+
+        // Description preserved (admin-edited)
+        assert_eq!(merged_org.description, "admin-edited org description");
+        // Frequency refreshed from resampled
+        assert_eq!(merged_org.frequency, 42);
+        // In preserved list
+        assert!(result.preserved.contains(&"ORGANIZATION".to_string()));
+        // Not in added list
+        assert!(!result.added.contains(&"ORGANIZATION".to_string()));
+    }
+
+    #[test]
+    fn test_merge_relation_name_conflict_preserves_current_endpoints() {
+        // RELATION CONFLICT RULE: same name, different endpoints → keep current verbatim, record conflict.
+        let current_rel = RelationTypeProposal {
+            name: "employs".to_string(),
+            description: "employment relationship".to_string(),
+            source_type: "ORGANIZATION".to_string(),
+            target_type: "PERSON".to_string(),
+            frequency: 10,
+        };
+        let current = SchemaProposal {
+            status: SchemaStatus::Approved,
+            entity_types: vec![],
+            relation_types: vec![current_rel.clone()],
+            sample_size: 10,
+            total_documents: 100,
+            domain_hint: None,
+            proposed_at: 1700000000000,
+            reviewed_at: Some(1700000001000),
+            sampling_metadata: None,
+        };
+
+        // Resampled: same relation name but different (wrong) endpoints
+        let resampled = SchemaProposal {
+            status: SchemaStatus::Proposed,
+            entity_types: vec![],
+            relation_types: vec![RelationTypeProposal {
+                name: "employs".to_string(),
+                description: "employment (resampled, wrong endpoints)".to_string(),
+                source_type: "PERSON".to_string(),   // reversed!
+                target_type: "ORGANIZATION".to_string(), // reversed!
+                frequency: 5,
+            }],
+            sample_size: 20,
+            total_documents: 200,
+            domain_hint: None,
+            proposed_at: 1700001000000,
+            reviewed_at: None,
+            sampling_metadata: None,
+        };
+
+        let result = merge_schema(&current, &resampled);
+
+        // Only one relation in merged (no duplication)
+        assert_eq!(result.proposal.relation_types.len(), 1);
+
+        // The merged relation is the CURRENT one verbatim
+        let merged_rel = &result.proposal.relation_types[0];
+        assert_eq!(merged_rel.name, "employs");
+        assert_eq!(
+            merged_rel.source_type, "ORGANIZATION",
+            "Current source_type must be preserved"
+        );
+        assert_eq!(
+            merged_rel.target_type, "PERSON",
+            "Current target_type must be preserved"
+        );
+        assert_eq!(
+            merged_rel.description, "employment relationship",
+            "Current description must be preserved"
+        );
+
+        // Conflict recorded
+        assert_eq!(result.conflicts.len(), 1);
+        let conflict = &result.conflicts[0];
+        assert_eq!(conflict.name, "employs");
+        assert_eq!(
+            conflict.current_endpoints,
+            ("ORGANIZATION".to_string(), "PERSON".to_string())
+        );
+        assert_eq!(
+            conflict.rejected_endpoints,
+            ("PERSON".to_string(), "ORGANIZATION".to_string())
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Task 2 — start-from-defaults + constrained suggest tests
+    // (AppState-free in-memory registry mock)
+    // -----------------------------------------------------------------------
+
+    /// Minimal in-memory NamespaceRegistry for testing start-from-defaults and
+    /// constrained suggest behavior without AppState or DynamoDB.
+    ///
+    /// Implements only `get_schema` and `store_schema`; all other methods panic.
+    #[cfg(test)]
+    mod test_registry {
+        use async_trait::async_trait;
+        use edgequake_core::{
+            mcp_descriptor::McpDescriptor,
+            namespace::{
+                NamespaceListItem, NamespaceRecord, NamespaceRegistry, NamespaceRegistryError,
+                NamespaceSlug, PipelineConfig,
+            },
+            schema::SchemaProposal,
+        };
+        use std::sync::Mutex;
+
+        /// Simple in-memory registry storing one schema slot.
+        pub struct MemoryNamespaceRegistry {
+            pub schema: Mutex<Option<SchemaProposal>>,
+        }
+
+        impl MemoryNamespaceRegistry {
+            pub fn new(initial: Option<SchemaProposal>) -> Self {
+                Self {
+                    schema: Mutex::new(initial),
+                }
+            }
+
+            pub fn get_stored(&self) -> Option<SchemaProposal> {
+                self.schema.lock().unwrap().clone()
+            }
+        }
+
+        #[async_trait]
+        impl NamespaceRegistry for MemoryNamespaceRegistry {
+            async fn create_namespace(
+                &self,
+                _slug: &NamespaceSlug,
+                _description: Option<String>,
+            ) -> Result<NamespaceRecord, NamespaceRegistryError> {
+                unimplemented!("not needed for schema tests")
+            }
+            async fn list_namespaces(
+                &self,
+            ) -> Result<Vec<NamespaceListItem>, NamespaceRegistryError> {
+                unimplemented!()
+            }
+            async fn describe_namespace(
+                &self,
+                _slug: &NamespaceSlug,
+            ) -> Result<Option<NamespaceRecord>, NamespaceRegistryError> {
+                unimplemented!()
+            }
+            async fn get_config(
+                &self,
+                _slug: &NamespaceSlug,
+            ) -> Result<Option<PipelineConfig>, NamespaceRegistryError> {
+                unimplemented!()
+            }
+            async fn update_config(
+                &self,
+                _slug: &NamespaceSlug,
+                _config: &PipelineConfig,
+            ) -> Result<(), NamespaceRegistryError> {
+                unimplemented!()
+            }
+            async fn get_descriptor(
+                &self,
+                _slug: &NamespaceSlug,
+            ) -> Result<Option<McpDescriptor>, NamespaceRegistryError> {
+                unimplemented!()
+            }
+            async fn get_schema(
+                &self,
+                _slug: &NamespaceSlug,
+            ) -> Result<Option<SchemaProposal>, NamespaceRegistryError> {
+                Ok(self.schema.lock().unwrap().clone())
+            }
+            async fn store_schema(
+                &self,
+                _slug: &NamespaceSlug,
+                proposal: &SchemaProposal,
+            ) -> Result<(), NamespaceRegistryError> {
+                *self.schema.lock().unwrap() = Some(proposal.clone());
+                Ok(())
+            }
+            async fn approve_schema(
+                &self,
+                _slug: &NamespaceSlug,
+            ) -> Result<SchemaProposal, NamespaceRegistryError> {
+                unimplemented!()
+            }
+            async fn reject_schema(
+                &self,
+                _slug: &NamespaceSlug,
+            ) -> Result<SchemaProposal, NamespaceRegistryError> {
+                unimplemented!()
+            }
+            async fn put_preview_request(
+                &self,
+                _slug: &NamespaceSlug,
+            ) -> Result<(), NamespaceRegistryError> {
+                unimplemented!()
+            }
+            async fn get_preview_status(
+                &self,
+                _slug: &NamespaceSlug,
+            ) -> Result<Option<String>, NamespaceRegistryError> {
+                unimplemented!()
+            }
+            async fn get_preview_result(
+                &self,
+                _slug: &NamespaceSlug,
+            ) -> Result<Option<serde_json::Value>, NamespaceRegistryError> {
+                unimplemented!()
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_start_from_defaults_replaces_existing() {
+        // Start-from-defaults must REPLACE any existing proposal, including Approved,
+        // with the fresh Proposed 4-baseline-type seed.
+        use edgequake_core::NamespaceRegistry;
+        use test_registry::MemoryNamespaceRegistry;
+
+        // Set up an existing Approved proposal with extra non-baseline types.
+        let existing_approved = SchemaProposal {
+            status: SchemaStatus::Approved,
+            entity_types: vec![
+                EntityTypeProposal {
+                    name: "PERSON".to_string(),
+                    description: "admin-curated person".to_string(),
+                    frequency: 100,
+                    is_baseline: true,
+                },
+                EntityTypeProposal {
+                    name: "CUSTOM_DOMAIN_TYPE".to_string(),
+                    description: "domain-specific entity".to_string(),
+                    frequency: 50,
+                    is_baseline: false,
+                },
+                EntityTypeProposal {
+                    name: "ANOTHER_TYPE".to_string(),
+                    description: "another type".to_string(),
+                    frequency: 25,
+                    is_baseline: false,
+                },
+            ],
+            relation_types: vec![RelationTypeProposal {
+                name: "employs".to_string(),
+                description: "employment".to_string(),
+                source_type: "ORGANIZATION".to_string(),
+                target_type: "PERSON".to_string(),
+                frequency: 30,
+            }],
+            sample_size: 50,
+            total_documents: 500,
+            domain_hint: Some("legal".to_string()),
+            proposed_at: 1700000000000,
+            reviewed_at: Some(1700000001000),
+            sampling_metadata: None,
+        };
+
+        let registry = MemoryNamespaceRegistry::new(Some(existing_approved));
+        let slug = edgequake_core::NamespaceSlug::parse("test-ns").unwrap();
+
+        // Simulate start-from-defaults: store build_baseline_proposal() (REPLACE semantics).
+        let baseline = build_baseline_proposal();
+        registry.store_schema(&slug, &baseline).await.unwrap();
+
+        // Retrieve what's stored
+        let stored = registry.get_schema(&slug).await.unwrap().expect("schema stored");
+
+        // Must be Proposed (not Approved)
+        assert_eq!(stored.status, SchemaStatus::Proposed, "Status must be Proposed after defaults reset");
+
+        // Must have exactly the 4 baseline types (prior extra types gone)
+        assert_eq!(
+            stored.entity_types.len(),
+            4,
+            "Exactly 4 baseline types; prior extra types replaced"
+        );
+        let names: Vec<&str> = stored.entity_types.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"PERSON"));
+        assert!(names.contains(&"ORGANIZATION"));
+        assert!(names.contains(&"LOCATION"));
+        assert!(names.contains(&"DATE"));
+
+        // Prior CUSTOM_DOMAIN_TYPE and ANOTHER_TYPE must be gone
+        assert!(!names.contains(&"CUSTOM_DOMAIN_TYPE"), "Approved custom type replaced");
+        assert!(!names.contains(&"ANOTHER_TYPE"), "Approved extra type replaced");
+
+        // No relation types in baseline seed
+        assert_eq!(stored.relation_types.len(), 0, "Baseline seed has no relation types");
+        // No domain hint
+        assert!(stored.domain_hint.is_none(), "Baseline seed has no domain hint");
+    }
+
+    #[tokio::test]
+    async fn test_suggest_does_not_overwrite_approved() {
+        // Constrained suggest path: when an Approved proposal exists, suggest must NOT
+        // wholesale-replace it. It must route through the additive merge (or be rejected).
+        // We test the merge path: the Approved proposal's admin types/descriptions survive.
+        use edgequake_core::NamespaceRegistry;
+        use test_registry::MemoryNamespaceRegistry;
+
+        // Approved proposal with admin-curated PERSON description.
+        let approved_proposal = SchemaProposal {
+            status: SchemaStatus::Approved,
+            entity_types: vec![
+                EntityTypeProposal {
+                    name: "PERSON".to_string(),
+                    description: "admin-curated person".to_string(),
+                    frequency: 10,
+                    is_baseline: true,
+                },
+                EntityTypeProposal {
+                    name: "ORGANIZATION".to_string(),
+                    description: "admin-curated org".to_string(),
+                    frequency: 7,
+                    is_baseline: true,
+                },
+            ],
+            relation_types: vec![],
+            sample_size: 20,
+            total_documents: 200,
+            domain_hint: None,
+            proposed_at: 1700000000000,
+            reviewed_at: Some(1700000001000),
+            sampling_metadata: None,
+        };
+
+        let registry = MemoryNamespaceRegistry::new(Some(approved_proposal.clone()));
+        let slug = edgequake_core::NamespaceSlug::parse("test-ns").unwrap();
+
+        // Simulate a constrained suggest: a resampled proposal with PERSON (different desc)
+        // + NEW type arrives. The suggest path must merge, not overwrite.
+        let resampled = SchemaProposal {
+            status: SchemaStatus::Proposed,
+            entity_types: vec![
+                EntityTypeProposal {
+                    name: "PERSON".to_string(),
+                    description: "LLM-generated description, should NOT win".to_string(),
+                    frequency: 15,
+                    is_baseline: true,
+                },
+                EntityTypeProposal {
+                    name: "NEW_TYPE".to_string(),
+                    description: "a new type from resampling".to_string(),
+                    frequency: 4,
+                    is_baseline: false,
+                },
+            ],
+            relation_types: vec![],
+            sample_size: 30,
+            total_documents: 300,
+            domain_hint: None,
+            proposed_at: 1700001000000,
+            reviewed_at: None,
+            sampling_metadata: None,
+        };
+
+        // The constrained suggest path uses merge_schema (not wholesale overwrite).
+        let current = registry
+            .get_schema(&slug)
+            .await
+            .unwrap()
+            .expect("Approved schema exists");
+        let merge_result = merge_schema(&current, &resampled);
+        // Store the merged proposal (Proposed, for review).
+        registry
+            .store_schema(&slug, &merge_result.proposal)
+            .await
+            .unwrap();
+
+        // Verify: the stored proposal is NOT a wholesale replacement of the Approved schema.
+        let stored = registry.get_schema(&slug).await.unwrap().expect("stored");
+
+        // Status = Proposed (delta for review — not still Approved)
+        assert_eq!(stored.status, SchemaStatus::Proposed, "Merged delta is Proposed");
+
+        // Admin description of PERSON preserved (NOT overwritten by LLM)
+        let stored_person = stored
+            .entity_types
+            .iter()
+            .find(|e| e.name == "PERSON")
+            .expect("PERSON preserved in merged proposal");
+        assert_eq!(
+            stored_person.description, "admin-curated person",
+            "Admin description must survive the constrained suggest merge"
+        );
+
+        // ORGANIZATION also preserved
+        let stored_org = stored
+            .entity_types
+            .iter()
+            .find(|e| e.name == "ORGANIZATION")
+            .expect("ORGANIZATION preserved");
+        assert_eq!(stored_org.description, "admin-curated org");
+
+        // NEW_TYPE was added from resampling
+        assert!(
+            stored.entity_types.iter().any(|e| e.name == "NEW_TYPE"),
+            "NEW_TYPE added from resampled"
+        );
+
+        // Total: 3 types (PERSON + ORGANIZATION + NEW_TYPE), nothing removed
+        assert_eq!(stored.entity_types.len(), 3, "Nothing removed; new type added");
     }
 }
