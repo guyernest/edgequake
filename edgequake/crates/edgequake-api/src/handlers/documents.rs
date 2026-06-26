@@ -148,11 +148,27 @@ pub(crate) async fn resolve_schema_gate_status_for_verified_workspace(
         }
     };
 
+    // (3-5) Resolve the gate from the fetched workspace's slug.
+    resolve_gate_for_workspace_slug(state, &workspace.slug).await
+}
+
+/// Resolve the schema gate from an ALREADY-FETCHED, ownership-verified workspace's slug.
+///
+/// This is steps (3)-(5) of gate resolution: parse the slug as a `NamespaceSlug`, obtain the
+/// namespace registry, load the `SchemaProposal`, and apply the pure `schema_gate` helper.
+/// Callers that have already loaded the workspace (e.g. `resume_document`, which fetches it for
+/// the tenant-ownership check) call this directly to avoid a redundant `get_workspace` fetch.
+/// Fail-closed on all uncertainty (design §8): returns `"awaiting_schema"` unless an Approved
+/// proposal is confirmed.
+pub(crate) async fn resolve_gate_for_workspace_slug(
+    state: &AppState,
+    workspace_slug: &str,
+) -> &'static str {
     // (3) Parse workspace.slug as a NamespaceSlug (Phase 23 invariant: slug == namespace slug).
-    let slug = match edgequake_core::NamespaceSlug::parse(&workspace.slug) {
+    let slug = match edgequake_core::NamespaceSlug::parse(workspace_slug) {
         Ok(s) => s,
         Err(_) => {
-            warn!(workspace_id = %workspace_id, slug = %workspace.slug, "workspace.slug is not a valid NamespaceSlug; parking at awaiting_schema");
+            warn!(slug = %workspace_slug, "workspace.slug is not a valid NamespaceSlug; parking at awaiting_schema");
             return "awaiting_schema";
         }
     };
@@ -170,7 +186,7 @@ pub(crate) async fn resolve_schema_gate_status_for_verified_workspace(
     let proposal = match registry.get_schema(&slug).await {
         Ok(p) => p,
         Err(e) => {
-            warn!(workspace_id = %workspace_id, error = %e, "get_schema failed; parking at awaiting_schema");
+            warn!(slug = %workspace_slug, error = %e, "get_schema failed; parking at awaiting_schema");
             return "awaiting_schema";
         }
     };
@@ -4531,26 +4547,31 @@ pub async fn resume_document(
     }
 
     // === Schema gate (Pitfall 5 / Phase 33-04 SCHEMA-CONSOLIDATE):
-    // Tenant ownership was verified above (caller_tenant == doc_tenant).
-    // That satisfies the PRECONDITION of resolve_schema_gate_status_for_verified_workspace.
-    // Fetch the workspace and re-verify ownership (explicit per-call-site check, design §8 /
-    // review item [1]) BEFORE calling the gate resolver.
+    // Tenant/workspace ownership against the doc metadata was verified above. Here we fetch the
+    // workspace ONCE — both to re-verify ownership against the authoritative workspace record
+    // (cross-tenant → 404, no existence leak; design §8 / review item [1]) AND to resolve the
+    // gate from its slug via resolve_gate_for_workspace_slug, avoiding a redundant get_workspace.
     let workspace_id_str = doc_workspace.unwrap_or("default");
-    if let Ok(ws_uuid) = workspace_id_str.parse::<uuid::Uuid>() {
-        if let Ok(Some(ref ws)) = state.workspace_service.get_workspace(ws_uuid).await {
-            // Explicit tenant ownership check: cross-tenant workspace_id → 404 (no existence leak).
-            if let Some(ref caller_tenant) = tenant_ctx.tenant_id {
-                if ws.tenant_id.to_string() != *caller_tenant {
-                    return Err(ApiError::NotFound(format!(
-                        "Document {} not found",
-                        document_id
-                    )));
+    let gate_status = match workspace_id_str.parse::<uuid::Uuid>() {
+        Ok(ws_uuid) => match state.workspace_service.get_workspace(ws_uuid).await {
+            Ok(Some(ws)) => {
+                // Explicit tenant ownership check: cross-tenant workspace_id → 404 (no leak).
+                if let Some(ref caller_tenant) = tenant_ctx.tenant_id {
+                    if ws.tenant_id.to_string() != *caller_tenant {
+                        return Err(ApiError::NotFound(format!(
+                            "Document {} not found",
+                            document_id
+                        )));
+                    }
                 }
+                resolve_gate_for_workspace_slug(&state, &ws.slug).await
             }
-        }
-    }
-    let gate_status =
-        resolve_schema_gate_status_for_verified_workspace(&state, workspace_id_str).await;
+            // Workspace not found / lookup error → fail closed (design §8).
+            _ => "awaiting_schema",
+        },
+        // Unparseable workspace id → fail closed.
+        Err(_) => "awaiting_schema",
+    };
     if gate_status != "extracting" {
         // Gate is closed: schema not approved.
         return Err(ApiError::ValidationError(
