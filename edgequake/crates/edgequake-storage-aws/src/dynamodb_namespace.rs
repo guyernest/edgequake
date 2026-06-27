@@ -713,6 +713,13 @@ impl DynamoNamespaceRegistry {
             .get_item()
             .table_name(&self.config.table_name)
             .key("PK", AttributeValue::S(pk))
+            // Strongly-consistent: the admin UI refetches the schema immediately
+            // after a write (start-from-defaults / propose / resample / approve),
+            // so an eventually-consistent read races the write and returns the
+            // stale (empty) replica — forcing a manual page refresh. (Phase 33
+            // wave-8 live-verify finding; mirrors the workspace-store consistent
+            // reads from 33-08.)
+            .consistent_read(true)
             .key("SK", AttributeValue::S("SCHEMA".to_string()))
             .send()
             .await
