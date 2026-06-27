@@ -453,8 +453,16 @@ pub async fn get_namespace_schema(
 pub async fn suggest_namespace_schema(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
-    Json(body): Json<SuggestSchemaRequest>,
+    // Body is OPTIONAL: every SuggestSchemaRequest field is `Option`, and the
+    // admin "Propose from documents" action sends no body. A required
+    // `Json<T>` extractor rejects an empty body with "EOF while parsing a
+    // value at line 1 column 0" (Phase 33 wave-8 live-verify finding). Accept
+    // a missing/empty body as the all-default request. `Option<Json<T>>`
+    // resolves to `None` on any extractor rejection (empty body or missing
+    // content-type), so this also tolerates a `{}` or populated payload.
+    body: Option<Json<SuggestSchemaRequest>>,
 ) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    let body = body.map(|Json(b)| b).unwrap_or_default();
     let registry = get_registry(&state)?;
 
     let slug = NamespaceSlug::parse(&namespace)
@@ -1014,8 +1022,13 @@ pub async fn start_from_defaults(
 pub async fn resample_namespace_schema(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
-    Json(body): Json<SuggestSchemaRequest>,
+    // Optional body, same rationale as `suggest_namespace_schema`: the admin
+    // "Update from new documents" action sends no body and every field is
+    // `Option`. A required `Json<T>` extractor rejects the empty body with an
+    // EOF parse error (Phase 33 wave-8 live-verify finding).
+    body: Option<Json<SuggestSchemaRequest>>,
 ) -> ApiResult<Json<ResampleResponse>> {
+    let body = body.map(|Json(b)| b).unwrap_or_default();
     let registry = get_registry(&state)?;
 
     let slug = NamespaceSlug::parse(&namespace)
