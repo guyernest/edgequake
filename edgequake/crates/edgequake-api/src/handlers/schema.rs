@@ -14,6 +14,7 @@
 //! | POST | `/api/v1/namespaces/{ns}/schema/reject` | [`reject_namespace_schema`] | Reject proposal |
 
 use axum::{
+    body::Bytes,
     extract::{Path, State},
     http::StatusCode,
     Json,
@@ -185,6 +186,26 @@ fn schema_proposal_to_body(proposal: SchemaProposal, now_ms: i64) -> SchemaRespo
             proposed_at: proposal.proposed_at,
             reviewed_at: proposal.reviewed_at,
         },
+    }
+}
+
+/// Parse an OPTIONAL JSON request body into a `SuggestSchemaRequest`.
+///
+/// The admin "Propose from documents" / "Update from new documents" actions send
+/// `Content-Type: application/json` with an EMPTY body. Neither `Json<T>` (rejects
+/// empty with "EOF while parsing a value at line 1 column 0") nor Axum 0.8's
+/// `Option<Json<T>>` handles this: `OptionalFromRequest` for `Json` only returns
+/// `None` when the JSON content-type is ABSENT — when it's present (as the admin UI
+/// always sends) it still runs the parser and propagates the EOF rejection. Reading
+/// the raw body as `Bytes` and parsing by hand is the only robust form:
+///   - empty body      -> all-default request (every field is `Option`)
+///   - non-empty body  -> parse it; malformed JSON -> 400 (restores input validation)
+fn parse_optional_suggest_body(body: &Bytes) -> ApiResult<SuggestSchemaRequest> {
+    if body.is_empty() {
+        Ok(SuggestSchemaRequest::default())
+    } else {
+        serde_json::from_slice(body)
+            .map_err(|e| ApiError::BadRequest(format!("invalid JSON body: {}", e)))
     }
 }
 
@@ -453,16 +474,13 @@ pub async fn get_namespace_schema(
 pub async fn suggest_namespace_schema(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
-    // Body is OPTIONAL: every SuggestSchemaRequest field is `Option`, and the
-    // admin "Propose from documents" action sends no body. A required
-    // `Json<T>` extractor rejects an empty body with "EOF while parsing a
-    // value at line 1 column 0" (Phase 33 wave-8 live-verify finding). Accept
-    // a missing/empty body as the all-default request. `Option<Json<T>>`
-    // resolves to `None` on any extractor rejection (empty body or missing
-    // content-type), so this also tolerates a `{}` or populated payload.
-    body: Option<Json<SuggestSchemaRequest>>,
+    // Raw bytes, parsed by hand: the admin "Propose from documents" action sends
+    // `Content-Type: application/json` with an EMPTY body, which both `Json<T>` and
+    // Axum 0.8 `Option<Json<T>>` reject with an EOF error. See
+    // `parse_optional_suggest_body`. MUST be the last extractor (consumes the body).
+    body: Bytes,
 ) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
-    let body = body.map(|Json(b)| b).unwrap_or_default();
+    let body = parse_optional_suggest_body(&body)?;
     let registry = get_registry(&state)?;
 
     let slug = NamespaceSlug::parse(&namespace)
@@ -1022,13 +1040,13 @@ pub async fn start_from_defaults(
 pub async fn resample_namespace_schema(
     State(state): State<AppState>,
     Path(namespace): Path<String>,
-    // Optional body, same rationale as `suggest_namespace_schema`: the admin
-    // "Update from new documents" action sends no body and every field is
-    // `Option`. A required `Json<T>` extractor rejects the empty body with an
-    // EOF parse error (Phase 33 wave-8 live-verify finding).
-    body: Option<Json<SuggestSchemaRequest>>,
+    // Raw bytes, parsed by hand (same rationale as `suggest_namespace_schema`): the
+    // admin "Update from new documents" action sends `Content-Type: application/json`
+    // with an empty body, which Axum 0.8 `Option<Json<T>>` still rejects. MUST be the
+    // last extractor (consumes the body).
+    body: Bytes,
 ) -> ApiResult<Json<ResampleResponse>> {
-    let body = body.map(|Json(b)| b).unwrap_or_default();
+    let body = parse_optional_suggest_body(&body)?;
     let registry = get_registry(&state)?;
 
     let slug = NamespaceSlug::parse(&namespace)
