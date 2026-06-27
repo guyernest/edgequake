@@ -69,6 +69,9 @@ pub mod dynamodb_kv;
 #[cfg(feature = "dynamodb")]
 pub mod dynamodb_namespace;
 
+#[cfg(feature = "dynamodb")]
+pub mod dynamodb_workspace;
+
 #[cfg(feature = "athena")]
 pub mod athena_bm25;
 
@@ -94,6 +97,9 @@ pub use dynamodb_kv::{DynamoKVConfig, DynamoKVStorage};
 
 #[cfg(feature = "dynamodb")]
 pub use dynamodb_namespace::{DynamoNamespaceConfig, DynamoNamespaceRegistry, NamespaceListItem};
+
+#[cfg(feature = "dynamodb")]
+pub use dynamodb_workspace::{DynamoWorkspaceConfig, DynamoWorkspaceService};
 
 #[cfg(feature = "athena")]
 pub use athena_bm25::{AthenaBm25Config, AthenaBm25Storage};

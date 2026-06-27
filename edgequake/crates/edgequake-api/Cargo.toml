@@ -10,6 +10,10 @@ description = "REST API server for EdgeQuake"
 [features]
 default = []
 postgres = ["edgequake-storage/postgres", "edgequake-core/postgres", "edgequake-query/postgres", "dep:sqlx"]
+# Phase 33 Wave 8 (33-08): enable the DynamoDB workspace/namespace adapters so the
+# live admin Lambda can persist tenants/workspaces across cold starts. Reachable as
+# edgequake_storage_aws::DynamoWorkspaceService once this feature is on.
+aws-namespace = ["edgequake-storage-aws/dynamodb"]
 # Vision mode for PDF extraction using multimodal LLM (requires poppler-utils system package)
 vision = ["edgequake-pdf/vision"]
 
