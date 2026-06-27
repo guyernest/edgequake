@@ -642,6 +642,221 @@ impl AppState {
         }
     }
 
+    /// Create a new application state with **DynamoDB-backed** persistent admin stores.
+    ///
+    /// Wires all THREE durable stores the live admin Lambda needs so the namespace
+    /// registry, the tenant/workspace service, and the document KV store survive a
+    /// Lambda cold start (the in-memory variants reset on every cold start, which is
+    /// the 501/data-loss failure this wave exists to kill):
+    ///
+    /// 1. [`DynamoNamespaceRegistry`] — via the existing [`with_namespace_registry`](Self::with_namespace_registry) seam.
+    /// 2. [`DynamoWorkspaceService`] (33-08) — as the `workspace_service`.
+    /// 3. [`DynamoKVStorage`] — as `kv_storage` for documents (namespace `"default"`,
+    ///    matching `MemoryKVStorage::new("default")` — a single global KV instance keyed
+    ///    by document id, NOT per-workspace).
+    ///
+    /// `vector_storage` / `graph_storage` deliberately stay in-memory for now — the
+    /// extraction pipeline is the deferred seam and is out of scope for this wave.
+    ///
+    /// # Cold-start safety (Pitfall 3 — the documented crash-loop)
+    ///
+    /// This constructor is `async` and contains **NO** `block_on`. The earlier
+    /// `Handle::current().block_on(...)` form panicked ("Cannot start a runtime from
+    /// within a runtime") inside the lambda's tokio runtime on every cold start. The
+    /// only awaited setup here is `RawDocsStorage::new(...)`, mirroring `new_memory`.
+    ///
+    /// # Pass-in client (Review edit B — no new edgequake-api dep)
+    ///
+    /// The `aws_sdk_dynamodb::Client` is built ONCE in the lambda crate's `main.rs`
+    /// (which already depends on aws-config + aws-sdk-dynamodb) and passed in here, then
+    /// cloned into all three stores. edgequake-api therefore adds NO `aws-config` /
+    /// `aws-sdk-dynamodb` direct dependency — the `Client` type is named through the
+    /// `edgequake-storage-aws` re-export, reachable only under the `aws-namespace`
+    /// feature. `aws_config::load_defaults` is NOT called here.
+    ///
+    /// # Feature gate (Review edit A)
+    ///
+    /// Gated on `#[cfg(feature = "aws-namespace")]` — the feature edgequake-api EXPOSES
+    /// (`aws-namespace = ["edgequake-storage-aws/dynamodb"]`) and the lambda crate
+    /// ENABLES. It is intentionally NOT gated on `dynamodb` (an edgequake-storage-aws
+    /// feature edgequake-api never enables — gating on it would compile this constructor
+    /// OUT of the live binary, silently reintroducing the in-memory 501 bug).
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Pre-built DynamoDB client (built once in the lambda crate's main.rs).
+    /// * `namespace_table` - DynamoDB table name for the namespace registry.
+    /// * `workspace_table` - DynamoDB table name for the tenant/workspace service.
+    /// * `kv_table` - DynamoDB table name for the document KV store.
+    /// * `llm_api_key` - Optional API key override (same semantics as `new_memory`).
+    #[cfg(feature = "aws-namespace")]
+    pub async fn new_dynamodb(
+        client: edgequake_storage_aws::aws_sdk_dynamodb::Client,
+        namespace_table: String,
+        workspace_table: String,
+        kv_table: String,
+        llm_api_key: Option<impl Into<String>>,
+    ) -> Self {
+        use edgequake_llm::ProviderFactory;
+        use edgequake_storage_aws::{
+            DynamoKVConfig, DynamoKVStorage, DynamoNamespaceConfig, DynamoNamespaceRegistry,
+            DynamoWorkspaceConfig, DynamoWorkspaceService,
+        };
+
+        // If API key provided, set it in environment for factory to use
+        if let Some(key) = llm_api_key {
+            std::env::set_var("OPENAI_API_KEY", key.into());
+        }
+
+        // Use ProviderFactory for auto-detection (identical to new_memory)
+        let (llm_provider, embedding_provider) =
+            ProviderFactory::from_env().expect("Failed to create LLM provider from environment");
+
+        // Get embedding dimension from provider for vector storage
+        let embedding_dim = embedding_provider.dimension();
+
+        // --- The three DURABLE stores, all from the ONE passed-in client (cloned). ---
+        // KV namespace "default" matches MemoryKVStorage::new("default") — a single global
+        // KV instance keyed by document id, NOT per-workspace.
+        let kv_storage = Arc::new(DynamoKVStorage::new_with_client(
+            DynamoKVConfig::new(kv_table, "default"),
+            client.clone(),
+        ));
+        let workspace_service: SharedWorkspaceService = Arc::new(DynamoWorkspaceService::new(
+            DynamoWorkspaceConfig {
+                table_name: workspace_table,
+            },
+            client.clone(),
+        ));
+        // NOTE: the descriptor-auto-gen infra builder is intentionally NOT invoked — the
+        // live create-instance flow never POSTs /namespaces, so descriptor auto-gen stays
+        // deferred (RESEARCH must-answer 2).
+        let namespace_registry: edgequake_core::SharedNamespaceRegistry =
+            Arc::new(DynamoNamespaceRegistry::new(
+                DynamoNamespaceConfig {
+                    table_name: namespace_table,
+                },
+                client.clone(),
+            ));
+
+        // vector_storage / graph_storage stay in-memory (extraction pipeline deferred — out of scope).
+        let vector_storage = Arc::new(MemoryVectorStorage::new("default", embedding_dim));
+        let graph_storage = Arc::new(MemoryGraphStorage::new("default"));
+
+        tracing::info!(
+            provider = embedding_provider.name(),
+            dimension = embedding_dim,
+            storage_type = "dynamodb",
+            namespace = "default",
+            "DynamoDB admin stores initialized (namespace registry + workspace service + KV)"
+        );
+
+        // Create conversation service
+        let conversation_service: SharedConversationService =
+            Arc::new(InMemoryConversationService::new());
+
+        // Create pipeline with LLM and embedding providers configured
+        use edgequake_pipeline::LLMExtractor;
+        let extractor = Arc::new(LLMExtractor::new(Arc::clone(&llm_provider)));
+        let pipeline = Arc::new(
+            Pipeline::default_pipeline()
+                .with_extractor(extractor)
+                .with_embedding_provider(Arc::clone(&embedding_provider)),
+        );
+
+        // Create task infrastructure
+        let task_storage = Arc::new(edgequake_tasks::memory::MemoryTaskStorage::new());
+        let task_queue = Arc::new(edgequake_tasks::queue::ChannelTaskQueue::new(100));
+
+        // Create legacy query engine (for backward compatibility)
+        let query_engine = Arc::new(QueryEngine::new(
+            QueryEngineConfig::default(),
+            Arc::clone(&vector_storage) as Arc<dyn edgequake_storage::traits::VectorStorage>,
+            Arc::clone(&graph_storage) as Arc<dyn edgequake_storage::traits::GraphStorage>,
+            Arc::clone(&embedding_provider),
+            Arc::clone(&llm_provider),
+        ));
+
+        // Create SOTA query engine with LightRAG-style enhancements
+        let reranker = create_bm25_reranker();
+        let sota_engine = Arc::new(
+            SOTAQueryEngine::new(
+                SOTAQueryConfig::default(),
+                Arc::clone(&vector_storage) as Arc<dyn edgequake_storage::traits::VectorStorage>,
+                Arc::clone(&graph_storage) as Arc<dyn edgequake_storage::traits::GraphStorage>,
+                Arc::clone(&embedding_provider),
+                Arc::clone(&llm_provider),
+            )
+            .with_reranker(reranker),
+        );
+
+        // Create workspace vector registry for per-workspace dimensions
+        let vector_registry: Arc<dyn edgequake_storage::traits::WorkspaceVectorRegistry> =
+            Arc::new(MemoryWorkspaceVectorRegistry::new(
+                Arc::clone(&vector_storage) as Arc<dyn edgequake_storage::traits::VectorStorage>,
+            ));
+
+        // Create auth services
+        let auth_config = AuthConfig::default();
+        let jwt_service = Arc::new(JwtService::new(auth_config.clone()));
+        let password_service = Arc::new(PasswordService::new(auth_config.clone()));
+        let rbac_service = Arc::new(RbacService::new());
+
+        Self {
+            kv_storage: Arc::clone(&kv_storage) as Arc<dyn edgequake_storage::traits::KVStorage>,
+            vector_storage: Arc::clone(&vector_storage)
+                as Arc<dyn edgequake_storage::traits::VectorStorage>,
+            vector_registry,
+            graph_storage: Arc::clone(&graph_storage)
+                as Arc<dyn edgequake_storage::traits::GraphStorage>,
+            llm_provider: Arc::clone(&llm_provider),
+            embedding_provider: Arc::clone(&embedding_provider),
+            query_engine,
+            sota_engine,
+            pipeline,
+            task_storage,
+            task_queue,
+            pipeline_state: PipelineState::new(),
+            progress_broadcaster: ProgressBroadcaster::default(),
+            workspace_service,
+            conversation_service,
+            config: AppConfig::default(),
+            auth_config,
+            jwt_service,
+            password_service,
+            rbac_service,
+            cache_manager: CacheManager::with_defaults(),
+            rate_limiter: RateLimiter::new(TokenBucketConfig::default()),
+            storage_mode: StorageMode::Memory,
+            models_config: Arc::new(
+                ModelsConfig::load().unwrap_or_else(|_| ModelsConfig::builtin_defaults()),
+            ),
+            #[cfg(feature = "postgres")]
+            pg_pool: None,
+            #[cfg(feature = "postgres")]
+            pdf_storage: None,
+            start_time: std::time::Instant::now(),
+            path_validation_config: crate::path_validation::PathValidationConfig {
+                allow_any_path: true,
+                ..Default::default()
+            },
+            // The durable namespace registry — wired here directly (the with_namespace_registry
+            // builder is the ONLY persistence seam; new_memory(...).with_namespace_registry(...)
+            // would still leave workspaces + documents in memory, which is why new_dynamodb wires
+            // all three at once — RESEARCH Pitfall 2).
+            namespace_registry: Some(namespace_registry),
+            namespace_storage_factory: None,
+            namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
+            bm25_storage_factory: None,
+            raw_docs: Arc::new(
+                edgequake_storage_aws::RawDocsStorage::new(
+                    std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
+                )
+                .await,
+            ),
+        }
+    }
+
     /// Create AppState from pre-populated storage backends (for dual-protocol baked Lambda, D-04).
     ///
     /// The provided `Arc<dyn Trait>` adapters are the SAME instances that `RagRuntime` loaded
