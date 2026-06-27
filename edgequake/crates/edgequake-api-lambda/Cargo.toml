@@ -20,10 +20,20 @@ path = "src/main.rs"
 # crates now use sqlx-rustls instead of native-tls (see edgequake-audit/Cargo.toml) — i.e. no vendored
 # OpenSSL — NOT because of this flag. The flag is kept so the in-memory build stays connector-free if
 # edgequake-api ever gains default features.
-edgequake-api = { path = "../edgequake-api", default-features = false }
+# Phase 33 Wave 9 (33-09): enable the aws-namespace feature so the DynamoDB-backed
+# admin stores + AppState::new_dynamodb compile into the LIVE binary (gating on
+# aws-namespace, the feature edgequake-api exposes; NOT the dynamodb storage-aws
+# feature). default-features = false kept (defensive — edgequake-api has no defaults).
+edgequake-api = { path = "../edgequake-api", default-features = false, features = ["aws-namespace"] }
 
 # Async runtime (workspace-pinned)
 tokio = { workspace = true }
+
+# AWS client construction for the live admin path (33-09): the DynamoDB client is built
+# ONCE here and passed into AppState::new_dynamodb, so aws-config/aws-sdk-dynamodb stay
+# in the LAMBDA crate and are NOT added as edgequake-api direct deps (Review edit B).
+aws-config = "1.5"
+aws-sdk-dynamodb = "1.53"
 
 # Structured logging (used to emit SNAPSHOT_BAKED startup log line)
 tracing = { workspace = true }
