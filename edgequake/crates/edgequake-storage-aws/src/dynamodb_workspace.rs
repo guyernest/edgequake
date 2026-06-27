@@ -556,14 +556,27 @@ impl WorkspaceService for DynamoWorkspaceService {
             Ok(_) => {}
             Err(ref e) if is_condition_check_failed(e) => {
                 // Slug already claimed. If it points at THIS workspace, treat the
-                // insert as idempotent; otherwise it's a genuine conflict.
-                if let Some(existing) = self
+                // insert as idempotent; if it points at a DIFFERENT workspace it's a
+                // genuine conflict; if it resolves to NOTHING the index is dangling
+                // (its target WS#META is gone) — proceeding would write a workspace
+                // unreachable by slug, so fail loud instead of silently continuing.
+                match self
                     .get_workspace_by_slug(workspace.tenant_id, &workspace.slug)
                     .await?
                 {
-                    if existing.workspace_id != workspace.workspace_id {
+                    Some(existing) if existing.workspace_id == workspace.workspace_id => {
+                        // Idempotent re-insert of the same workspace — fall through.
+                    }
+                    Some(_) => {
                         return Err(Error::validation(format!(
                             "Workspace with slug '{}' already exists in this tenant",
+                            workspace.slug
+                        )));
+                    }
+                    None => {
+                        return Err(Error::internal(format!(
+                            "Workspace slug '{}' index exists but resolves to no workspace \
+                             (inconsistent state); refusing to insert",
                             workspace.slug
                         )));
                     }

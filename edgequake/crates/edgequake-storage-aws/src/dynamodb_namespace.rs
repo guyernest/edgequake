@@ -294,6 +294,11 @@ impl DynamoNamespaceRegistry {
                 .query()
                 .table_name(&self.config.table_name)
                 .key_condition_expression("PK = :pk")
+                // Strongly-consistent: the admin lists namespaces immediately
+                // after create_namespace; an eventually-consistent query can omit
+                // the just-created namespace (same read-after-write class as the
+                // get_schema fix). Negligible RCU cost at admin traffic.
+                .consistent_read(true)
                 .expression_attribute_values(
                     ":pk",
                     AttributeValue::S("NAMESPACES".to_string()),
@@ -361,6 +366,9 @@ impl DynamoNamespaceRegistry {
             .table_name(&self.config.table_name)
             .key("PK", AttributeValue::S(pk))
             .key("SK", AttributeValue::S("META".to_string()))
+            // Strongly-consistent read-after-write (mirrors get_schema): the admin
+            // describes a namespace right after creating it.
+            .consistent_read(true)
             .send()
             .await
             .map_err(dynamo_err)?;
@@ -408,6 +416,9 @@ impl DynamoNamespaceRegistry {
             .table_name(&self.config.table_name)
             .key("PK", AttributeValue::S(pk))
             .key("SK", AttributeValue::S("CONFIG".to_string()))
+            // Strongly-consistent read-after-write (mirrors get_schema): config is
+            // read immediately after create/update on the admin path.
+            .consistent_read(true)
             .send()
             .await
             .map_err(dynamo_err)?;
@@ -615,6 +626,9 @@ impl DynamoNamespaceRegistry {
             .table_name(&self.config.table_name)
             .key("PK", AttributeValue::S(pk))
             .key("SK", AttributeValue::S("DESCRIPTOR".to_string()))
+            // Strongly-consistent read-after-write (mirrors get_schema): the
+            // descriptor is generated on create and read back immediately.
+            .consistent_read(true)
             .send()
             .await
             .map_err(dynamo_err)?;
