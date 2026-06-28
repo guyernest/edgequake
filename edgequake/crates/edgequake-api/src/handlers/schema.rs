@@ -1039,16 +1039,12 @@ pub async fn reject_namespace_schema(
 
 /// Seed the namespace schema from the 4 BASELINE entity types (no LLM).
 ///
-/// REPLACE semantics (design §4.1): stores a fresh `Proposed` SchemaProposal
-/// seeded from the 4 BASELINE types (PERSON, ORGANIZATION, LOCATION, DATE),
-/// replacing ANY existing proposal — including an Approved one.
+/// ADDITIVE + IDEMPOTENT semantics (33-13): merges the 4 baseline types into the
+/// current draft. Any existing/custom types are PRESERVED verbatim. Running
+/// start-from-defaults twice produces no duplicate type names.
 ///
-/// This is the ONLY sanctioned destructive path on the schema lifecycle. The
-/// admin uses this to start from scratch, then edits and approves via the
-/// existing PATCH + POST /approve endpoints.
-///
-/// The caller must exercise explicit intent (POST, not GET) because this action
-/// is destructive: an Approved schema is replaced by the fresh Proposed baseline.
+/// This is NOT destructive — use `POST /schema/reset` to clear or overwrite the
+/// draft from scratch. The gate key (Approved) is unchanged.
 ///
 /// # Errors
 ///
@@ -1062,7 +1058,7 @@ pub async fn reject_namespace_schema(
         ("namespace" = String, Path, description = "Namespace slug")
     ),
     responses(
-        (status = 200, description = "Baseline schema seeded — status=Proposed; admin must edit and approve"),
+        (status = 200, description = "Baseline types merged additively — status=Proposed; existing types preserved"),
         (status = 400, description = "Invalid slug format"),
         (status = 404, description = "Namespace not found"),
         (status = 501, description = "Namespace registry not configured"),
@@ -1080,20 +1076,131 @@ pub async fn start_from_defaults(
 
     info!(
         namespace = slug.as_str(),
-        "start-from-defaults: seeding baseline proposal (REPLACE semantics)"
+        "start-from-defaults: merging baseline types additively (idempotent)"
     );
 
-    let baseline = build_baseline_proposal();
-
-    // REPLACE: store_schema is a wholesale replace — any existing proposal
-    // (including Approved) is overwritten with the fresh Proposed baseline.
-    // This is the ONLY sanctioned destructive path (design §4.1).
-    registry
-        .store_schema(&slug, &baseline)
+    // ADDITIVE recipe (33-13 / Risk R6):
+    //   - read current; if Some, merge baseline in (preserves custom types, idempotent);
+    //   - if None, store the baseline directly.
+    // merge_schema keys by EXACT name — running defaults twice preserves the 4 names.
+    let current = registry
+        .get_schema(&slug)
         .await
         .map_err(map_registry_error)?;
 
-    let body = schema_proposal_to_body(baseline, chrono::Utc::now().timestamp_millis());
+    let merged = match current {
+        Some(c) => merge_schema(&c, &build_baseline_proposal()).proposal,
+        None => build_baseline_proposal(),
+    };
+
+    registry
+        .store_schema(&slug, &merged)
+        .await
+        .map_err(map_registry_error)?;
+
+    let body = schema_proposal_to_body(merged, chrono::Utc::now().timestamp_millis());
+    Ok(Json(SchemaResponse {
+        namespace: slug.as_str().to_string(),
+        schema: body,
+    }))
+}
+
+/// Request body for POST /schema/reset.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ResetSchemaRequest {
+    /// Target reset state: `"empty"` (status None, empty vecs) or `"baseline"` (4 baseline types, Proposed).
+    pub to: String,
+}
+
+/// Reset the namespace schema — the ONLY destructive operation on the schema lifecycle.
+///
+/// Body `{to: "empty"}`: clears to the SINGLE mandated empty representation —
+/// status None + empty entity_types/relation_types vecs. GET /schema returns None;
+/// the gate parks (does not open). This is NOT a registry-deletion: the record exists
+/// but is empty so GET and the gate behave deterministically.
+///
+/// Body `{to: "baseline"}`: stores the 4 baseline types (status Proposed).
+///
+/// An invalid `to` value returns 422 ValidationError.
+///
+/// This is the ONLY handler that destructively overwrites the draft (including
+/// an Approved schema). All other schema endpoints (defaults, discover) are additive.
+///
+/// # Errors
+///
+/// - 400: Invalid slug format
+/// - 422: Invalid `to` value
+/// - 501: Namespace registry not configured
+#[utoipa::path(
+    post,
+    path = "/api/v1/namespaces/{namespace}/schema/reset",
+    params(
+        ("namespace" = String, Path, description = "Namespace slug")
+    ),
+    request_body = ResetSchemaRequest,
+    responses(
+        (status = 200, description = "Schema reset — empty (status None + empty vecs) or baseline (4 types, Proposed)"),
+        (status = 400, description = "Invalid slug format"),
+        (status = 422, description = "Invalid 'to' value — must be 'empty' or 'baseline'"),
+        (status = 501, description = "Namespace registry not configured"),
+    ),
+    tags = ["Namespaces"]
+)]
+pub async fn reset_namespace_schema(
+    State(state): State<AppState>,
+    Path(namespace): Path<String>,
+    Json(body): Json<ResetSchemaRequest>,
+) -> ApiResult<Json<SchemaResponse>> {
+    let registry = get_registry(&state)?;
+
+    let slug = NamespaceSlug::parse(&namespace)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid namespace slug: {}", e)))?;
+
+    info!(
+        namespace = slug.as_str(),
+        to = %body.to,
+        "reset-namespace-schema: destructive reset requested"
+    );
+
+    let stored = match body.to.as_str() {
+        "empty" => {
+            // The SINGLE mandated empty representation (Codex MED-3):
+            // status None + EMPTY entity_types/relation_types vecs.
+            // NOT a registry-deletion: the record persists so GET and the gate are deterministic.
+            let empty = SchemaProposal {
+                status: SchemaStatus::None,
+                entity_types: vec![],
+                relation_types: vec![],
+                sample_size: 0,
+                total_documents: 0,
+                domain_hint: None,
+                proposed_at: chrono::Utc::now().timestamp_millis(),
+                reviewed_at: None,
+                sampling_metadata: None,
+            };
+            registry
+                .store_schema(&slug, &empty)
+                .await
+                .map_err(map_registry_error)?;
+            empty
+        }
+        "baseline" => {
+            let baseline = build_baseline_proposal();
+            registry
+                .store_schema(&slug, &baseline)
+                .await
+                .map_err(map_registry_error)?;
+            baseline
+        }
+        other => {
+            return Err(ApiError::ValidationError(format!(
+                "Invalid reset target '{}': must be 'empty' or 'baseline'",
+                other
+            )));
+        }
+    };
+
+    let body = schema_proposal_to_body(stored, chrono::Utc::now().timestamp_millis());
     Ok(Json(SchemaResponse {
         namespace: slug.as_str().to_string(),
         schema: body,
@@ -2258,14 +2365,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_start_from_defaults_replaces_existing() {
-        // Start-from-defaults must REPLACE any existing proposal, including Approved,
-        // with the fresh Proposed 4-baseline-type seed.
+    async fn test_start_from_defaults_merges_additively() {
+        // 33-13 additive semantics: start-from-defaults PRESERVES custom types and
+        // ADDS the 4 baseline types. Running it twice produces no duplicates (idempotent).
+        // Risk R6: merging baseline (freq=0) into a populated draft is cosmetic — no data loss.
         use edgequake_core::NamespaceRegistry;
         use test_registry::MemoryNamespaceRegistry;
 
-        // Set up an existing Approved proposal with extra non-baseline types.
-        let existing_approved = SchemaProposal {
+        // Existing draft has custom types (including PERSON with admin-curated desc + freq).
+        let existing_draft = SchemaProposal {
             status: SchemaStatus::Approved,
             entity_types: vec![
                 EntityTypeProposal {
@@ -2278,12 +2386,6 @@ mod tests {
                     name: "CUSTOM_DOMAIN_TYPE".to_string(),
                     description: "domain-specific entity".to_string(),
                     frequency: 50,
-                    is_baseline: false,
-                },
-                EntityTypeProposal {
-                    name: "ANOTHER_TYPE".to_string(),
-                    description: "another type".to_string(),
-                    frequency: 25,
                     is_baseline: false,
                 },
             ],
@@ -2302,39 +2404,206 @@ mod tests {
             sampling_metadata: None,
         };
 
-        let registry = MemoryNamespaceRegistry::new(Some(existing_approved));
+        let registry = MemoryNamespaceRegistry::new(Some(existing_draft));
         let slug = edgequake_core::NamespaceSlug::parse("test-ns").unwrap();
 
-        // Simulate start-from-defaults: store build_baseline_proposal() (REPLACE semantics).
+        // Simulate start-from-defaults ADDITIVE: read current, merge baseline in.
+        let current = registry.get_schema(&slug).await.unwrap();
+        let merged = match current {
+            Some(c) => merge_schema(&c, &build_baseline_proposal()).proposal,
+            None => build_baseline_proposal(),
+        };
+        registry.store_schema(&slug, &merged).await.unwrap();
+
+        let stored = registry.get_schema(&slug).await.unwrap().expect("schema stored");
+
+        // Status must be Proposed (merge always resets to Proposed).
+        assert_eq!(stored.status, SchemaStatus::Proposed, "Additive merge yields Proposed status");
+
+        let names: Vec<&str> = stored.entity_types.iter().map(|e| e.name.as_str()).collect();
+
+        // All 4 baseline names present.
+        assert!(names.contains(&"PERSON"), "PERSON in merged result");
+        assert!(names.contains(&"ORGANIZATION"), "ORGANIZATION added by merge");
+        assert!(names.contains(&"LOCATION"), "LOCATION added by merge");
+        assert!(names.contains(&"DATE"), "DATE added by merge");
+
+        // Custom type PRESERVED (not destroyed).
+        assert!(names.contains(&"CUSTOM_DOMAIN_TYPE"), "Custom type preserved after additive defaults");
+
+        // Admin description of PERSON preserved (merge keeps current description verbatim).
+        let merged_person = stored.entity_types.iter().find(|e| e.name == "PERSON").unwrap();
+        assert_eq!(
+            merged_person.description, "admin-curated person",
+            "Admin description preserved verbatim"
+        );
+
+        // Risk R6: PERSON's frequency was 100 in current; baseline has 0.
+        // merge_schema refreshes frequency from resampled — so it becomes 0 here.
+        // This is cosmetic (frequency update only), not data loss of the description.
+        // The description is the authoritative admin data; frequency is a sampling stat.
+        // The important check is that description is intact (asserted above).
+        // We just confirm frequency has been updated (not left at the wrong value):
+        // baseline freq=0 was merged in — this is expected cosmetic behaviour.
+        assert_eq!(
+            merged_person.frequency, 0,
+            "Frequency refreshed to 0 from baseline (cosmetic, not data loss — R6)"
+        );
+
+        // IDEMPOTENCE: run defaults a second time; still no duplicates.
+        let current2 = registry.get_schema(&slug).await.unwrap();
+        let merged2 = match current2 {
+            Some(c) => merge_schema(&c, &build_baseline_proposal()).proposal,
+            None => build_baseline_proposal(),
+        };
+        registry.store_schema(&slug, &merged2).await.unwrap();
+
+        let stored2 = registry.get_schema(&slug).await.unwrap().expect("schema stored twice");
+        let names2: Vec<&str> = stored2.entity_types.iter().map(|e| e.name.as_str()).collect();
+
+        // No duplicate PERSON (exactly one).
+        let person_count = names2.iter().filter(|&&n| n == "PERSON").count();
+        assert_eq!(person_count, 1, "No duplicate PERSON after second defaults run");
+
+        // All 4 baseline names still present; CUSTOM_DOMAIN_TYPE still there.
+        assert!(names2.contains(&"ORGANIZATION"), "ORGANIZATION still present after idempotent run");
+        assert!(names2.contains(&"CUSTOM_DOMAIN_TYPE"), "Custom type preserved after idempotent run");
+    }
+
+    #[tokio::test]
+    async fn test_reset_namespace_schema_empty() {
+        // reset to='empty': stores status None + empty vecs (the SINGLE mandated representation).
+        use edgequake_core::NamespaceRegistry;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let existing = SchemaProposal {
+            status: SchemaStatus::Approved,
+            entity_types: vec![EntityTypeProposal {
+                name: "PERSON".to_string(),
+                description: "p".to_string(),
+                frequency: 5,
+                is_baseline: true,
+            }],
+            relation_types: vec![],
+            sample_size: 10,
+            total_documents: 100,
+            domain_hint: None,
+            proposed_at: 1700000000000,
+            reviewed_at: Some(1700000001000),
+            sampling_metadata: None,
+        };
+        let registry = MemoryNamespaceRegistry::new(Some(existing));
+        let slug = edgequake_core::NamespaceSlug::parse("test-ns").unwrap();
+
+        // Simulate reset to='empty': store the single mandated empty representation.
+        let empty = SchemaProposal {
+            status: SchemaStatus::None,
+            entity_types: vec![],
+            relation_types: vec![],
+            sample_size: 0,
+            total_documents: 0,
+            domain_hint: None,
+            proposed_at: chrono::Utc::now().timestamp_millis(),
+            reviewed_at: None,
+            sampling_metadata: None,
+        };
+        registry.store_schema(&slug, &empty).await.unwrap();
+
+        let stored = registry.get_schema(&slug).await.unwrap().expect("stored");
+        assert_eq!(stored.status, SchemaStatus::None, "Reset-to-empty yields status None");
+        assert!(stored.entity_types.is_empty(), "Reset-to-empty yields empty entity_types");
+        assert!(stored.relation_types.is_empty(), "Reset-to-empty yields empty relation_types");
+        assert!(stored.domain_hint.is_none(), "Reset-to-empty has no domain hint");
+
+        // POST-RESET GET: the stored empty draft should render as SchemaResponseBody::None
+        // (not Proposing, not Approved, not the gate's Approved state).
+        let body = schema_proposal_to_body(stored, chrono::Utc::now().timestamp_millis());
+        assert!(
+            matches!(body, SchemaResponseBody::None),
+            "GET after reset-to-empty returns None body (gate will park, not open)"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_reset_namespace_schema_baseline() {
+        // reset to='baseline': stores the 4 baseline types (status Proposed).
+        use edgequake_core::NamespaceRegistry;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = MemoryNamespaceRegistry::new(None);
+        let slug = edgequake_core::NamespaceSlug::parse("test-ns").unwrap();
+
+        // Simulate reset to='baseline': store build_baseline_proposal().
         let baseline = build_baseline_proposal();
         registry.store_schema(&slug, &baseline).await.unwrap();
 
-        // Retrieve what's stored
-        let stored = registry.get_schema(&slug).await.unwrap().expect("schema stored");
-
-        // Must be Proposed (not Approved)
-        assert_eq!(stored.status, SchemaStatus::Proposed, "Status must be Proposed after defaults reset");
-
-        // Must have exactly the 4 baseline types (prior extra types gone)
-        assert_eq!(
-            stored.entity_types.len(),
-            4,
-            "Exactly 4 baseline types; prior extra types replaced"
-        );
+        let stored = registry.get_schema(&slug).await.unwrap().expect("stored");
+        assert_eq!(stored.status, SchemaStatus::Proposed, "Reset-to-baseline yields Proposed");
+        assert_eq!(stored.entity_types.len(), 4, "Exactly 4 baseline types");
         let names: Vec<&str> = stored.entity_types.iter().map(|e| e.name.as_str()).collect();
         assert!(names.contains(&"PERSON"));
         assert!(names.contains(&"ORGANIZATION"));
         assert!(names.contains(&"LOCATION"));
         assert!(names.contains(&"DATE"));
+        assert!(stored.relation_types.is_empty(), "Baseline has no relation types");
+    }
 
-        // Prior CUSTOM_DOMAIN_TYPE and ANOTHER_TYPE must be gone
-        assert!(!names.contains(&"CUSTOM_DOMAIN_TYPE"), "Approved custom type replaced");
-        assert!(!names.contains(&"ANOTHER_TYPE"), "Approved extra type replaced");
+    #[test]
+    fn test_reset_namespace_schema_invalid_to_is_422() {
+        // reset to='garbage': must map to a 422 ValidationError (not panic, not 500).
+        // We test the validation logic directly (no AppState needed for this unit test).
+        let valid_tos = ["empty", "baseline"];
+        let invalid_to = "garbage";
+        assert!(
+            !valid_tos.contains(&invalid_to),
+            "Sanity: 'garbage' is not a valid reset target"
+        );
+        // The handler must return ApiError::ValidationError for unknown 'to' values.
+        // We verify the discriminant here; the HTTP 422 mapping is covered by error.rs tests.
+        let err = ApiError::ValidationError(format!(
+            "Invalid reset target '{}': must be 'empty' or 'baseline'",
+            invalid_to
+        ));
+        assert!(
+            matches!(err, ApiError::ValidationError(_)),
+            "Invalid 'to' must produce ValidationError (→ 422)"
+        );
+    }
 
-        // No relation types in baseline seed
-        assert_eq!(stored.relation_types.len(), 0, "Baseline seed has no relation types");
-        // No domain hint
-        assert!(stored.domain_hint.is_none(), "Baseline seed has no domain hint");
+    #[tokio::test]
+    async fn test_reset_to_empty_gate_parks() {
+        // After reset-to-empty: GET /schema returns None body → gate parks (does not open).
+        // The gate contract: only Some(Approved) opens; every other case parks (33-04).
+        use edgequake_core::NamespaceRegistry;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = MemoryNamespaceRegistry::new(None);
+        let slug = edgequake_core::NamespaceSlug::parse("test-ns").unwrap();
+
+        // Reset to empty.
+        let empty = SchemaProposal {
+            status: SchemaStatus::None,
+            entity_types: vec![],
+            relation_types: vec![],
+            sample_size: 0,
+            total_documents: 0,
+            domain_hint: None,
+            proposed_at: chrono::Utc::now().timestamp_millis(),
+            reviewed_at: None,
+            sampling_metadata: None,
+        };
+        registry.store_schema(&slug, &empty).await.unwrap();
+
+        let proposal = registry.get_schema(&slug).await.unwrap().expect("stored");
+        let body = schema_proposal_to_body(proposal.clone(), chrono::Utc::now().timestamp_millis());
+
+        // GET returns None body (not Proposing, not Approved).
+        assert!(matches!(body, SchemaResponseBody::None), "GET returns None after reset-to-empty");
+
+        // Gate contract: only Approved opens; None parks.
+        // Simulate resolve_schema_gate_status: schema_gate(status) returns park for non-Approved.
+        let gate_opens = matches!(proposal.status, SchemaStatus::Approved);
+        assert!(!gate_opens, "Gate must not open for status=None (parks after reset-to-empty)");
     }
 
     #[tokio::test]

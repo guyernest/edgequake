@@ -164,15 +164,20 @@ fn api_v1_routes() -> Router<AppState> {
             "/namespaces/{namespace}/schema/reject",
             post(handlers::reject_namespace_schema),
         )
-        // Phase 33-05 — SCHEMA-MANUAL-DEFAULTS: seed from 4 baseline types (REPLACE, no LLM)
+        // Phase 33-13 — SCHEMA-ADDITIVE-DRAFT: defaults is additive+idempotent (not REPLACE)
         .route(
             "/namespaces/{namespace}/schema/defaults",
             post(handlers::start_from_defaults),
         )
-        // Phase 33-05 — SCHEMA-RESAMPLE-MERGE: non-destructive additive resample (PINNED route)
+        // Phase 33-13 — SCHEMA-RESET: the ONLY destructive op (empty|baseline)
+        .route(
+            "/namespaces/{namespace}/schema/reset",
+            post(handlers::reset_namespace_schema),
+        )
+        // Phase 33-05 — SCHEMA-RESAMPLE-MERGE: aliased to unified discover handler (33-13)
         .route(
             "/namespaces/{namespace}/schema/resample",
-            post(handlers::resample_namespace_schema),
+            post(handlers::suggest_namespace_schema),
         )
         // Extraction preview routes (Phase 23 Plan 02)
         .route(
