@@ -83,7 +83,7 @@ pub mod bm25_parquet;
 
 // Re-export main types
 pub use error::{AwsStorageError, Result};
-pub use raw_docs::RawDocsStorage;
+pub use raw_docs::{InMemoryRawDocsReader, RawDocsReader, RawDocsStorage, RawDocsStorageReader, RawObject};
 pub use s3_vector::{S3Config, S3VectorStorage};
 
 #[cfg(feature = "s3vectors")]

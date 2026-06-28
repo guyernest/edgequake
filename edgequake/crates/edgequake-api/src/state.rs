@@ -1111,12 +1111,20 @@ impl AppState {
             namespace_storage_factory: None,
             namespace_storage_cache: Arc::new(RwLock::new(HashMap::new())),
             bm25_storage_factory: None,
+            // Phase 33-12: construct RawDocsStorage without block_on (which panics
+            // inside a tokio runtime) by spawning a dedicated OS thread. The empty-bucket
+            // storage is a no-op placeholder — test paths that need raw-doc reads now
+            // inject an InMemoryRawDocsReader seam into stage_workspace_sampling_dir.
             raw_docs: Arc::new(
-                tokio::runtime::Handle::current().block_on(
-                    edgequake_storage_aws::RawDocsStorage::new(
-                        std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
-                    ),
-                ),
+                std::thread::spawn(|| {
+                    tokio::runtime::Runtime::new()
+                        .expect("test_state: failed to create throwaway tokio runtime")
+                        .block_on(edgequake_storage_aws::RawDocsStorage::new(
+                            std::env::var("RAW_DOCS_BUCKET").unwrap_or_default(),
+                        ))
+                })
+                .join()
+                .expect("test_state: RawDocsStorage init thread panicked"),
             ),
         }
     }

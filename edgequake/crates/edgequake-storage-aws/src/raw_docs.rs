@@ -12,16 +12,30 @@
 //! - `namespace` — client-supplied (validated, no traversal)
 //! - `sha256` — content-addressed document_id (advisory for dedup, D-03)
 //! - `filename` — client-supplied (validated, no traversal)
+//!
+//! # RawDocsReader seam (Phase 33-12)
+//!
+//! The [`RawDocsReader`] trait is the MANDATORY injectable seam for the schema sampler.
+//! Production code reads through [`RawDocsStorageReader`] (delegates to [`RawDocsStorage`]).
+//! Tests inject [`InMemoryRawDocsReader`] so the sampler runs without a live S3 bucket.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
+
+use async_trait::async_trait;
 
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::presigning::PresigningConfig;
 
 use crate::error::AwsStorageError;
 
+// ============================================================================
+// RawDocsReader seam (Phase 33-12, Codex HIGH-3)
+// ============================================================================
+
 /// A single raw document object returned from `list_raw_docs`.
+///
+/// Shared by both the real [`RawDocsStorage`] and the injectable seam.
 #[derive(Debug, Clone)]
 pub struct RawObject {
     /// Full S3 object key.
@@ -31,6 +45,129 @@ pub struct RawObject {
     /// Last modified timestamp (ISO-8601 string), if available.
     pub last_modified: Option<String>,
 }
+
+/// Injectable seam for raw-document read access (listing + retrieval).
+///
+/// This trait is the MANDATORY seam that separates the schema sampler from live S3.
+/// The production path uses [`RawDocsStorageReader`] (delegates to [`RawDocsStorage`]).
+/// Tests inject [`InMemoryRawDocsReader`] — no real bucket, no `#[ignore]`.
+///
+/// The trait mirrors the concrete [`RawDocsStorage`] methods exactly so production
+/// callers are byte-for-byte identical to the test path.
+#[async_trait]
+pub trait RawDocsReader: Send + Sync {
+    /// List all raw documents under `prefix` (paginated internally, returns ALL).
+    ///
+    /// `prefix` should end with a trailing slash: `"{tenant}/{workspace}/{namespace}/"`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AwsStorageError` on any underlying error (S3 / in-memory).
+    async fn list_raw_docs(&self, prefix: &str) -> Result<Vec<RawObject>, AwsStorageError>;
+
+    /// Retrieve the bytes of a raw document at `key`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AwsStorageError` when the key is unknown or an I/O error occurs.
+    async fn get_object(&self, key: &str) -> Result<Vec<u8>, AwsStorageError>;
+}
+
+/// Production [`RawDocsReader`] impl — delegates verbatim to [`RawDocsStorage`].
+///
+/// The live `new_dynamodb` path is byte-for-byte unchanged: this wrapper just
+/// exposes the same methods behind the trait so the sampler can be injected in tests.
+pub struct RawDocsStorageReader<'a> {
+    inner: &'a RawDocsStorage,
+}
+
+impl<'a> RawDocsStorageReader<'a> {
+    /// Wrap a [`RawDocsStorage`] reference.
+    pub fn new(inner: &'a RawDocsStorage) -> Self {
+        Self { inner }
+    }
+}
+
+#[async_trait]
+impl<'a> RawDocsReader for RawDocsStorageReader<'a> {
+    async fn list_raw_docs(&self, prefix: &str) -> Result<Vec<RawObject>, AwsStorageError> {
+        self.inner.list_raw_docs(prefix).await
+    }
+
+    async fn get_object(&self, key: &str) -> Result<Vec<u8>, AwsStorageError> {
+        self.inner.get_object(key).await
+    }
+}
+
+/// In-memory fake [`RawDocsReader`] for tests.
+///
+/// Holds a `Vec<(key, bytes)>`.
+/// - `list_raw_docs(prefix)` returns only entries whose key STARTS WITH `prefix`.
+/// - `get_object(key)` returns the seeded bytes, or an error for unknown keys.
+/// No real S3 calls, no `#[ignore]` — runs in CI.
+pub struct InMemoryRawDocsReader {
+    objects: Vec<(String, Vec<u8>)>,
+}
+
+impl InMemoryRawDocsReader {
+    /// Construct an empty fake reader.
+    pub fn new() -> Self {
+        Self { objects: Vec::new() }
+    }
+
+    /// Seed an object with the given key and byte content.
+    pub fn seed(&mut self, key: impl Into<String>, bytes: impl Into<Vec<u8>>) {
+        self.objects.push((key.into(), bytes.into()));
+    }
+
+    /// Convenience builder: seed from an iterator of `(key, bytes)` pairs.
+    pub fn from_objects<K, V>(pairs: impl IntoIterator<Item = (K, V)>) -> Self
+    where
+        K: Into<String>,
+        V: Into<Vec<u8>>,
+    {
+        let mut reader = Self::new();
+        for (k, v) in pairs {
+            reader.seed(k, v);
+        }
+        reader
+    }
+}
+
+impl Default for InMemoryRawDocsReader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl RawDocsReader for InMemoryRawDocsReader {
+    async fn list_raw_docs(&self, prefix: &str) -> Result<Vec<RawObject>, AwsStorageError> {
+        let objects = self
+            .objects
+            .iter()
+            .filter(|(key, _)| key.starts_with(prefix))
+            .map(|(key, bytes)| RawObject {
+                key: key.clone(),
+                size: bytes.len() as i64,
+                last_modified: None,
+            })
+            .collect();
+        Ok(objects)
+    }
+
+    async fn get_object(&self, key: &str) -> Result<Vec<u8>, AwsStorageError> {
+        self.objects
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, bytes)| bytes.clone())
+            .ok_or_else(|| AwsStorageError::S3Error(format!("InMemoryRawDocsReader: key not found: {key}")))
+    }
+}
+
+// ============================================================================
+// RawDocsStorage (S3 client)
+// ============================================================================
 
 /// S3 client for raw document storage (Phase 143 "S3-as-record").
 ///
@@ -429,5 +566,70 @@ mod tests {
     fn build_key_rejects_traversal_in_workspace() {
         assert!(RawDocsStorage::build_key("t", "..", "ns", "sha", "file.txt").is_err());
         assert!(RawDocsStorage::build_key("t", "a/b", "ns", "sha", "file.txt").is_err());
+    }
+
+    // ---------------------------------------------------------------------------
+    // RawDocsReader seam tests (Phase 33-12, Codex HIGH-3)
+    // These tests prove the in-memory fake works correctly and that the seam
+    // is injectable. No real S3 calls. No #[ignore]. Runs in CI.
+    // ---------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn raw_docs_reader_list_filters_by_prefix() {
+        // Seed two keys under the target prefix and one under a different prefix.
+        // list_raw_docs(prefix) must return ONLY the two matching keys.
+        let reader = InMemoryRawDocsReader::from_objects([
+            ("tenant1/ws1/ns1/sha-a/doc-a.md", b"content A" as &[u8]),
+            ("tenant1/ws1/ns1/sha-b/doc-b.md", b"content B" as &[u8]),
+            ("tenant2/ws2/ns2/sha-c/doc-c.md", b"content C" as &[u8]), // different prefix
+        ]);
+
+        let prefix = "tenant1/ws1/ns1/";
+        let objects = reader.list_raw_docs(prefix).await.unwrap();
+
+        assert_eq!(objects.len(), 2, "Only 2 objects match the prefix");
+        let keys: Vec<&str> = objects.iter().map(|o| o.key.as_str()).collect();
+        assert!(keys.contains(&"tenant1/ws1/ns1/sha-a/doc-a.md"));
+        assert!(keys.contains(&"tenant1/ws1/ns1/sha-b/doc-b.md"));
+        assert!(!keys.contains(&"tenant2/ws2/ns2/sha-c/doc-c.md"));
+    }
+
+    #[tokio::test]
+    async fn raw_docs_reader_get_object_returns_seeded_bytes() {
+        // get_object must return exactly the seeded bytes.
+        let reader = InMemoryRawDocsReader::from_objects([
+            ("tenant1/ws1/ns1/sha-a/doc.md", b"hello seam" as &[u8]),
+        ]);
+
+        let bytes = reader.get_object("tenant1/ws1/ns1/sha-a/doc.md").await.unwrap();
+        assert_eq!(bytes, b"hello seam");
+    }
+
+    #[tokio::test]
+    async fn raw_docs_reader_get_object_errors_for_unknown_key() {
+        let reader = InMemoryRawDocsReader::new();
+        let result = reader.get_object("nonexistent/key").await;
+        assert!(result.is_err(), "Unknown key must return Err");
+    }
+
+    #[tokio::test]
+    async fn raw_docs_reader_size_matches_content_length() {
+        let reader = InMemoryRawDocsReader::from_objects([
+            ("t/w/ns/sha/file.md", b"twelve bytes" as &[u8]),
+        ]);
+        let objects = reader.list_raw_docs("t/w/ns/").await.unwrap();
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].size, 12, "size must equal byte length");
+    }
+
+    #[tokio::test]
+    async fn raw_docs_reader_empty_prefix_returns_all() {
+        // With an empty prefix every seeded key matches.
+        let reader = InMemoryRawDocsReader::from_objects([
+            ("a/b", b"1" as &[u8]),
+            ("c/d", b"2" as &[u8]),
+        ]);
+        let objects = reader.list_raw_docs("").await.unwrap();
+        assert_eq!(objects.len(), 2);
     }
 }
