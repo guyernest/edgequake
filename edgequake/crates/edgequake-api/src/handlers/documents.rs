@@ -152,32 +152,6 @@ pub(crate) async fn resolve_schema_gate_status_for_verified_workspace(
     resolve_gate_for_workspace_slug(state, &workspace.slug).await
 }
 
-/// Resolve the workspace's namespace slug for raw-docs S3 keying (Phase 33-12 fix).
-///
-/// The raw-docs S3 key MUST be stamped with the SAME namespace the schema gate keys
-/// on — the workspace's slug ([`resolve_gate_for_workspace_slug`], Phase 23 invariant
-/// "slug == namespace slug"). The legacy `upload_document` / `upload_file` paths
-/// previously hardcoded `"default"` for the key's namespace segment, so a document
-/// parked at `awaiting_schema` for namespace `<slug>` had its bytes stored under
-/// `.../default/...`. The 33-12 schema sampler reads under the workspace slug and
-/// therefore never found those bytes ("no parked raw docs found in S3"). Deriving the
-/// namespace from the workspace slug here keeps storage and the gate consistent.
-///
-/// Falls back to `"default"` only when the workspace cannot be resolved (anonymous /
-/// memory / test mode) — matching the pre-existing fail-soft storage posture.
-pub(crate) async fn resolve_namespace_for_storage(
-    state: &AppState,
-    workspace_id: &str,
-) -> String {
-    let Ok(ws_uuid) = workspace_id.parse::<uuid::Uuid>() else {
-        return "default".to_string();
-    };
-    match state.workspace_service.get_workspace(ws_uuid).await {
-        Ok(Some(ws)) => ws.slug,
-        _ => "default".to_string(),
-    }
-}
-
 /// Resolve the schema gate from an ALREADY-FETCHED, ownership-verified workspace's slug.
 ///
 /// This is steps (3)-(5) of gate resolution: parse the slug as a `NamespaceSlug`, obtain the
@@ -1006,11 +980,19 @@ pub async fn upload_document(
 
     // Phase 33 INGEST-S3-CONVERGE (R6): Write bytes to S3 FIRST (S3-first, metadata-second).
     // For text/markdown, store content as UTF-8 bytes under the sha256 key.
-    // Phase 33-12 fix: key the raw doc under the workspace's namespace slug (NOT a
-    // hardcoded "default") so it matches where the schema gate parks it and where the
-    // schema sampler reads it. Storage namespace == gate namespace == workspace.slug.
-    let namespace_for_storage =
-        resolve_namespace_for_storage(&state, &workspace_id_for_storage).await;
+    // Phase 33-12: key the raw doc under the workspace's namespace slug (NOT a hardcoded
+    // "default") so storage namespace == gate namespace == workspace.slug and the schema
+    // sampler can find docs parked at awaiting_schema. Fetch the workspace ONCE here and
+    // reuse it for the gate below (resolve_gate_for_workspace_slug) — avoids a second
+    // get_workspace round-trip per upload.
+    let upload_workspace = match workspace_id_for_storage.parse::<uuid::Uuid>() {
+        Ok(ws_uuid) => state.workspace_service.get_workspace(ws_uuid).await.ok().flatten(),
+        Err(_) => None,
+    };
+    let namespace_for_storage = upload_workspace
+        .as_ref()
+        .map(|ws| ws.slug.clone())
+        .unwrap_or_else(|| "default".to_string());
     let raw_doc_key = edgequake_storage_aws::RawDocsStorage::build_key(
         tenant_id_for_storage.as_deref().unwrap_or("default"),
         &workspace_id_for_storage,
@@ -1057,16 +1039,13 @@ pub async fn upload_document(
         )])
         .await?;
 
-    // Phase 33-04 INGEST-SCHEMA-GATE: tenant ownership check BEFORE calling the gate
-    // resolver (design §8 / review item [1]).  workspace_id_for_storage comes from
-    // tenant_ctx.workspace_id — this is the caller's own workspace, so the ownership
-    // check is by construction satisfied here (tenant_ctx.tenant_id IS the workspace
-    // owner injected by the proxy).  The resolver's PRECONDITION is thus met.
-    let gate_status = resolve_schema_gate_status_for_verified_workspace(
-        &state,
-        &workspace_id_for_storage,
-    )
-    .await;
+    // Phase 33-04 INGEST-SCHEMA-GATE: resolve the gate from the workspace already fetched
+    // above (ownership satisfied by construction — workspace_id_for_storage is the
+    // proxy-injected caller workspace). Unresolved workspace → fail closed (design §8).
+    let gate_status = match upload_workspace.as_ref() {
+        Some(ws) => resolve_gate_for_workspace_slug(&state, &ws.slug).await,
+        None => "awaiting_schema",
+    };
 
     // Write the gate-determined status transition — reuse the in-memory metadata
     // (the row was just written above, so no KV read-back is needed).
@@ -2770,11 +2749,17 @@ pub async fn upload_file(
 
     // Phase 33 INGEST-S3-CONVERGE (R6): Write bytes to S3 FIRST, metadata second.
     // Key layout: {tenant}/{workspace}/{namespace}/{sha256}/{filename}
-    // Phase 33-12 fix: key the raw doc under the workspace's namespace slug (NOT a
-    // hardcoded "default") so storage namespace == gate namespace == workspace.slug
-    // and the schema sampler can find documents parked at awaiting_schema.
-    let namespace_for_storage =
-        resolve_namespace_for_storage(&state, &workspace_id_for_storage).await;
+    // Phase 33-12: key the raw doc under the workspace's namespace slug (NOT a hardcoded
+    // "default") so storage namespace == gate namespace == workspace.slug. Fetch the
+    // workspace ONCE here and reuse it for the gate below — avoids a second get_workspace.
+    let upload_workspace = match workspace_id_for_storage.parse::<uuid::Uuid>() {
+        Ok(ws_uuid) => state.workspace_service.get_workspace(ws_uuid).await.ok().flatten(),
+        Err(_) => None,
+    };
+    let namespace_for_storage = upload_workspace
+        .as_ref()
+        .map(|ws| ws.slug.clone())
+        .unwrap_or_else(|| "default".to_string());
     let raw_doc_key = edgequake_storage_aws::RawDocsStorage::build_key(
         tenant_id_for_storage.as_deref().unwrap_or("default"),
         &workspace_id_for_storage,
@@ -2822,15 +2807,13 @@ pub async fn upload_file(
         )])
         .await?;
 
-    // Phase 33-04 INGEST-SCHEMA-GATE: tenant ownership check BEFORE calling the gate
-    // resolver (design §8 / review item [1]).  workspace_id_for_storage comes from
-    // tenant_ctx.workspace_id — the caller's own workspace; ownership is satisfied by
-    // construction (proxy-injected tenant context).
-    let gate_status = resolve_schema_gate_status_for_verified_workspace(
-        &state,
-        &workspace_id_for_storage,
-    )
-    .await;
+    // Phase 33-04 INGEST-SCHEMA-GATE: resolve the gate from the workspace already fetched
+    // above (ownership satisfied by construction — proxy-injected caller workspace).
+    // Unresolved workspace → fail closed (awaiting_schema), design §8.
+    let gate_status = match upload_workspace.as_ref() {
+        Some(ws) => resolve_gate_for_workspace_slug(&state, &ws.slug).await,
+        None => "awaiting_schema",
+    };
 
     // Write the gate-determined status transition — reuse the in-memory metadata
     // (the row was just written above, so no KV read-back is needed).
@@ -5129,29 +5112,6 @@ mod tests {
 
         // Suppress unused variable warning.
         drop(kv);
-    }
-
-    /// Phase 33-12 fix: `resolve_namespace_for_storage` must fall back to "default"
-    /// (never panic or error) when the workspace_id is unparseable or unknown — the
-    /// fail-soft storage posture the upload paths rely on. The positive case (known
-    /// workspace → its slug) follows the same `get_workspace → ws.slug` path proven by
-    /// `test_gate_resolver_parks_foreign_or_missing_workspace` and the live E2E check.
-    #[tokio::test]
-    async fn test_resolve_namespace_for_storage_falls_back_to_default() {
-        let state = crate::state::AppState::new_memory(None::<String>).await;
-
-        assert_eq!(
-            resolve_namespace_for_storage(&state, "not-a-uuid").await,
-            "default",
-            "Non-UUID workspace_id must fall back to the default namespace"
-        );
-
-        let unknown_id = uuid::Uuid::new_v4().to_string();
-        assert_eq!(
-            resolve_namespace_for_storage(&state, &unknown_id).await,
-            "default",
-            "Unknown workspace_id must fall back to the default namespace"
-        );
     }
 
     // =========================================================================
