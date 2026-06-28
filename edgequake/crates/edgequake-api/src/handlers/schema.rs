@@ -26,6 +26,9 @@ use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 use edgequake_core::{NamespaceRegistryError, NamespaceSlug};
 use edgequake_core::schema::{SchemaProposal, SchemaStatus, EntityTypeProposal, RelationTypeProposal};
+use edgequake_storage_aws::{RawDocsReader, RawDocsStorageReader};
+#[cfg(test)]
+use edgequake_storage_aws::InMemoryRawDocsReader;
 
 // ---------------------------------------------------------------------------
 // Request / response types
@@ -319,71 +322,175 @@ async fn find_workspace_by_slug(
 }
 
 /// Stage the namespace's workspace documents into a fresh tempdir for the
-/// schema sampler (D-05).
+/// schema sampler (D-05, Phase 33-12).
 ///
-/// The sampler (`edgequake_schema::sampler`) walks a directory of raw
-/// .md/.txt files. The namespace's `snapshot_uri` points at the snapshot
-/// OUTPUT directory — it usually does not exist before the first export and
-/// never contains raw sources — so suggestion must sample the workspace's
-/// uploaded documents instead.
+/// # Source (Phase 33-12 retarget)
 ///
-/// Returns `None` when no workspace matches the slug or the workspace has no
-/// documents (the caller falls back to the legacy snapshot_uri behavior).
+/// Reads parked raw uploads from `reader` (backed by `state.raw_docs` S3 in
+/// production; an `InMemoryRawDocsReader` in tests — NO live S3, NO `#[ignore]`).
+///
+/// # Deliberate prefix strategy (Codex HIGH-1 / T-33-12-PX)
+///
+/// The write side (documents.rs:4310-4331) parks uploads under
+/// `{tenant_id_for_storage}/{workspace_id_for_storage}/{namespace}/`, where
+/// those identifiers come from the `X-Tenant-ID` / `X-Workspace-ID` request
+/// headers (strings, defaulting to `"default"` when absent).
+///
+/// Because the header-supplied identifiers may NOT be UUIDs, we cannot assume
+/// the resolved Workspace UUIDs will match the keys already in the bucket.
+/// We therefore try TWO tenant-scoped candidate prefixes (never a cross-tenant
+/// wildcard) and use the FIRST one that returns ≥1 object:
+///
+/// 1. **Primary** — the UUID form: `{tenant_id}/{workspace_id}/{slug}/`
+///    (the form produced when the client sends UUID header values, which is the
+///    common path for the admin wizard).
+/// 2. **Alternate** — `{tenant_id}/default/{slug}/`
+///    (the form produced when the write side falls back to "default" workspace,
+///    which happens when no X-Workspace-ID header is present; cited from
+///    documents.rs:4312-4315 with `"default"` fallback).
+///
+/// Both prefixes are tenant-scoped (never cross-tenant). The CHOSEN prefix and
+/// the staged_count are logged so the 33-15 live proof can assert staged_count >= 1.
+///
+/// # Filtering
+///
+/// Only objects with non-zero size are staged. Files are written as
+/// `doc-NNNN.md` so the schema sampler can read them as plain text.
+///
+/// # Return value
+///
+/// - `Some((tempdir_path, TempDir, staged_count))` when ≥1 doc staged.
+/// - `None` when the workspace is unresolved OR no objects exist under any
+///   candidate prefix (NOT an `Err` — the caller falls back to snapshot_uri).
+///   Warn-logged as "falling back to snapshot_uri".
+///
 /// The returned `TempDir` guard must be kept alive until sampling finishes.
 pub(crate) async fn stage_workspace_sampling_dir(
     state: &AppState,
     slug: &NamespaceSlug,
+    reader: &dyn RawDocsReader,
 ) -> Option<(String, tempfile::TempDir, usize)> {
     let workspace = find_workspace_by_slug(state, slug.as_str()).await?;
 
-    let documents = match crate::snapshot_export::collect_workspace_documents(
-        &state.kv_storage,
-        &workspace.workspace_id.to_string(),
-    )
-    .await
-    {
-        Ok(docs) => docs,
-        Err(e) => {
-            warn!(
-                namespace = slug.as_str(),
-                error = %e,
-                "Failed to collect workspace documents for schema sampling; \
-                 falling back to snapshot_uri"
-            );
-            return None;
-        }
-    };
-    if documents.is_empty() {
-        return None;
-    }
+    let tenant_id = workspace.tenant_id.to_string();
+    let workspace_id = workspace.workspace_id.to_string();
+    let namespace = slug.as_str();
 
+    // --- DELIBERATE prefix strategy (Codex HIGH-1 / documents.rs:4310-4331) ---
+    //
+    // PRIMARY: UUID-form as the admin wizard produces it.
+    let primary_prefix = format!("{}/{}/{}/", tenant_id, workspace_id, namespace);
+    // ALTERNATE: "default" workspace fallback (documents.rs:4312-4315 default path).
+    // Still tenant-scoped; never a cross-tenant wildcard.
+    let alternate_prefix = format!("{}/default/{}/", tenant_id, namespace);
+
+    // Try primary first; if empty, try alternate; use the first that yields ≥1 object.
+    let (chosen_prefix, raw_objects) = 'find: {
+        match reader.list_raw_docs(&primary_prefix).await {
+            Ok(objs) if !objs.is_empty() => break 'find (primary_prefix, objs),
+            Ok(_) => {
+                debug!(
+                    namespace,
+                    primary = %primary_prefix,
+                    "Primary raw-docs prefix empty; trying tenant-scoped alternate"
+                );
+            }
+            Err(e) => {
+                warn!(
+                    namespace,
+                    error = %e,
+                    prefix = %primary_prefix,
+                    "Failed to list raw docs at primary prefix; trying alternate"
+                );
+            }
+        }
+        match reader.list_raw_docs(&alternate_prefix).await {
+            Ok(objs) if !objs.is_empty() => break 'find (alternate_prefix, objs),
+            Ok(_) => {
+                debug!(namespace, alternate = %alternate_prefix, "Alternate raw-docs prefix also empty");
+            }
+            Err(e) => {
+                warn!(
+                    namespace,
+                    error = %e,
+                    prefix = %alternate_prefix,
+                    "Failed to list raw docs at alternate prefix"
+                );
+            }
+        }
+        // No objects found under any candidate prefix.
+        warn!(
+            namespace,
+            primary = %primary_prefix,
+            alternate = %alternate_prefix,
+            "No raw docs found under any candidate prefix; falling back to snapshot_uri"
+        );
+        return None;
+    };
+
+    // Create a staging tempdir.
     let dir = match tempfile::tempdir() {
         Ok(dir) => dir,
         Err(e) => {
             warn!(
-                namespace = slug.as_str(),
+                namespace,
                 error = %e,
                 "Failed to create sampling tempdir; falling back to snapshot_uri"
             );
             return None;
         }
     };
-    for (index, doc) in documents.iter().enumerate() {
-        let path = dir.path().join(format!("doc-{:04}.md", index));
-        if let Err(e) = std::fs::write(&path, &doc.content) {
+
+    // Stage each non-empty object as doc-NNNN.md.
+    // Key layout from documents.rs:4425-4437: {tenant}/{workspace}/{namespace}/{sha256}/{filename}
+    // Segment 4 is the filename — but we just copy the full content into the tempdir.
+    let mut staged_count: usize = 0;
+    for obj in raw_objects.iter().filter(|o| o.size > 0) {
+        let bytes = match reader.get_object(&obj.key).await {
+            Ok(b) => b,
+            Err(e) => {
+                warn!(
+                    namespace,
+                    key = %obj.key,
+                    error = %e,
+                    "Failed to fetch raw doc for schema sampling; skipping"
+                );
+                continue;
+            }
+        };
+
+        let path = dir.path().join(format!("doc-{:04}.md", staged_count));
+        if let Err(e) = std::fs::write(&path, &bytes) {
             warn!(
-                namespace = slug.as_str(),
+                namespace,
+                key = %obj.key,
                 error = %e,
-                "Failed to stage workspace document for sampling; \
-                 falling back to snapshot_uri"
+                "Failed to write staged doc for schema sampling; falling back to snapshot_uri"
             );
             return None;
         }
+        staged_count += 1;
     }
 
+    if staged_count == 0 {
+        warn!(
+            namespace,
+            prefix = %chosen_prefix,
+            "Prefix had objects but none could be staged (all zero-byte?); falling back to snapshot_uri"
+        );
+        return None;
+    }
+
+    // Log the evidence needed by the 33-15 live proof (Codex HIGH-1 + MED-6).
+    info!(
+        namespace,
+        chosen_prefix = %chosen_prefix,
+        staged_count,
+        "Staged raw docs for schema sampling"
+    );
+
     let location = dir.path().display().to_string();
-    let count = documents.len();
-    Some((location, dir, count))
+    Some((location, dir, staged_count))
 }
 
 // ---------------------------------------------------------------------------
@@ -568,44 +675,38 @@ pub async fn suggest_namespace_schema(
         }
     }
 
-    // --- Resolve data location (D-05) ---
-    // Prefer sampling the workspace's UPLOADED documents: snapshot_uri points
-    // at the snapshot OUTPUT directory, which typically does not exist before
-    // the first export and never contains the raw .md/.txt sources the
-    // sampler expects. Falls back to the legacy snapshot_uri-directory
-    // behavior when no workspace/documents are found (back-compat).
-    let (location, sample_dir) = match stage_workspace_sampling_dir(&state, &slug).await {
+    // --- Resolve data location (D-05 / Phase 33-12 S3 retarget) ---
+    // Prefer sampling the workspace's UPLOADED raw documents via the RawDocsReader
+    // seam (sources from state.raw_docs S3 in production). Falls back to the legacy
+    // snapshot_uri behavior when no workspace / no parked docs are found.
+    let raw_docs_reader = RawDocsStorageReader::new(&state.raw_docs);
+    let (location, sample_dir) = match stage_workspace_sampling_dir(&state, &slug, &raw_docs_reader).await {
         Some((location, dir, document_count)) => {
             info!(
                 namespace = slug.as_str(),
                 documents = document_count,
-                "Sampling schema suggestion from workspace documents"
+                "Sampling schema suggestion from workspace raw docs (S3)"
             );
             (location, Some(dir))
         }
         None => {
-            // The namespace's pipeline config contains snapshot_uri. If
-            // absent, we cannot determine a data location and must return an
-            // error (per plan: "do NOT silently no-op").
+            // Legacy fallback: use snapshot_uri from the pipeline config.
+            // No hard get_config error on missing config — return a friendly error
+            // only if snapshot_uri is also absent (no data location at all).
             let config = registry
                 .get_config(&slug)
                 .await
-                .map_err(map_registry_error)?
+                .map_err(map_registry_error)?;
+
+            let location = config
+                .and_then(|c| c.snapshot_uri)
                 .ok_or_else(|| {
-                    ApiError::NotFound(format!(
-                        "Pipeline config not found for namespace: {}",
+                    ApiError::BadRequest(format!(
+                        "Cannot suggest schema for namespace '{}': no parked raw docs found \
+                         in S3 and snapshot_uri is not configured. Upload documents first.",
                         slug
                     ))
                 })?;
-
-            let location = config.snapshot_uri.clone().ok_or_else(|| {
-                ApiError::BadRequest(format!(
-                    "Cannot suggest schema for namespace '{}': no workspace documents \
-                     found and snapshot_uri is not configured. Upload documents or set \
-                     snapshot_uri in the pipeline config first.",
-                    slug
-                ))
-            })?;
 
             // Validate location has no path traversal
             if location.contains("..") {
@@ -1072,35 +1173,33 @@ pub async fn resample_namespace_schema(
         }
     }
 
-    // Resolve data location (same logic as suggest_namespace_schema).
-    let (location, _sample_dir) = match stage_workspace_sampling_dir(&state, &slug).await {
+    // Resolve data location (same logic as suggest_namespace_schema, Phase 33-12 S3 retarget).
+    let raw_docs_reader = RawDocsStorageReader::new(&state.raw_docs);
+    let (location, _sample_dir) = match stage_workspace_sampling_dir(&state, &slug, &raw_docs_reader).await {
         Some((location, dir, document_count)) => {
             info!(
                 namespace = slug.as_str(),
                 documents = document_count,
-                "Re-sampling schema from workspace documents"
+                "Re-sampling schema from workspace raw docs (S3)"
             );
             (location, Some(dir))
         }
         None => {
+            // Legacy fallback: use snapshot_uri from the pipeline config.
             let config = registry
                 .get_config(&slug)
                 .await
-                .map_err(map_registry_error)?
+                .map_err(map_registry_error)?;
+
+            let location = config
+                .and_then(|c| c.snapshot_uri)
                 .ok_or_else(|| {
-                    ApiError::NotFound(format!(
-                        "Pipeline config not found for namespace: {}",
+                    ApiError::BadRequest(format!(
+                        "Cannot re-sample schema for namespace '{}': no parked raw docs found \
+                         in S3 and snapshot_uri is not configured.",
                         slug
                     ))
                 })?;
-
-            let location = config.snapshot_uri.clone().ok_or_else(|| {
-                ApiError::BadRequest(format!(
-                    "Cannot re-sample schema for namespace '{}': no workspace documents \
-                     found and snapshot_uri is not configured.",
-                    slug
-                ))
-            })?;
             if location.contains("..") {
                 return Err(ApiError::BadRequest(
                     "snapshot_uri must not contain '..' path-traversal sequences".to_string(),
@@ -1634,11 +1733,20 @@ mod tests {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Phase 33-12 sampling tests: migrated from KV-seeded to RawDocsReader seam
+    //
+    // These tests now inject an InMemoryRawDocsReader — no real S3, no #[ignore],
+    // no block_on panic. The seam (Task 1) is the MANDATORY decoupling that
+    // enables CI runs without a live bucket.
+    // -----------------------------------------------------------------------
+
     #[tokio::test]
-    async fn test_stage_workspace_sampling_prefers_workspace_documents() {
-        // D-05: when the namespace's workspace has uploaded documents, the
-        // suggest handler samples THOSE (staged into a tempdir of .md files),
-        // not the snapshot_uri output directory.
+    async fn test_stage_workspace_sampling_prefers_raw_docs() {
+        // Phase 33-12 retarget (was: "prefers_workspace_documents" seeded via KV).
+        // After retarget: the sampler reads from the RawDocsReader seam.
+        // Inject an InMemoryRawDocsReader seeded with a doc under the PRIMARY prefix
+        // ({tenant_id}/{workspace_id}/{slug}/); assert the seeded S3 doc is staged.
         use edgequake_core::types::{CreateWorkspaceRequest, Tenant};
 
         let state = crate::state::AppState::test_state();
@@ -1665,48 +1773,100 @@ mod tests {
             )
             .await
             .unwrap();
-        state
-            .kv_storage
-            .upsert(&[
-                (
-                    "d1-metadata".to_string(),
-                    serde_json::json!({
-                        "id": "d1",
-                        "title": "notes.md",
-                        "workspace_id": workspace.workspace_id.to_string(),
-                    }),
-                ),
-                (
-                    "d1-content".to_string(),
-                    serde_json::json!({ "content": "Workspace document body" }),
-                ),
-            ])
-            .await
-            .unwrap();
+
+        // Build the PRIMARY prefix the sampler will try:
+        // {tenant_id}/{workspace_id}/{slug}/  (UUID-form, documents.rs:4312-4330)
+        let primary_key = format!(
+            "{}/{}/sample-ws/sha-abc/notes.md",
+            tenant.tenant_id, workspace.workspace_id
+        );
+
+        // Inject the fake reader seeded under the primary prefix.
+        let mut reader = InMemoryRawDocsReader::new();
+        reader.seed(primary_key.clone(), b"Workspace raw document body");
 
         let slug = edgequake_core::NamespaceSlug::parse("sample-ws").unwrap();
-        let staged = stage_workspace_sampling_dir(&state, &slug).await;
-        let (location, dir, count) = staged.expect("workspace documents must be preferred");
-        assert_eq!(count, 1);
+        let staged = stage_workspace_sampling_dir(&state, &slug, &reader).await;
+        let (location, dir, count) = staged.expect("raw docs under primary prefix must be staged");
+        assert_eq!(count, 1, "exactly one doc staged");
 
-        // The staged dir contains the document as a .md file the sampler can read
+        // The staged dir contains the document as a .md file the sampler can read.
         let staged_file = std::path::Path::new(&location).join("doc-0000.md");
         let content = std::fs::read_to_string(&staged_file).expect("staged file readable");
-        assert_eq!(content, "Workspace document body");
+        assert_eq!(content, "Workspace raw document body");
 
-        // Dropping the guard cleans up the tempdir
+        // Dropping the guard cleans up the tempdir.
         let dir_path = dir.path().to_path_buf();
         drop(dir);
         assert!(!dir_path.exists());
     }
 
     #[tokio::test]
-    async fn test_stage_workspace_sampling_falls_back_without_documents() {
-        // D-05 back-compat: no workspace matching the slug → None, so the
-        // handler falls back to the snapshot_uri-directory behavior.
+    async fn test_stage_workspace_sampling_picks_alternate_when_primary_empty() {
+        // Phase 33-12 new strategy test (Codex HIGH-1):
+        // When the PRIMARY prefix ({tenant_id}/{workspace_id}/{slug}/) yields zero objects
+        // but the ALTERNATE prefix ({tenant_id}/default/{slug}/) has objects, the sampler
+        // must pick the alternate and stage those docs (never silently return None).
+        use edgequake_core::types::{CreateWorkspaceRequest, Tenant};
+
         let state = crate::state::AppState::test_state();
+        let tenant = state
+            .workspace_service
+            .create_tenant(Tenant::new("T", "t-slug"))
+            .await
+            .unwrap();
+        let workspace = state
+            .workspace_service
+            .create_workspace(
+                tenant.tenant_id,
+                CreateWorkspaceRequest {
+                    name: "Alt WS".to_string(),
+                    slug: Some("alt-ws".to_string()),
+                    description: None,
+                    max_documents: None,
+                    llm_model: None,
+                    llm_provider: None,
+                    embedding_model: None,
+                    embedding_provider: None,
+                    embedding_dimension: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        // Primary prefix (UUID workspace): EMPTY — no objects seeded there.
+        // Alternate prefix ("default" workspace): seeded with one doc.
+        let alternate_key = format!(
+            "{}/default/alt-ws/sha-xyz/upload.md",
+            tenant.tenant_id
+        );
+
+        // Verify the primary prefix is indeed different from the alternate prefix
+        // (so the primary is empty and the test exercises the fallback path).
+        let primary_prefix = format!("{}/{}/alt-ws/", tenant.tenant_id, workspace.workspace_id);
+        assert!(
+            !alternate_key.starts_with(&primary_prefix),
+            "alternate key must NOT match primary prefix for this test to be meaningful"
+        );
+
+        let mut reader = InMemoryRawDocsReader::new();
+        reader.seed(alternate_key, b"Alternate workspace raw document");
+
+        let slug = edgequake_core::NamespaceSlug::parse("alt-ws").unwrap();
+        let staged = stage_workspace_sampling_dir(&state, &slug, &reader).await;
+        let (_, dir, count) = staged.expect("docs under alternate prefix must be staged");
+        assert_eq!(count, 1, "one doc staged from alternate prefix");
+        drop(dir);
+    }
+
+    #[tokio::test]
+    async fn test_stage_workspace_sampling_falls_back_without_documents() {
+        // D-05 back-compat (migrated to seam): no workspace matching the slug → None.
+        // No documents in the fake reader → None. NOT an error.
+        let state = crate::state::AppState::test_state();
+        let reader = InMemoryRawDocsReader::new(); // no objects seeded
         let slug = edgequake_core::NamespaceSlug::parse("no-such-ws").unwrap();
-        assert!(stage_workspace_sampling_dir(&state, &slug).await.is_none());
+        assert!(stage_workspace_sampling_dir(&state, &slug, &reader).await.is_none());
     }
 
     #[test]
