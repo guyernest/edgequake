@@ -615,6 +615,104 @@ pub struct RebuildKnowledgeGraphResponse {
 }
 
 // ============================================================================
+// Phase 29.2: Extraction Batch DTOs
+// ============================================================================
+
+/// Allowlist of approved batch-capable models.
+/// Reject any model_id outside this set with ApiError::ValidationError.
+pub const APPROVED_BATCH_MODELS: &[&str] = &["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"];
+
+/// Default model for batch extraction.
+pub const DEFAULT_BATCH_MODEL: &str = "gpt-4o-mini";
+
+/// Maximum length (characters) for caller-supplied extraction instructions.
+/// Untrusted user input embedded in LLM prompt — cap at 2000 chars (T-29.2-01).
+pub const MAX_EXTRACTION_INSTRUCTIONS_LEN: usize = 2000;
+
+/// Batch track state values stored in kv_storage.
+pub mod batch_track_state {
+    /// Written BEFORE the OpenAI submit call — orphan-safe pending marker.
+    pub const PENDING_WITHOUT_BATCH_ID: &str = "pending_without_batch_id";
+    /// Written immediately after batch creation — carries batch_id.
+    pub const SUBMITTED: &str = "submitted";
+    /// Terminal success state set after materialization.
+    pub const COMPLETED: &str = "completed";
+    /// Terminal failure states.
+    pub const FAILED: &str = "failed";
+    pub const EXPIRED: &str = "expired";
+    pub const CANCELLED: &str = "cancelled";
+}
+
+/// kv_storage key prefix for extraction-batch track records.
+/// Key format: `extraction_batch_track:{workspace_id}:{namespace}`
+pub fn extraction_batch_track_key(workspace_id: &uuid::Uuid, namespace: &str) -> String {
+    format!("extraction_batch_track:{}:{}", workspace_id, namespace)
+}
+
+/// kv_storage key for extraction results (materialized for merge_entities consumption).
+/// Key format: `extraction_batch_results:{track_id}`
+pub fn extraction_batch_results_key(track_id: &str) -> String {
+    format!("extraction_batch_results:{}", track_id)
+}
+
+/// Request body for submitting an OpenAI Batch extraction job.
+///
+/// - `namespace` is REQUIRED (HIGH #2).
+/// - `extraction_instructions` is capped at 2000 chars (T-29.2-01, Security V5).
+/// - `model_id` is restricted to APPROVED_BATCH_MODELS.
+/// - `use_realtime` is accepted but IGNORED (always Batch path — D-08 seam).
+#[derive(Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+pub struct SubmitExtractionBatchRequest {
+    /// Namespace slug — REQUIRED. Identifies the extraction namespace within the workspace.
+    pub namespace: String,
+    /// Optional override for the entity extraction prompt (D-06).
+    /// Capped at 2000 chars; untrusted (T-29.2-01).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extraction_instructions: Option<String>,
+    /// Optional model override. Must be in APPROVED_BATCH_MODELS.
+    /// Defaults to "gpt-4o-mini".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    /// Reserved D-08 seam: real-time fast path (deferred). Always ignored — Batch path only.
+    /// FUTURE: use_realtime=true for corpora < 50 documents to skip Batch API latency.
+    #[serde(default)]
+    pub use_realtime: bool,
+}
+
+/// Response from submit_extraction_batch — MCP-Task 202 shape.
+///
+/// Matches the 202+track_id shape expected by `execute_tool_call_with_tasks`/`poll_task_durably`
+/// (RESEARCH Pattern 3). The durable agent auto-invokes poll_task_durably on this response.
+#[derive(Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+pub struct SubmitExtractionBatchResponse {
+    /// Workspace ID.
+    pub workspace_id: uuid::Uuid,
+    /// Namespace slug.
+    pub namespace: String,
+    /// Track ID for polling via GET /tasks/{track_id} (MCP-Task id).
+    pub track_id: String,
+    /// OpenAI Batch ID (stored in track metadata).
+    pub batch_id: String,
+    /// Track state (submitted or pending_without_batch_id on recovery).
+    pub status: String,
+}
+
+/// Diagnostic-only response from get_batch_status.
+/// READ-ONLY — does NOT trigger fetch or materialization.
+#[derive(Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+pub struct GetBatchStatusResponse {
+    /// OpenAI Batch ID.
+    pub batch_id: String,
+    /// OpenAI batch status string (e.g., "in_progress", "completed", "failed").
+    pub status: String,
+    /// Progress counts from OpenAI (total/completed/failed requests).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_counts: Option<serde_json::Value>,
+    /// Whether the batch has reached a terminal state.
+    pub is_terminal: bool,
+}
+
+// ============================================================================
 // Unit Tests
 // ============================================================================
 
