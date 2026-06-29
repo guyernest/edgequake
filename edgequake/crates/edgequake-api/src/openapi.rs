@@ -131,6 +131,9 @@ use crate::handlers;
         handlers::rebuild_knowledge_graph,
         handlers::reprocess_all_documents,
         handlers::export_workspace_snapshot,
+        // Phase 29.2: Extraction batch endpoints
+        handlers::submit_extraction_batch,
+        handlers::get_batch_status,
         // Entity resolution (Wave 0)
         handlers::resolve_entities,
         // Lineage & Provenance

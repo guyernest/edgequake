@@ -264,6 +264,15 @@ fn api_v1_routes() -> Router<AppState> {
             "/workspaces/{workspace_id}/export-snapshot",
             post(handlers::export_workspace_snapshot),
         )
+        // Phase 29.2: Extraction batch — submit (202 MCP-Task) + diagnostic status
+        .route(
+            "/workspaces/{workspace_id}/extraction-batch",
+            post(handlers::submit_extraction_batch),
+        )
+        .route(
+            "/workspaces/{workspace_id}/extraction-batch/{batch_id}",
+            get(handlers::get_batch_status),
+        )
         // Phase 33-04 — SCHEMA-CONSOLIDATE: workspace-level draft/approve/get schema routes
         // retired. Namespace SchemaProposal routes (/namespaces/{slug}/schema) are canonical.
         // Phase 33 — INGEST-RESUME: release all awaiting_schema docs for a workspace.
