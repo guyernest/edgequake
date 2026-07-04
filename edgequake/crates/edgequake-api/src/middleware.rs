@@ -35,11 +35,54 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{info, warn};
 
+/// TEMPORARY (Phase 29.2.1 Plan 04 Task 1 — A1 LWA header-name probe).
+///
+/// Logs the inbound request header NAMES (and values for non-sensitive headers) so
+/// we can identify which header (if any) LWA :28 uses to forward the API Gateway
+/// JWT authorizer claims (`requestContext.authorizer.jwt.claims`) to the axum port.
+///
+/// SECURITY: values of `Authorization`, `Cookie`/`Set-Cookie`, and any
+/// `x-amzn-oidc-*` / other token-bearing header are REDACTED — never logged in full —
+/// to avoid leaking Bearer tokens or session cookies into CloudWatch (REVIEWS MEDIUM).
+///
+/// REMOVE this function and its call site before Task 2 finalizes the trust-gateway
+/// extraction middleware (acceptance criteria: "the debug dump is removed before Task
+/// 2 commits").
+fn dump_headers_redacted_a1_probe(request: &Request) {
+    const SENSITIVE_HEADER_SUBSTRINGS: &[&str] = &["token", "secret", "cookie", "authorization"];
+
+    let dumped: Vec<(String, String)> = request
+        .headers()
+        .iter()
+        .map(|(name, value)| {
+            let name_lower = name.as_str().to_lowercase();
+            let is_sensitive = SENSITIVE_HEADER_SUBSTRINGS
+                .iter()
+                .any(|needle| name_lower.contains(needle));
+            let value_str = if is_sensitive {
+                "<redacted>".to_string()
+            } else {
+                value.to_str().unwrap_or("<non-utf8>").to_string()
+            };
+            (name.to_string(), value_str)
+        })
+        .collect();
+
+    info!(
+        uri = %request.uri(),
+        headers = ?dumped,
+        "A1-PROBE: inbound request headers (Phase 29.2.1 Plan 04 Task 1 — TEMPORARY, remove before Task 2)"
+    );
+}
+
 /// Request logging middleware.
 pub async fn request_logging(request: Request, next: Next) -> Response {
     let method = request.method().clone();
     let uri = request.uri().clone();
     let start = Instant::now();
+
+    // TEMPORARY (Phase 29.2.1 Plan 04 Task 1 — A1 probe). See doc comment above.
+    dump_headers_redacted_a1_probe(&request);
 
     let response = next.run(request).await;
 
