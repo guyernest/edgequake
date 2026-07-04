@@ -82,16 +82,18 @@
 //! 3. Default tenant (for non-authenticated deployments)
 
 use axum::{
+    middleware as axum_middleware,
     routing::{delete, get, patch, post, put},
     Router,
 };
 
 use crate::handlers;
+use crate::middleware::{trust_gateway_enabled, trust_gateway_extract};
 use crate::state::AppState;
 
 /// Create the API router.
 pub fn create_router(state: AppState) -> Router {
-    Router::new()
+    let mut router = Router::new()
         // Health endpoints
         .route("/health", get(handlers::health_check))
         .route("/ready", get(handlers::readiness_check))
@@ -108,8 +110,18 @@ pub fn create_router(state: AppState) -> Router {
         // Ollama Emulation API (GAP-038)
         .nest("/api", ollama_api_routes())
         // API v1 endpoints
-        .nest("/api/v1", api_v1_routes())
-        .with_state(state)
+        .nest("/api/v1", api_v1_routes());
+
+    // D-01 (Phase 29.2.1 Plan 04): trust-gateway identity extraction, gated on
+    // TRUST_GATEWAY. No-op pass-through when unset — see
+    // crate::middleware::trust_gateway_extract. The Lambda is always behind the
+    // GraphragJwtAuthorizer API Gateway JWT authorizer when this is enabled; edgequake
+    // trusts the gateway-injected context rather than re-validating the token.
+    if trust_gateway_enabled() {
+        router = router.layer(axum_middleware::from_fn(trust_gateway_extract));
+    }
+
+    router.with_state(state)
 }
 
 /// Ollama-compatible API routes.

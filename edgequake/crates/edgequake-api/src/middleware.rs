@@ -294,12 +294,13 @@ const GATEWAY_SENTINEL_SUB: &str = "gateway-authenticated";
 /// When enabled, the Lambda is always placed behind the `GraphragJwtAuthorizer` API
 /// Gateway JWT authorizer (CDK-guaranteed — Phase 29.2.1 Plan 02), so the Cognito Bearer
 /// token has already been validated upstream. `trust_gateway_extract` below reads the
-/// gateway-injected identity instead of re-validating the token — no JWKS/RS256 is added
-/// here, which would be a redundant, divergent validation surface (RESEARCH Anti-Patterns,
-/// T-29.2.1-11).
+/// gateway-injected identity instead of re-validating the token — no redundant
+/// signature-based token validator is added here, which would be a divergent second
+/// validation surface (RESEARCH Anti-Patterns, T-29.2.1-11).
 pub fn trust_gateway_enabled() -> bool {
-    // RED stub (Phase 29.2.1 Plan 04 Task 2 TDD) — replaced by real env check in GREEN.
-    false
+    std::env::var("TRUST_GATEWAY")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
 }
 
 /// Identity extracted from the gateway-validated request context.
@@ -323,7 +324,7 @@ pub struct GatewayIdentity {
 /// unparseable, or missing the claim — extraction must never reject a request.
 ///
 /// Does NOT re-validate the Cognito token — the API Gateway JWT authorizer already did
-/// that (T-29.2.1-09). No JWKS/RS256/token decode is performed here.
+/// that (T-29.2.1-09). No signature verification or token re-decoding is performed here.
 pub async fn trust_gateway_extract(mut request: Request, next: Next) -> Response {
     if !trust_gateway_enabled() {
         return next.run(request).await;
@@ -344,10 +345,18 @@ pub async fn trust_gateway_extract(mut request: Request, next: Next) -> Response
 /// Pure helper: parses the `x-amzn-request-context` header value (if present) as JSON and
 /// reads `authorizer.jwt.claims.sub`. Falls back to [`GATEWAY_SENTINEL_SUB`] when `header`
 /// is `None`, unparseable, or missing the claim. Never panics, never rejects.
-fn extract_sub_from_gateway_context(_header: Option<&str>) -> String {
-    // RED stub (Phase 29.2.1 Plan 04 Task 2 TDD) — ignores input, always sentinel.
-    // Replaced by real JSON-path extraction in GREEN.
-    GATEWAY_SENTINEL_SUB.to_string()
+fn extract_sub_from_gateway_context(header: Option<&str>) -> String {
+    header
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+        .and_then(|ctx| {
+            ctx.get("authorizer")?
+                .get("jwt")?
+                .get("claims")?
+                .get("sub")?
+                .as_str()
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| GATEWAY_SENTINEL_SUB.to_string())
 }
 
 /// Rate limiting configuration.
