@@ -35,54 +35,11 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{info, warn};
 
-/// TEMPORARY (Phase 29.2.1 Plan 04 Task 1 — A1 LWA header-name probe).
-///
-/// Logs the inbound request header NAMES (and values for non-sensitive headers) so
-/// we can identify which header (if any) LWA :28 uses to forward the API Gateway
-/// JWT authorizer claims (`requestContext.authorizer.jwt.claims`) to the axum port.
-///
-/// SECURITY: values of `Authorization`, `Cookie`/`Set-Cookie`, and any
-/// `x-amzn-oidc-*` / other token-bearing header are REDACTED — never logged in full —
-/// to avoid leaking Bearer tokens or session cookies into CloudWatch (REVIEWS MEDIUM).
-///
-/// REMOVE this function and its call site before Task 2 finalizes the trust-gateway
-/// extraction middleware (acceptance criteria: "the debug dump is removed before Task
-/// 2 commits").
-fn dump_headers_redacted_a1_probe(request: &Request) {
-    const SENSITIVE_HEADER_SUBSTRINGS: &[&str] = &["token", "secret", "cookie", "authorization"];
-
-    let dumped: Vec<(String, String)> = request
-        .headers()
-        .iter()
-        .map(|(name, value)| {
-            let name_lower = name.as_str().to_lowercase();
-            let is_sensitive = SENSITIVE_HEADER_SUBSTRINGS
-                .iter()
-                .any(|needle| name_lower.contains(needle));
-            let value_str = if is_sensitive {
-                "<redacted>".to_string()
-            } else {
-                value.to_str().unwrap_or("<non-utf8>").to_string()
-            };
-            (name.to_string(), value_str)
-        })
-        .collect();
-
-    info!(
-        uri = %request.uri(),
-        headers = ?dumped,
-        "A1-PROBE: inbound request headers (Phase 29.2.1 Plan 04 Task 1 — TEMPORARY, remove before Task 2)"
-    );
-}
-
 /// Request logging middleware.
 pub async fn request_logging(request: Request, next: Next) -> Response {
     let method = request.method().clone();
     let uri = request.uri().clone();
     let start = Instant::now();
-
-    // TEMPORARY (Phase 29.2.1 Plan 04 Task 1 — A1 probe). See doc comment above.
-    dump_headers_redacted_a1_probe(&request);
 
     let response = next.run(request).await;
 
@@ -312,6 +269,87 @@ fn extract_api_key(request: &Request) -> Option<String> {
     None
 }
 
+// ============================================================================
+// Trust-Gateway Identity Extraction (Phase 29.2.1 Plan 04 — D-01)
+// ============================================================================
+
+/// Header used by API Gateway HTTP APIs (forwarded through Lambda Web Adapter) to carry
+/// the raw request context — including JWT authorizer claims — to the axum port.
+///
+/// Verified LIVE (Phase 29.2.1 Plan 04 Task 1 — A1, 2026-07-04T23:39Z, three
+/// gateway-authenticated requests): the validated identity is at
+/// `authorizer.jwt.claims.sub` inside this header's JSON payload. The sibling header
+/// `x-amzn-lambda-context` also arrives but carries NO identity (`identity: null`) and
+/// MUST NOT be used for auth decisions.
+const GATEWAY_REQUEST_CONTEXT_HEADER: &str = "x-amzn-request-context";
+
+/// Sentinel `sub` used when `TRUST_GATEWAY` is enabled but the gateway request-context
+/// header is absent, malformed, or missing the claim. Extraction NEVER rejects a request
+/// on a missing/unparseable header — a best-effort identity hint must not become an
+/// availability risk.
+const GATEWAY_SENTINEL_SUB: &str = "gateway-authenticated";
+
+/// Returns `true` iff the `TRUST_GATEWAY` env var is set to `"true"` (case-insensitive).
+///
+/// When enabled, the Lambda is always placed behind the `GraphragJwtAuthorizer` API
+/// Gateway JWT authorizer (CDK-guaranteed — Phase 29.2.1 Plan 02), so the Cognito Bearer
+/// token has already been validated upstream. `trust_gateway_extract` below reads the
+/// gateway-injected identity instead of re-validating the token — no JWKS/RS256 is added
+/// here, which would be a redundant, divergent validation surface (RESEARCH Anti-Patterns,
+/// T-29.2.1-11).
+pub fn trust_gateway_enabled() -> bool {
+    // RED stub (Phase 29.2.1 Plan 04 Task 2 TDD) — replaced by real env check in GREEN.
+    false
+}
+
+/// Identity extracted from the gateway-validated request context.
+///
+/// Attached to request extensions for downstream handlers/RBAC to consume. Deliberately
+/// carries only `sub` — workspace scope is NEVER derived here; each handler takes
+/// workspace scope from the URL path (D-03), not from token claims.
+#[derive(Debug, Clone)]
+pub struct GatewayIdentity {
+    /// The Cognito `sub` claim (or `GATEWAY_SENTINEL_SUB` when unavailable).
+    pub sub: String,
+}
+
+/// Trust-gateway identity-extraction middleware.
+///
+/// No-op pass-through when `TRUST_GATEWAY` is unset/false ([`trust_gateway_enabled`]
+/// returns `false`). When enabled, parses the `x-amzn-request-context` header (forwarded
+/// by Lambda Web Adapter — verified live in Task 1) as JSON, reads
+/// `authorizer.jwt.claims.sub`, and attaches a [`GatewayIdentity`] to the request
+/// extensions. Falls back to [`GATEWAY_SENTINEL_SUB`] when the header is absent,
+/// unparseable, or missing the claim — extraction must never reject a request.
+///
+/// Does NOT re-validate the Cognito token — the API Gateway JWT authorizer already did
+/// that (T-29.2.1-09). No JWKS/RS256/token decode is performed here.
+pub async fn trust_gateway_extract(mut request: Request, next: Next) -> Response {
+    if !trust_gateway_enabled() {
+        return next.run(request).await;
+    }
+
+    let raw_header = request
+        .headers()
+        .get(GATEWAY_REQUEST_CONTEXT_HEADER)
+        .and_then(|v| v.to_str().ok());
+    let sub = extract_sub_from_gateway_context(raw_header);
+
+    tracing::debug!(sub = %sub, "trust-gateway: identity extracted from gateway request context");
+    request.extensions_mut().insert(GatewayIdentity { sub });
+
+    next.run(request).await
+}
+
+/// Pure helper: parses the `x-amzn-request-context` header value (if present) as JSON and
+/// reads `authorizer.jwt.claims.sub`. Falls back to [`GATEWAY_SENTINEL_SUB`] when `header`
+/// is `None`, unparseable, or missing the claim. Never panics, never rejects.
+fn extract_sub_from_gateway_context(_header: Option<&str>) -> String {
+    // RED stub (Phase 29.2.1 Plan 04 Task 2 TDD) — ignores input, always sentinel.
+    // Replaced by real JSON-path extraction in GREEN.
+    GATEWAY_SENTINEL_SUB.to_string()
+}
+
 /// Rate limiting configuration.
 #[derive(Debug, Clone)]
 pub struct RateLimitConfig {
@@ -529,6 +567,88 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+
+    // ========================================================================
+    // Trust-Gateway Identity Extraction (Phase 29.2.1 Plan 04 Task 2 — TDD)
+    // ========================================================================
+
+    #[test]
+    #[serial(trust_gateway_env)]
+    fn test_trust_gateway_enabled_true() {
+        std::env::set_var("TRUST_GATEWAY", "true");
+        assert!(trust_gateway_enabled());
+        std::env::remove_var("TRUST_GATEWAY");
+    }
+
+    #[test]
+    #[serial(trust_gateway_env)]
+    fn test_trust_gateway_enabled_case_insensitive() {
+        std::env::set_var("TRUST_GATEWAY", "TRUE");
+        assert!(trust_gateway_enabled());
+        std::env::remove_var("TRUST_GATEWAY");
+    }
+
+    #[test]
+    #[serial(trust_gateway_env)]
+    fn test_trust_gateway_enabled_false_when_unset() {
+        std::env::remove_var("TRUST_GATEWAY");
+        assert!(!trust_gateway_enabled());
+    }
+
+    #[test]
+    #[serial(trust_gateway_env)]
+    fn test_trust_gateway_enabled_false_when_explicitly_false() {
+        std::env::set_var("TRUST_GATEWAY", "false");
+        assert!(!trust_gateway_enabled());
+        std::env::remove_var("TRUST_GATEWAY");
+    }
+
+    #[test]
+    fn test_extract_sub_from_gateway_context_valid_claim() {
+        // Shape verified live (Task 1, 2026-07-04T23:39Z gateway-authenticated requests).
+        let header = r#"{"authorizer":{"jwt":{"claims":{"sub":"f458f4a8-1021-708b-d7b6-8dc28342827b","username":"guy","cognito:groups":"[platform-admin admin]"}}},"requestId":"abc"}"#;
+        assert_eq!(
+            extract_sub_from_gateway_context(Some(header)),
+            "f458f4a8-1021-708b-d7b6-8dc28342827b"
+        );
+    }
+
+    #[test]
+    fn test_extract_sub_from_gateway_context_missing_header() {
+        assert_eq!(
+            extract_sub_from_gateway_context(None),
+            GATEWAY_SENTINEL_SUB
+        );
+    }
+
+    #[test]
+    fn test_extract_sub_from_gateway_context_malformed_json() {
+        assert_eq!(
+            extract_sub_from_gateway_context(Some("not-json")),
+            GATEWAY_SENTINEL_SUB
+        );
+    }
+
+    #[test]
+    fn test_extract_sub_from_gateway_context_missing_claim_path() {
+        let header = r#"{"authorizer":{"jwt":{"claims":{}}}}"#;
+        assert_eq!(
+            extract_sub_from_gateway_context(Some(header)),
+            GATEWAY_SENTINEL_SUB
+        );
+    }
+
+    #[test]
+    fn test_extract_sub_from_gateway_context_lambda_context_header_shape_has_no_identity() {
+        // x-amzn-lambda-context shape (identity: null) — verified NOT to carry claims live
+        // (Task 1). Must fall back to the sentinel, never panic on this shape.
+        let header = r#"{"requestId":"abc","identity":null}"#;
+        assert_eq!(
+            extract_sub_from_gateway_context(Some(header)),
+            GATEWAY_SENTINEL_SUB
+        );
+    }
 
     #[test]
     fn test_auth_config_default() {
