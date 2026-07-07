@@ -3099,4 +3099,510 @@ mod tests {
         // Confirm no stale PENDING_SENTINEL in the final proposal's domain_hint.
         // (tested implicitly by the Proposed match above; domain_hint=None cannot produce Proposing)
     }
+
+    // -----------------------------------------------------------------------
+    // Phase 35 — create-if-missing arm on update_namespace_schema (real-handler
+    // tests, per the RESEARCH.md-recommended pattern: call update_namespace_schema
+    // directly via State/Path/Json extractors wired to a MemoryNamespaceRegistry,
+    // instead of hand-simulating the merge logic like the older tests above).
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_creates_on_fresh_namespace() {
+        // AC-1: a namespace with NO prior schema row (get_schema returns None)
+        // must succeed (200), not 404, and persist the caller's types as Proposed.
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = Arc::new(MemoryNamespaceRegistry::new(None));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: Some(vec![EntityTypeProposal {
+                name: "PERSON".to_string(),
+                description: "a person".to_string(),
+                frequency: 1,
+                is_baseline: false,
+            }]),
+            relation_types: Some(vec![RelationTypeProposal {
+                name: "employs".to_string(),
+                description: "employment".to_string(),
+                source_type: "ORGANIZATION".to_string(),
+                target_type: "PERSON".to_string(),
+                frequency: 1,
+            }]),
+        };
+
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+        assert!(
+            result.is_ok(),
+            "fresh-namespace PATCH must return 200 (create-if-missing), not 404: {:?}",
+            result.err()
+        );
+
+        let stored = registry.get_stored().expect("a schema row must be created on the fresh path");
+        assert_eq!(
+            stored.status,
+            SchemaStatus::Proposed,
+            "fresh create-if-missing must land on Proposed, not None"
+        );
+        assert_eq!(stored.entity_types.len(), 1);
+        assert_eq!(stored.entity_types[0].name, "PERSON");
+        assert_eq!(stored.relation_types.len(), 1);
+        assert_eq!(stored.relation_types[0].name, "employs");
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_fresh_draft_is_approvable() {
+        // The freshly created draft MUST be status==Proposed — approve_schema
+        // hard-rejects any non-Proposed status (dynamodb_namespace.rs:792-797),
+        // so a None-status draft would be permanently unapprovable. This test is
+        // the tripwire for that invariant (does NOT extend MemoryNamespaceRegistry
+        // with approve_schema — out of scope; the status assertion is sufficient).
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = Arc::new(MemoryNamespaceRegistry::new(None));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: Some(vec![EntityTypeProposal {
+                name: "PERSON".to_string(),
+                description: "a person".to_string(),
+                frequency: 1,
+                is_baseline: false,
+            }]),
+            relation_types: None,
+        };
+
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+        assert!(result.is_ok(), "fresh create PATCH must succeed: {:?}", result.err());
+
+        let stored = registry.get_stored().expect("row created");
+        assert_eq!(
+            stored.status,
+            SchemaStatus::Proposed,
+            "must be Proposed (the necessary precondition for approve_schema), not None"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_rejects_empty_body_on_fresh_namespace() {
+        // Review #1 (T-35-03): turning 404->create means an all-optional PATCH {}
+        // body would otherwise create an approvable-but-empty Proposed proposal.
+        // The fresh path must reject it with 400 and create no row.
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = Arc::new(MemoryNamespaceRegistry::new(None));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: None,
+            relation_types: None,
+        };
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+
+        match result {
+            Err(ApiError::BadRequest(msg)) => {
+                assert!(
+                    msg.to_lowercase().contains("type"),
+                    "reject message should reference types, got: {}",
+                    msg
+                );
+            }
+            other => panic!(
+                "expected BadRequest(400) for an empty PATCH {{}} on a fresh namespace, got {:?}",
+                other
+            ),
+        }
+        assert!(
+            registry.get_stored().is_none(),
+            "no row should be created when the fresh-path empty-body guard rejects"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_rejects_both_empty_vecs_on_fresh_namespace() {
+        // Review #1: Some(vec![]) for both fields is the same "no types" case as
+        // omitted fields — must also 400 on the fresh path.
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = Arc::new(MemoryNamespaceRegistry::new(None));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: Some(vec![]),
+            relation_types: Some(vec![]),
+        };
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+
+        match result {
+            Err(ApiError::BadRequest(_)) => {}
+            other => panic!(
+                "expected BadRequest(400) for both-empty-vecs PATCH on a fresh namespace, got {:?}",
+                other
+            ),
+        }
+        assert!(
+            registry.get_stored().is_none(),
+            "no row should be created when the fresh-path empty-body guard rejects"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_rejects_all_related_to_relations_on_fresh_namespace() {
+        // Review #1 (REQUIRED): the RELATED_TO strip (L989-993) runs BEFORE the
+        // fresh-path empty check, so an all-RELATED_TO relation list leaves an
+        // effectively-empty final proposal and must still 400 (proves the reject
+        // fires on the FINAL post-strip proposal, not the raw body).
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = Arc::new(MemoryNamespaceRegistry::new(None));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: None,
+            relation_types: Some(vec![RelationTypeProposal {
+                name: "RELATED_TO".to_string(),
+                description: "generic relation".to_string(),
+                source_type: "ANY".to_string(),
+                target_type: "ANY".to_string(),
+                frequency: 1,
+            }]),
+        };
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+
+        match result {
+            Err(ApiError::BadRequest(_)) => {}
+            other => panic!(
+                "expected BadRequest(400) for an all-RELATED_TO fresh PATCH (post-strip empty), got {:?}",
+                other
+            ),
+        }
+        assert!(
+            registry.get_stored().is_none(),
+            "no row should be created when the fresh-path empty-body guard rejects"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_empty_body_on_existing_namespace_is_noop() {
+        // Review #1: the empty-body 400 reject is fresh-path-ONLY. An empty PATCH {}
+        // on an EXISTING namespace must stay the current unchanged 200 no-op merge.
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let existing = SchemaProposal {
+            status: SchemaStatus::Proposed,
+            entity_types: vec![EntityTypeProposal {
+                name: "PERSON".to_string(),
+                description: "a person".to_string(),
+                frequency: 3,
+                is_baseline: true,
+            }],
+            relation_types: vec![],
+            sample_size: 10,
+            total_documents: 20,
+            domain_hint: Some("legal".to_string()),
+            proposed_at: 1700000000000,
+            reviewed_at: None,
+            sampling_metadata: None,
+        };
+        let registry = Arc::new(MemoryNamespaceRegistry::new(Some(existing)));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: None,
+            relation_types: None,
+        };
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+        assert!(
+            result.is_ok(),
+            "an empty PATCH {{}} on an EXISTING namespace must stay a 200 no-op, not a new 400: {:?}",
+            result.err()
+        );
+
+        let stored = registry.get_stored().expect("row must still be present after the no-op merge");
+        assert_eq!(stored.status, SchemaStatus::Proposed, "status must be unchanged by the no-op");
+        assert_eq!(stored.entity_types.len(), 1, "existing entity_types must be untouched");
+        assert_eq!(stored.entity_types[0].name, "PERSON");
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_fresh_with_only_entity_types() {
+        // Review #2: a fresh PATCH supplying ONLY entity_types (non-empty) must
+        // return 200 Proposed with just that field populated.
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = Arc::new(MemoryNamespaceRegistry::new(None));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: Some(vec![EntityTypeProposal {
+                name: "PERSON".to_string(),
+                description: "a person".to_string(),
+                frequency: 1,
+                is_baseline: false,
+            }]),
+            relation_types: None,
+        };
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+        assert!(
+            result.is_ok(),
+            "fresh PATCH with only entity_types must succeed: {:?}",
+            result.err()
+        );
+
+        let stored = registry.get_stored().expect("row created");
+        assert_eq!(stored.status, SchemaStatus::Proposed);
+        assert_eq!(stored.entity_types.len(), 1);
+        assert_eq!(stored.entity_types[0].name, "PERSON");
+        assert!(stored.relation_types.is_empty(), "relation_types must stay empty when omitted");
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_fresh_with_only_relation_types() {
+        // Review #2: mirror of the entity-only test, for relation_types only.
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = Arc::new(MemoryNamespaceRegistry::new(None));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: None,
+            relation_types: Some(vec![RelationTypeProposal {
+                name: "employs".to_string(),
+                description: "employment".to_string(),
+                source_type: "ORGANIZATION".to_string(),
+                target_type: "PERSON".to_string(),
+                frequency: 1,
+            }]),
+        };
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+        assert!(
+            result.is_ok(),
+            "fresh PATCH with only relation_types must succeed: {:?}",
+            result.err()
+        );
+
+        let stored = registry.get_stored().expect("row created");
+        assert_eq!(stored.status, SchemaStatus::Proposed);
+        assert_eq!(stored.relation_types.len(), 1);
+        assert_eq!(stored.relation_types[0].name, "employs");
+        assert!(stored.entity_types.is_empty(), "entity_types must stay empty when omitted");
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_still_demotes_approved_schema() {
+        // AC-2 (closes a genuine pre-existing coverage gap, Pitfall 5): an existing
+        // Approved schema, PATCHed with a type change, must still reset to Proposed
+        // with reviewed_at cleared. This exercises the Some-arm merge path, which
+        // the fresh-path change must NOT affect.
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let existing = SchemaProposal {
+            status: SchemaStatus::Approved,
+            entity_types: vec![EntityTypeProposal {
+                name: "PERSON".to_string(),
+                description: "p".to_string(),
+                frequency: 5,
+                is_baseline: true,
+            }],
+            relation_types: vec![],
+            sample_size: 10,
+            total_documents: 100,
+            domain_hint: None,
+            proposed_at: 1700000000000,
+            reviewed_at: Some(1700000001000),
+            sampling_metadata: None,
+        };
+        let registry = Arc::new(MemoryNamespaceRegistry::new(Some(existing)));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: Some(vec![EntityTypeProposal {
+                name: "ORGANIZATION".to_string(),
+                description: "org".to_string(),
+                frequency: 2,
+                is_baseline: false,
+            }]),
+            relation_types: None,
+        };
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+        assert!(
+            result.is_ok(),
+            "merge-edit PATCH on an Approved schema must succeed: {:?}",
+            result.err()
+        );
+
+        let stored = registry.get_stored().expect("row present");
+        assert_eq!(
+            stored.status,
+            SchemaStatus::Proposed,
+            "editing an Approved schema must demote it back to Proposed (re-approval required)"
+        );
+        assert_eq!(stored.reviewed_at, None, "reviewed_at must be cleared on demotion");
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_create_if_missing_is_sequentially_idempotent() {
+        // Review #5 (AC-3): two SEQUENTIAL identical create-if-missing PATCHes must
+        // converge — the second call observes the now-existing row (Some arm) and
+        // reuses the stored proposed_at. This is sequential idempotency, NOT
+        // byte-identity across racing calls (last-writer-wins is documented, not
+        // tested — see the handler's concurrency rustdoc).
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = Arc::new(MemoryNamespaceRegistry::new(None));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let make_body = || PatchSchemaRequest {
+            entity_types: Some(vec![EntityTypeProposal {
+                name: "PERSON".to_string(),
+                description: "a person".to_string(),
+                frequency: 1,
+                is_baseline: false,
+            }]),
+            relation_types: None,
+        };
+
+        let result1 =
+            update_namespace_schema(State(state.clone()), Path(slug.clone()), Json(make_body())).await;
+        assert!(
+            result1.is_ok(),
+            "first create-if-missing PATCH must succeed: {:?}",
+            result1.err()
+        );
+        let first_stored = registry.get_stored().expect("row created after first call");
+
+        let result2 =
+            update_namespace_schema(State(state.clone()), Path(slug.clone()), Json(make_body())).await;
+        assert!(
+            result2.is_ok(),
+            "second identical PATCH (now takes the Some arm) must succeed: {:?}",
+            result2.err()
+        );
+        let second_stored = registry.get_stored().expect("row present after second call");
+
+        assert_eq!(second_stored.status, first_stored.status);
+        let first_names: Vec<&str> = first_stored.entity_types.iter().map(|e| e.name.as_str()).collect();
+        let second_names: Vec<&str> = second_stored.entity_types.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(second_names, first_names);
+        assert_eq!(
+            second_stored.proposed_at, first_stored.proposed_at,
+            "sequential identical PATCHes must converge — the second call reuses the stored proposed_at"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_rejects_dunder_entity_type_name() {
+        // AC-4 / T-35-01: a `__`-prefixed entity type name must be rejected on the
+        // create-if-missing (fresh/None) arm.
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let registry = Arc::new(MemoryNamespaceRegistry::new(None));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: Some(vec![EntityTypeProposal {
+                name: "__pending__".to_string(),
+                description: "malicious".to_string(),
+                frequency: 1,
+                is_baseline: false,
+            }]),
+            relation_types: None,
+        };
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+
+        match result {
+            Err(ApiError::BadRequest(_)) => {}
+            other => panic!(
+                "expected BadRequest(400) for a '__'-prefixed entity_types[].name, got {:?}",
+                other
+            ),
+        }
+        assert!(
+            registry.get_stored().is_none(),
+            "no row should be created when the sentinel guard rejects"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_namespace_schema_merge_rejects_dunder_relation_type_name() {
+        // AC-4 / T-35-01: a `__`-prefixed relation type name must be rejected on the
+        // merge (existing/Some) arm too — same single pre-arm guard covers both.
+        use std::sync::Arc;
+        use test_registry::MemoryNamespaceRegistry;
+
+        let existing = SchemaProposal {
+            status: SchemaStatus::Proposed,
+            entity_types: vec![],
+            relation_types: vec![],
+            sample_size: 0,
+            total_documents: 0,
+            domain_hint: None,
+            proposed_at: 1700000000000,
+            reviewed_at: None,
+            sampling_metadata: None,
+        };
+        let registry = Arc::new(MemoryNamespaceRegistry::new(Some(existing)));
+        let shared_registry: edgequake_core::SharedNamespaceRegistry = registry.clone();
+        let state = AppState::test_state().with_namespace_registry(shared_registry);
+        let slug = "test-ns".to_string();
+
+        let body = PatchSchemaRequest {
+            entity_types: None,
+            relation_types: Some(vec![RelationTypeProposal {
+                name: "__pending__".to_string(),
+                description: "malicious".to_string(),
+                source_type: "ANY".to_string(),
+                target_type: "ANY".to_string(),
+                frequency: 1,
+            }]),
+        };
+        let result = update_namespace_schema(State(state), Path(slug), Json(body)).await;
+
+        match result {
+            Err(ApiError::BadRequest(_)) => {}
+            other => panic!(
+                "expected BadRequest(400) for a '__'-prefixed relation_types[].name on the merge arm, got {:?}",
+                other
+            ),
+        }
+
+        let stored = registry
+            .get_stored()
+            .expect("existing row must be untouched by a rejected PATCH");
+        assert!(stored.relation_types.is_empty(), "rejected PATCH must not mutate the existing row");
+    }
 }
