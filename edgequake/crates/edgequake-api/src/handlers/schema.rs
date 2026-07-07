@@ -918,18 +918,42 @@ pub async fn suggest_namespace_schema(
     }))
 }
 
-/// Merge-patch the current schema proposal.
+/// Merge-patch the current schema proposal — creates one if none exists yet.
 ///
-/// Loads the existing proposal, applies only the fields present in the
-/// request body (entity_types and/or relation_types), strips any relation
+/// Loads the existing proposal (if any), applies only the fields present in
+/// the request body (entity_types and/or relation_types), strips any relation
 /// type named "RELATED_TO", then stores the merged proposal.
 ///
 /// A body that omits entity_types leaves existing entity_types intact.
 ///
+/// # Create-if-missing (Phase 35)
+///
+/// A namespace can legitimately reach this endpoint with NO prior schema
+/// activity (`create_namespace` and document upload never seed a schema row).
+/// When no schema row exists yet, this handler builds a fresh, empty base
+/// (`status: Proposed`) and applies the caller's types onto it, instead of
+/// 404ing. A fresh PATCH whose FINAL proposal has zero entity_types AND zero
+/// relation_types (empty body, both-empty vecs, or an all-`RELATED_TO`
+/// relation list) is rejected with 400 instead of creating an
+/// approvable-but-empty draft; this reject applies ONLY to the fresh-create
+/// path — an empty PATCH on an EXISTING namespace remains an unchanged 200
+/// no-op merge.
+///
+/// # Concurrency (last-writer-wins)
+///
+/// Concurrent create-if-missing PATCHes are last-writer-wins: the registry has
+/// no conditional/compare-and-swap write, so two racing fresh PATCHes can both
+/// observe no existing row and the later `store_schema` call wins. The
+/// [`PENDING_SENTINEL`] in-flight guard below does NOT prevent a race with an
+/// in-flight [`suggest_namespace_schema`] whose sentinel row has not yet
+/// landed — it only rejects once the sentinel is already stored. No stronger
+/// protection is provided than what is described here.
+///
 /// # Errors
 ///
-/// - 400: Invalid slug
-/// - 404: No schema proposal exists
+/// - 400: Invalid slug, reserved (`__`-prefixed) type name, or an empty/no-type
+///   PATCH on a fresh namespace
+/// - 404: Namespace not found (surfaced by the registry)
 /// - 501: Registry not configured
 #[utoipa::path(
     patch,
@@ -939,9 +963,9 @@ pub async fn suggest_namespace_schema(
     ),
     request_body = inline(serde_json::Value),
     responses(
-        (status = 200, description = "Merged schema proposal"),
-        (status = 400, description = "Invalid slug"),
-        (status = 404, description = "No schema proposal exists"),
+        (status = 200, description = "Merged (or freshly created) schema proposal"),
+        (status = 400, description = "Invalid slug, reserved type name, or empty PATCH on a fresh namespace"),
+        (status = 404, description = "Namespace not found"),
         (status = 409, description = "Schema suggestion in progress"),
         (status = 501, description = "Namespace registry not configured"),
     ),
@@ -959,14 +983,69 @@ pub async fn update_namespace_schema(
 
     debug!(namespace = slug.as_str(), "Patching namespace schema");
 
+    // Phase 35 / T-34-05 / T-35-01: reject reserved-sentinel-colliding type names
+    // before touching the registry. Mirrors suggest_namespace_schema's guard
+    // (schema.rs:637-649) but validates Vec<EntityTypeProposal>/
+    // Vec<RelationTypeProposal> names rather than two Option<String> fields.
+    // Runs BEFORE the Some/None base selection below, so it mechanically
+    // covers both the create-if-missing arm and the merge arm with one check.
+    // Scope confirmed complete (review #6): sentinels are only ever read from
+    // proposal.domain_hint (L127/140/164), which PatchSchemaRequest does not
+    // carry, and no nested alias/label/property field participates in
+    // sentinel semantics — top-level name-only validation is sufficient.
+    for et in body.entity_types.iter().flatten() {
+        if et.name.starts_with("__") {
+            return Err(ApiError::BadRequest(format!(
+                "entity_types[].name must not start with '__' (reserved for internal sentinels): {}",
+                et.name
+            )));
+        }
+    }
+    for rt in body.relation_types.iter().flatten() {
+        if rt.name.starts_with("__") {
+            return Err(ApiError::BadRequest(format!(
+                "relation_types[].name must not start with '__' (reserved for internal sentinels): {}",
+                rt.name
+            )));
+        }
+    }
+
     // Must get first to merge (per REVIEW Gemini #8: store_schema wipes PipelineConfig types)
-    let mut proposal = registry
+    //
+    // Phase 35: create-if-missing. A namespace can legitimately reach this
+    // endpoint with ZERO prior schema activity (create_namespace and document
+    // upload never seed a schema row). Build a fresh, empty base instead of
+    // 404ing.
+    //
+    // status MUST be Proposed, not None:
+    //   - DynamoNamespaceRegistry::approve_schema requires status==Proposed to
+    //     transition to Approved (dynamodb_namespace.rs:792-797); a None-status
+    //     proposal can NEVER be approved even with populated entity_types.
+    //   - schema_proposal_to_body renders status=None as the opaque `None`
+    //     sentinel regardless of entity_types content (schema.rs:135-161),
+    //     which would hide the caller's just-written draft from every
+    //     subsequent GET/PATCH response.
+    // This is DELIBERATELY distinct from POST /schema/reset {to:"empty"}'s
+    // representation (status: None) — that endpoint's "empty" means "nothing
+    // proposed, gate parks forever"; ours means "freshly proposed, empty
+    // until the caller's types are applied below." Do NOT share a builder
+    // between the two — their status values differ deliberately.
+    let existing = registry
         .get_schema(&slug)
         .await
-        .map_err(map_registry_error)?
-        .ok_or_else(|| {
-            ApiError::NotFound(format!("No schema proposal found for namespace: {}", slug))
-        })?;
+        .map_err(map_registry_error)?;
+    let is_fresh = existing.is_none();
+    let mut proposal = existing.unwrap_or_else(|| SchemaProposal {
+        status: SchemaStatus::Proposed,
+        entity_types: vec![],
+        relation_types: vec![],
+        sample_size: 0,
+        total_documents: 0,
+        domain_hint: None,
+        proposed_at: chrono::Utc::now().timestamp_millis(),
+        reviewed_at: None,
+        sampling_metadata: None,
+    });
 
     // WR-10: never merge into the in-flight pending sentinel — it would race
     // the spawned suggest task (last-writer-wins on SK=SCHEMA) and preserve
@@ -991,6 +1070,19 @@ pub async fn update_namespace_schema(
             .into_iter()
             .filter(|r| r.name != "RELATED_TO")
             .collect();
+    }
+
+    // Phase 35 / T-35-03 / review #1: on the fresh-create path ONLY, reject a
+    // FINAL proposal with zero entity_types AND zero relation_types (empty
+    // PATCH {}, both-empty vecs, or an all-RELATED_TO relation list that was
+    // just stripped above) so no approvable-but-empty draft is ever created.
+    // Gated on `is_fresh` only — an empty PATCH on an EXISTING namespace stays
+    // the unchanged no-op merge below (200), not a new 400.
+    if is_fresh && proposal.entity_types.is_empty() && proposal.relation_types.is_empty() {
+        return Err(ApiError::BadRequest(
+            "cannot create a schema with no types; provide entity_types and/or relation_types"
+                .to_string(),
+        ));
     }
 
     // WR-10: editing an Approved schema invalidates the approval —
