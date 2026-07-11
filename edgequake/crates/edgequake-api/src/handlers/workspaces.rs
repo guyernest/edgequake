@@ -2111,7 +2111,11 @@ pub async fn rebuild_knowledge_graph(
 ///
 /// Runs the same export as the automatic rebuild-track trigger, on demand.
 /// The workspace's slug is the namespace slug; the namespace PipelineConfig
-/// must have `snapshot_uri` set (an absolute local directory path).
+/// must have `snapshot_uri` set — either an absolute local directory path OR
+/// an `s3://bucket/prefix/` destination (D-04). This endpoint takes no
+/// request body; the destination is aimed exclusively via the existing
+/// `PUT /api/v1/namespaces/{namespace}/config` endpoint's `snapshot_uri`
+/// field, which already validates `s3://` and rejects `..` traversal.
 ///
 /// Returns the snapshot manifest JSON on success.
 #[utoipa::path(

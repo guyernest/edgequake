@@ -46,6 +46,12 @@ use edgequake_core::snapshot::{
 use edgequake_core::types::Workspace;
 use edgequake_llm::traits::EmbeddingProvider;
 use edgequake_storage::traits::{GraphStorage, KVStorage, VectorStorage};
+// S3 publish branch (Defect 2a — reached via edgequake-storage-aws's re-exports, NO
+// new Cargo dependency for edgequake-api; edgequake-storage-aws already depends on
+// aws-sdk-s3/aws-config directly and unconditionally re-exports them).
+use edgequake_storage_aws::aws_config;
+use edgequake_storage_aws::aws_sdk_s3::primitives::ByteStream;
+use edgequake_storage_aws::aws_sdk_s3::Client as S3Client;
 
 /// Batch size for export-time entity embedding generation.
 const ENTITY_EMBED_BATCH_SIZE: usize = 64;
@@ -259,15 +265,18 @@ pub async fn rebuild_track_is_terminal(
     Ok(found_any)
 }
 
-/// Export a workspace snapshot to `snapshot_uri` (absolute local directory).
+/// Export a workspace snapshot to `snapshot_uri` — either an absolute local
+/// directory path OR an `s3://bucket/prefix/` destination.
 ///
 /// Produces the same 7-file layout as the batch pipeline's snapshot stage:
-/// 6 JSONL data files plus `manifest.json`. The target directory is replaced
-/// atomically-ish (staged in a tempdir, then the target dir is removed and
-/// re-populated), mirroring batch publish semantics for local paths.
-///
-/// `s3://` URIs are NOT supported by the server export (use the batch
-/// pipeline for S3 publication).
+/// 6 JSONL data files plus `manifest.json`. All 7 files are always staged to
+/// a local tempdir first, then published:
+/// - Local `snapshot_uri`: the target directory is replaced atomically-ish
+///   (staged dir contents copied in, target dir removed + re-populated).
+/// - `s3://bucket/prefix/` `snapshot_uri`: each staged file is uploaded via
+///   `put_object` under `{prefix}/{file}` using the AWS SDK S3 client
+///   reached through `edgequake_storage_aws`'s `aws_sdk_s3`/`aws_config`
+///   re-exports (Defect 2a — no new Cargo dependency for `edgequake-api`).
 pub async fn export_workspace_snapshot(
     sources: &SnapshotExportSources,
     workspace: &Workspace,
@@ -275,13 +284,6 @@ pub async fn export_workspace_snapshot(
     snapshot_uri: &str,
     snapshot_mode: &str,
 ) -> anyhow::Result<SnapshotManifest> {
-    if snapshot_uri.starts_with("s3://") {
-        bail!(
-            "s3:// snapshot_uri is not supported by the API server export \
-             (got '{}'); use a local directory path",
-            snapshot_uri
-        );
-    }
     if snapshot_uri.contains("..") {
         bail!("snapshot_uri must not contain '..' path-traversal sequences");
     }
@@ -370,7 +372,7 @@ pub async fn export_workspace_snapshot(
     )
     .context("Failed to write manifest.json")?;
 
-    publish_snapshot(snapshot_uri, local_dir)?;
+    publish_snapshot(snapshot_uri, local_dir).await?;
 
     info!(
         workspace_id = %workspace_id,
@@ -728,8 +730,19 @@ fn sha256_file(path: &Path) -> anyhow::Result<String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-/// Publish the staged snapshot to the target directory (create/replace).
-fn publish_snapshot(uri: &str, local_dir: &Path) -> anyhow::Result<()> {
+/// Publish the staged snapshot to `uri` — either an absolute local directory
+/// (create/replace) or an `s3://bucket/prefix/` destination.
+async fn publish_snapshot(uri: &str, local_dir: &Path) -> anyhow::Result<()> {
+    // ROUTING branch (Codex MEDIUM / T-164-05a): `s3://` destinations upload via the AWS
+    // SDK S3 client; everything else falls through to the local-fs copy below.
+    if uri.starts_with("s3://") {
+        let rest = uri.strip_prefix("s3://").expect("checked starts_with(\"s3://\") above");
+        let (bucket, prefix) = parse_s3_uri(rest)?;
+        let aws_cfg = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+        let s3 = S3Client::new(&aws_cfg);
+        return publish_snapshot_s3(&s3, &bucket, &prefix, local_dir).await;
+    }
+
     let target = std::path::PathBuf::from(uri);
     if target.exists() {
         fs::remove_dir_all(&target)
@@ -748,6 +761,61 @@ fn publish_snapshot(uri: &str, local_dir: &Path) -> anyhow::Result<()> {
     ] {
         fs::copy(local_dir.join(file), target.join(file))
             .with_context(|| format!("Failed to publish snapshot file {}", file))?;
+    }
+    Ok(())
+}
+
+/// Parse an `s3://bucket/prefix` (or `s3://bucket`) URI tail — everything
+/// after the `s3://` scheme — into `(bucket, prefix)`. `prefix` has no
+/// trailing slash; it may be empty when the URI names only a bucket.
+fn parse_s3_uri(rest: &str) -> anyhow::Result<(String, String)> {
+    let mut parts = rest.splitn(2, '/');
+    let bucket = parts
+        .next()
+        .filter(|b| !b.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("s3:// snapshot_uri is missing a bucket name: 's3://{}'", rest))?
+        .to_string();
+    let prefix = parts.next().unwrap_or("").trim_end_matches('/').to_string();
+    Ok((bucket, prefix))
+}
+
+/// Upload the 7 staged snapshot files from `local_dir` to `s3://{bucket}/{prefix}/`.
+///
+/// Extracted as a standalone fn (rather than inlined in `publish_snapshot`) so tests
+/// can inject an `S3Client` built against a local HTTP test double instead of live AWS
+/// (see `tests::publish_snapshot_s3_uploads_all_seven_files`).
+async fn publish_snapshot_s3(
+    s3: &S3Client,
+    bucket: &str,
+    prefix: &str,
+    local_dir: &Path,
+) -> anyhow::Result<()> {
+    for file in [
+        MANIFEST_FILE,
+        DOCUMENTS_FILE,
+        CHUNKS_FILE,
+        ENTITIES_FILE,
+        RELATIONSHIPS_FILE,
+        VECTORS_FILE,
+        BM25_FILE,
+    ] {
+        let bytes = fs::read(local_dir.join(file))
+            .with_context(|| format!("Failed to read staged snapshot file {}", file))?;
+        let key = if prefix.is_empty() {
+            file.to_string()
+        } else {
+            format!("{prefix}/{file}")
+        };
+        s3.put_object()
+            .bucket(bucket)
+            .key(&key)
+            .body(ByteStream::from(bytes))
+            .content_type("application/json")
+            .send()
+            .await
+            .with_context(|| {
+                format!("Failed to publish snapshot file '{file}' to s3://{bucket}/{key}")
+            })?;
     }
     Ok(())
 }
@@ -1046,20 +1114,189 @@ mod tests {
         assert!((cs101[0]["embedding"][0].as_f64().unwrap() - 0.5).abs() < 1e-6);
     }
 
+    /// T-164-04: the `..` path-traversal guard must reject an `s3://` destination
+    /// exactly like it rejects a local one — proven at the `export_workspace_snapshot`
+    /// entry point (the guard fires before any storage/S3 access is attempted).
+    ///
+    /// Deliberately does NOT use `fixture_state()`/`AppState::test_state()` (which
+    /// panics pre-existingly in this checkout — see deferred-items.md, unrelated to
+    /// this plan's snapshot_export.rs changes): the guard fires before `sources`/
+    /// `workspace` are touched, so lightweight in-memory adapters (no AppState, no
+    /// RawDocsStorage) are sufficient to exercise it.
     #[tokio::test]
-    async fn test_export_rejects_s3_uri() {
-        let (state, workspace) = fixture_state().await;
-        let sources = sources_from_state(&state);
+    async fn test_export_rejects_s3_traversal_uri() {
+        let sources = SnapshotExportSources {
+            kv_storage: Arc::new(edgequake_storage::MemoryKVStorage::new("test")),
+            graph_storage: Arc::new(edgequake_storage::MemoryGraphStorage::new("test")),
+            vector_storage: Arc::new(edgequake_storage::MemoryVectorStorage::new("test", 1536)),
+            embedding_provider: Arc::new(edgequake_llm::MockProvider::new()),
+        };
+        let workspace = Workspace::new(uuid::Uuid::new_v4(), "Traversal Test", "traversal-test");
+
         let err = export_workspace_snapshot(
             &sources,
             &workspace,
-            "snapshot-ws",
-            "s3://bucket/prefix",
+            "traversal-test",
+            "s3://bucket/../evil",
             "write-and-store",
         )
         .await
-        .expect_err("s3 must be rejected");
-        assert!(err.to_string().contains("s3://"));
+        .expect_err("s3 URI containing '..' must be rejected by the traversal guard");
+        assert!(
+            err.to_string().contains(".."),
+            "traversal-guard error must mention '..'; got: {}",
+            err
+        );
+    }
+
+    /// Minimal HTTP/1.1 test double standing in for S3: accepts connections, parses the
+    /// request line + `Content-Length` header, drains the body, replies 200, and records
+    /// the request path. No TLS, no chunked-transfer support — sufficient because
+    /// `publish_snapshot_s3_uploads_all_seven_files` disables aws-chunked checksum-trailer
+    /// encoding (`RequestChecksumCalculation::WhenRequired`) so small in-memory PutObject
+    /// bodies are sent with a plain, known `Content-Length`.
+    async fn spawn_fake_s3_endpoint() -> (String, Arc<tokio::sync::Mutex<Vec<String>>>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind fake s3 endpoint");
+        let addr = listener.local_addr().expect("local_addr");
+        let paths: Arc<tokio::sync::Mutex<Vec<String>>> = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+        let paths_bg = Arc::clone(&paths);
+
+        tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = match listener.accept().await {
+                    Ok(v) => v,
+                    Err(_) => break,
+                };
+                let paths = Arc::clone(&paths_bg);
+                tokio::spawn(async move {
+                    let mut buf = Vec::new();
+                    let mut chunk = [0u8; 4096];
+                    let header_end = loop {
+                        let n = match socket.read(&mut chunk).await {
+                            Ok(0) => return,
+                            Ok(n) => n,
+                            Err(_) => return,
+                        };
+                        buf.extend_from_slice(&chunk[..n]);
+                        if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                            break pos;
+                        }
+                        if buf.len() > 64 * 1024 {
+                            return;
+                        }
+                    };
+                    let header_text = String::from_utf8_lossy(&buf[..header_end]).to_string();
+                    let mut lines = header_text.split("\r\n");
+                    let request_line = lines.next().unwrap_or_default().to_string();
+                    let path = request_line
+                        .split_whitespace()
+                        .nth(1)
+                        .unwrap_or_default()
+                        .to_string();
+                    let mut content_length: usize = 0;
+                    let mut expects_continue = false;
+                    for line in lines {
+                        let lower = line.to_ascii_lowercase();
+                        if let Some(v) = lower.strip_prefix("content-length:") {
+                            content_length = v.trim().parse().unwrap_or(0);
+                        }
+                        if lower.starts_with("expect:") && lower.contains("100-continue") {
+                            expects_continue = true;
+                        }
+                    }
+                    if expects_continue {
+                        let _ = socket.write_all(b"HTTP/1.1 100 Continue\r\n\r\n").await;
+                    }
+                    let already_have = buf.len().saturating_sub(header_end + 4);
+                    let mut remaining = content_length.saturating_sub(already_have);
+                    while remaining > 0 {
+                        let n = match socket.read(&mut chunk).await {
+                            Ok(0) => break,
+                            Ok(n) => n,
+                            Err(_) => break,
+                        };
+                        remaining = remaining.saturating_sub(n);
+                    }
+                    paths.lock().await.push(path);
+                    let _ = socket
+                        .write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nETag: \"test-etag\"\r\n\r\n",
+                        )
+                        .await;
+                });
+            }
+        });
+
+        (format!("http://{addr}"), paths)
+    }
+
+    /// D-04/T-164-05a: proves `publish_snapshot_s3` issues exactly 7 `put_object` calls
+    /// (one per snapshot file) under `{bucket}/{prefix}/{file}` keys, against a local HTTP
+    /// test double rather than live AWS.
+    #[tokio::test]
+    async fn publish_snapshot_s3_uploads_all_seven_files() {
+        use edgequake_storage_aws::aws_sdk_s3::config::{
+            Builder as S3ConfigBuilder, Credentials as S3Credentials, Region as S3Region,
+            RequestChecksumCalculation,
+        };
+
+        let (endpoint, recorded_paths) = spawn_fake_s3_endpoint().await;
+
+        let local_dir = tempfile::tempdir().expect("local staging dir");
+        let files = [
+            MANIFEST_FILE,
+            DOCUMENTS_FILE,
+            CHUNKS_FILE,
+            ENTITIES_FILE,
+            RELATIONSHIPS_FILE,
+            VECTORS_FILE,
+            BM25_FILE,
+        ];
+        for file in files {
+            fs::write(local_dir.path().join(file), b"{}").expect("write staged snapshot file");
+        }
+
+        let cfg = S3ConfigBuilder::new()
+            .region(S3Region::new("us-east-1"))
+            .credentials_provider(S3Credentials::new("test", "test", None, None, "test"))
+            .endpoint_url(&endpoint)
+            .force_path_style(true)
+            .behavior_version(aws_config::BehaviorVersion::latest())
+            .request_checksum_calculation(RequestChecksumCalculation::WhenRequired)
+            .build();
+        let client = S3Client::from_conf(cfg);
+
+        publish_snapshot_s3(&client, "help-bucket", "help-snapshot", local_dir.path())
+            .await
+            .expect("publish_snapshot_s3 must succeed against the fake S3 endpoint");
+
+        // Strip any query string (the SDK appends `?x-id=PutObject` for operation
+        // identification) before comparing key suffixes.
+        let paths: Vec<String> = recorded_paths
+            .lock()
+            .await
+            .iter()
+            .map(|p| p.split('?').next().unwrap_or(p).to_string())
+            .collect();
+        assert_eq!(
+            paths.len(),
+            7,
+            "expected exactly 7 put_object calls (one per snapshot file); got: {:?}",
+            paths
+        );
+        for file in files {
+            let expected_suffix = format!("/help-bucket/help-snapshot/{file}");
+            assert!(
+                paths.iter().any(|p| p.ends_with(&expected_suffix)),
+                "expected a put_object call with key ending in '{expected_suffix}'; got paths: {:?}",
+                paths
+            );
+        }
     }
 
     #[tokio::test]
